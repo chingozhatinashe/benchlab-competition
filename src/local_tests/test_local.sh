@@ -35,7 +35,9 @@ docker run --rm \
   -e INFERENCE_TIMESTAMP="$T0" \
   -e OUTPUT_POST='{"url":"http://host.docker.internal:8899/","fields":{"key":"local"}}' \
   swp-local "$T0"
-echo "runtime    : $(( $(date +%s) - START ))s   (cap 900s INCLUDING pull)"
+RUNTIME=$(( $(date +%s) - START ))
+echo "runtime    : ${RUNTIME}s   (cap 900s INCLUDING pull)"
+[ "$RUNTIME" -lt 900 ] || { echo "FAIL: runtime over 900s"; exit 1; }
 
 [ -f out/forecast.json ] || { echo "FAIL: nothing uploaded"; exit 1; }
 jq -e '.forecast_speed_kms | length == 72' out/forecast.json > /dev/null \
