@@ -1,0 +1,11 @@
+# Dev-only content: keep it out of the image (15 GiB cap; pull time counts
+# against the 900 s run budget).
+data/
+experiments/
+training/
+local_tests/
+**/__pycache__/
+**/*.pyc
+**/*.ipynb
+**/.ipynb_checkpoints/
+*.egg-info/

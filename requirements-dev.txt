@@ -1,0 +1,10 @@
+# Local development only — NOT installed in the submission image.
+# Runtime dependencies for the image live in src/requirements.txt.
+-r src/requirements.txt
+-e .
+
+pytest
+ruff
+ipykernel
+matplotlib
+requests

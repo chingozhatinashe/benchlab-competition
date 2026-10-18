@@ -1,0 +1,16 @@
+# Local development only: an editable install makes the src/ packages
+# importable from notebooks and scripts anywhere in the repo. The submission
+# image does not use this file; its dependencies are in src/requirements.txt.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "benchlab-swp"
+version = "0.1.0"
+# Match python3 in the submission image (ubuntu:22.04)
+requires-python = ">=3.10,<3.11"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["connectors", "feature_engineering", "models", "inference", "training"]

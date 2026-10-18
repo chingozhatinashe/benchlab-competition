@@ -1,0 +1,13 @@
+# Everything here runs inside a Linux container (and verify.sh hashes the
+# conformance kit byte-for-byte), so keep LF line endings even on Windows.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.zip binary
+*.pt binary
+*.pth binary
+*.onnx binary
+*.joblib binary
+*.pkl binary
