@@ -23,15 +23,15 @@ env:
 jobs:
   checks:
     name: checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Conformance kit is unmodified
         run: cd conformance_pack && bash verify.sh
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.10"  # matches python3 in the ubuntu:22.04 image
           cache: pip
@@ -54,10 +54,10 @@ jobs:
   container:
     name: container
     needs: checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build and run as the platform does
         working-directory: src/local_tests
@@ -79,7 +79,7 @@ jobs:
       - name: Package submission
         run: bash package_submission.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: submission-${{ github.sha }}
           path: |
