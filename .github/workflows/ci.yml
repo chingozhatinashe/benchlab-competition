@@ -1,0 +1,89 @@
+# Keeps main in a state that can produce a qualifying Benchlab submission.
+# A green run on main attaches a ready-to-upload submission.zip.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Set to "1" before the deadline to fail on template team_name/contact_email.
+  STRICT_TEAM_INFO: "0"
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conformance kit is unmodified
+        run: cd conformance_pack && bash verify.sh
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"  # matches python3 in the ubuntu:22.04 image
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            src/requirements.txt
+
+      - name: Submission contract
+        run: python ci/check_submission.py
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check src tests ci
+
+      - name: Model output contract
+        run: pytest -v
+
+  container:
+    name: container
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run as the platform does
+        working-directory: src/local_tests
+        run: |
+          # Most recent 6-hourly cycle, so live data exists for real connectors.
+          T0=$(date -u -d "$(date -u +%Y-%m-%d) $(( $(date -u +%-H) / 6 * 6 )):00" +%Y%m%dT%H0000Z)
+          CPU=$(( $(jq .cpu_units ../submission.json) / 1024 ))
+          MEM="$(jq .memory_mib ../submission.json)m"
+          echo "t0=$T0 cpu=$CPU mem=$MEM"
+          CPU=$CPU MEM=$MEM ./test_local.sh "$T0"
+
+      - name: Dev-only folders are not in the image
+        run: |
+          docker run --rm --entrypoint ls swp-local -A /app | tee app.txt
+          if grep -qxE 'data|experiments|training|local_tests' app.txt; then
+            echo "::error::dev-only folder found in /app"; exit 1
+          fi
+
+      - name: Package submission
+        run: bash package_submission.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: submission-${{ github.sha }}
+          path: |
+            submission.zip
+            src/local_tests/out/forecast.json
+          retention-days: 30
+          if-no-files-found: error

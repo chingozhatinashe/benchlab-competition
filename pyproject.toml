@@ -14,3 +14,14 @@ requires-python = ">=3.10,<3.11"
 [tool.setuptools]
 package-dir = { "" = "src" }
 packages = ["connectors", "feature_engineering", "models", "inference", "training"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["submission_pack", "conformance_pack"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "SIM"]
