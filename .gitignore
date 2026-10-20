@@ -19,3 +19,6 @@ src/data/*
 # Local test output and submission zips
 src/local_tests/out/
 *.zip
+
+# Organiser PDFs (large; summarised in docs/*.md)
+docs/*.pdf
