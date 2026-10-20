@@ -59,6 +59,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # public.ecr.aws rate-limits anonymous pulls from shared runner IPs (429).
+      # Pull the base image with retries first; docker build then uses the local copy.
+      - name: Pull base image (with retries)
+        run: |
+          IMAGE=$(awk 'toupper($1) == "FROM" { print $2; exit }' src/Dockerfile)
+          for attempt in 1 2 3 4 5; do
+            if docker pull --platform linux/amd64 "$IMAGE"; then exit 0; fi
+            [ "$attempt" -lt 5 ] || break
+            wait=$((attempt * 30))
+            echo "::warning::pull of $IMAGE failed (attempt $attempt/5), retrying in ${wait}s"
+            sleep "$wait"
+          done
+          echo "::error::could not pull $IMAGE after 5 attempts"
+          exit 1
+
       - name: Build and run as the platform does
         working-directory: src/local_tests
         run: |
