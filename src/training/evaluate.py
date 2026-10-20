@@ -46,8 +46,11 @@ def evaluate(model, path=HOURLY_CSV):
         actuals.append(series.iloc[pos + 1 : pos + 1 + HORIZON].to_numpy())
 
     forecasts, actuals = np.concatenate(forecasts), np.concatenate(actuals)
+    observed = np.isfinite(actuals)
     return {
         "timse": timse(actuals, forecasts),
+        # Secondary diagnostic only; models are ranked by TIMSE.
+        "rmse": float(np.sqrt(np.mean((actuals[observed] - forecasts[observed]) ** 2))),
         "n_forecasts": len(forecasts) // HORIZON,
         "n_scored": int(np.isfinite(actuals).sum()),
         "n_missing_actual": int(np.isnan(actuals).sum()),
