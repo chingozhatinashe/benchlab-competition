@@ -1,4 +1,6 @@
-"""Reference models that use only the hourly speed series (see docs/baselines.md).
+"""Reference models that use only the hourly speed series.
+
+Results and analysis: src/experiments/baselines.ipynb.
 
 Every model follows the training.evaluate interface:
 

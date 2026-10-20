@@ -35,19 +35,14 @@ def _valid_pairs(actual, forecast):
     return actual, forecast
 
 
-def timse(actual, forecast):
-    """TIMSE of `forecast` against `actual` (both in km/s).
+def tail_mse_curve(actual, forecast):
+    """Thresholds v*_1..v*_m (sorted observations) and the tail MSE M_j at each.
 
-    Inputs are any array-likes of the same shape; they are flattened, so a
-    (runs x 72) block is scored as one pooled set. NaN in `actual` marks a
-    missing observation. Returns NaN when there are no observations, and 0.0
-    with a single observation (the sum has no terms).
+    TIMSE is the area under this curve: sum_j (v*_{j+1} - v*_j) * M_j. Inputs
+    are handled as in `timse`.
     """
     v, vhat = _valid_pairs(actual, forecast)
     n = v.size
-    if n == 0:
-        return float("nan")
-
     order = np.argsort(v, kind="stable")
     v = v[order]
     sq_err = (v - vhat[order]) ** 2
@@ -56,7 +51,18 @@ def timse(actual, forecast):
     tail_sum = np.concatenate([np.cumsum(sq_err[::-1])[::-1], [0.0]])
     # S_j includes every value tied with v*_j, so it starts at the first such index.
     start = np.searchsorted(v, v, side="left")
-    tail_mse = tail_sum[start] / (n - start)
+    return v, tail_sum[start] / (n - start)
 
-    gaps = np.diff(v)
-    return float(np.dot(gaps, tail_mse[:-1]))
+
+def timse(actual, forecast):
+    """TIMSE of `forecast` against `actual` (both in km/s).
+
+    Inputs are any array-likes of the same shape; they are flattened, so a
+    (runs x 72) block is scored as one pooled set. NaN in `actual` marks a
+    missing observation. Returns NaN when there are no observations, and 0.0
+    with a single observation (the sum has no terms).
+    """
+    thresholds, tail_mse = tail_mse_curve(actual, forecast)
+    if thresholds.size == 0:
+        return float("nan")
+    return float(np.dot(np.diff(thresholds), tail_mse[:-1]))
