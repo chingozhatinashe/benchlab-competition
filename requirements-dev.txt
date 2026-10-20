@@ -8,3 +8,6 @@ ruff==0.17.1
 ipykernel
 matplotlib
 requests
+statsmodels
+nbformat
+nbclient
