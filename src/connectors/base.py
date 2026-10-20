@@ -36,15 +36,25 @@ class HTTPNotFound(Exception):
 
 def http_get_json(url, headers=None, timeout=30, retries=3):
     """GET a URL and decode JSON. Retries on network and 5xx errors with backoff."""
-    req_headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    req_headers = {"Accept": "application/json"}
+    req_headers.update(headers or {})
+    body = http_get_bytes(url, headers=req_headers, timeout=timeout, retries=retries)
+    return json.loads(body) if body.strip() else None
+
+
+def http_get_bytes(url, headers=None, timeout=30, retries=3):
+    """GET a URL and return the raw body. Retries on network and 5xx errors with backoff.
+
+    Raises HTTPNotFound on 404 and re-raises other 4xx errors immediately.
+    """
+    req_headers = {"User-Agent": USER_AGENT}
     req_headers.update(headers or {})
     last_err = None
     for attempt in range(retries):
         try:
             req = urllib.request.Request(url, headers=req_headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                body = resp.read()
-            return json.loads(body) if body.strip() else None
+                return resp.read()
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 raise HTTPNotFound(url) from e

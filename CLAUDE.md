@@ -24,7 +24,10 @@ uv venv --python 3.10 .venv && uv pip install --python .venv -r requirements-dev
 (cd src/local_tests && ./test_local.sh 20261111T060000Z) # full Docker build + run + upload + validate
 bash package_submission.sh                              # builds submission.zip from src/
 .venv/Scripts/python -m training.pull_omni              # pulls 2 years of OMNI hourly data into src/data/omni_hourly/
+.venv/Scripts/python -m training.pull_ace_rtsw          # pulls the pinned 5-year real-time ACE speed series into src/data/ace_rtsw/
 ```
+
+**Evaluation** (`docs/evaluation.md`): fit models only on `training.datasets.load_train()`, the first 4 years. Score every model with `training.evaluate.evaluate(model)`, which computes TIMSE on the held-out final year. Never fit, tune or select features on the eval year.
 
 `test_local.sh` takes `CPU`/`MEM` env vars. CI sets them from `submission.json`.
 
