@@ -23,6 +23,7 @@ uv venv --python 3.10 .venv && uv pip install --python .venv -r requirements-dev
 (cd conformance_pack && bash verify.sh)                 # must print "OK — kit is unmodified"
 (cd src/local_tests && ./test_local.sh 20261111T060000Z) # full Docker build + run + upload + validate
 bash package_submission.sh                              # builds submission.zip from src/
+.venv/Scripts/python -m training.pull_omni              # pulls 2 years of OMNI hourly data into src/data/omni_hourly/
 ```
 
 `test_local.sh` takes `CPU`/`MEM` env vars. CI sets them from `submission.json`.
