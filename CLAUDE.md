@@ -60,7 +60,7 @@ bash package_submission.sh                              # builds submission.zip 
 
 `.github/workflows/ci.yml` runs on PRs into `main` and on pushes to `main`. `main` is branch-protected: the `checks` and `container` jobs must pass, branches must be up to date, and the rules apply to admins. Work on a branch and open a PR against `chingozhatinashe/benchlab-competition`, not upstream.
 - **`checks` job:** conformance digest, `ci/check_submission.py`, ruff, pytest.
-- **`container` job:** runs `test_local.sh` at the latest 6-hourly `t0` with the declared CPU/memory, then uploads `submission-<sha>` (containing `submission.zip`) as an artifact.
+- **`container` job:** loads the base image from the Actions cache, refreshed weekly, because public.ecr.aws returns 429s to shared runners. It then runs `test_local.sh` at the latest 6-hourly `t0` with the declared CPU/memory and uploads `submission-<sha>` (containing `submission.zip`) as an artifact.
 - **Uploading:** you upload to Benchlab manually. A replacement upload must re-qualify, and an earlier ELIGIBLE version is not kept as a fallback.
 - **`STRICT_TEAM_INFO`:** setting it to `"1"` in `ci.yml` makes template team details a CI failure.
 

@@ -59,6 +59,61 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # public.ecr.aws rate-limits anonymous pulls from shared runner IPs (429).
+      # Keep the base image in the Actions cache, refreshed weekly, so most runs
+      # never touch the registry. docker build then uses the local copy.
+      - name: Base image cache key
+        id: base
+        run: |
+          IMAGE=$(awk 'toupper($1) == "FROM" { print $2; exit }' src/Dockerfile)
+          PREFIX="base-image-$(echo "$IMAGE" | tr '/:' '--')-"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+          echo "key=${PREFIX}$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore base image
+        id: restore
+        uses: actions/cache/restore@v6
+        with:
+          path: /tmp/base-image.tar
+          key: ${{ steps.base.outputs.key }}
+          restore-keys: ${{ steps.base.outputs.prefix }}
+
+      - name: Load or pull base image
+        id: load
+        env:
+          IMAGE: ${{ steps.base.outputs.image }}
+          FRESH: ${{ steps.restore.outputs.cache-hit }}
+        run: |
+          if [ -f /tmp/base-image.tar ]; then
+            docker load -i /tmp/base-image.tar
+          fi
+          [ "$FRESH" = "true" ] && exit 0
+
+          # No cache, or last week's copy: try to refresh it from the registry.
+          for attempt in 1 2 3; do
+            if docker pull --platform linux/amd64 "$IMAGE"; then
+              docker save -o /tmp/base-image.tar "$IMAGE"
+              echo "save=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            [ "$attempt" -lt 3 ] && sleep 20
+          done
+
+          if [ -f /tmp/base-image.tar ]; then
+            echo "::warning::could not refresh $IMAGE (registry 429?); using the cached copy"
+          else
+            echo "::error::could not pull $IMAGE and no cached copy exists; re-run the job"
+            exit 1
+          fi
+
+      - name: Save base image
+        if: steps.load.outputs.save == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /tmp/base-image.tar
+          key: ${{ steps.base.outputs.key }}
+
       - name: Build and run as the platform does
         working-directory: src/local_tests
         run: |
