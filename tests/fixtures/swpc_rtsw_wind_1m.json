@@ -1,0 +1,8 @@
+[
+  {"time_tag": "2026-10-20T03:02:00", "active": true, "source": "SOLAR1", "proton_speed": 410.5, "overall_quality": 0},
+  {"time_tag": "2026-10-20T03:02:00", "active": false, "source": "ACE", "proton_speed": 405.0, "overall_quality": 0},
+  {"time_tag": "2026-10-20T03:01:00", "active": true, "source": "SOLAR1", "proton_speed": null, "overall_quality": 0},
+  {"time_tag": "2026-10-20T03:01:00", "active": false, "source": "IMAP", "proton_speed": 399.1, "overall_quality": 2},
+  {"time_tag": "2026-10-20T03:00:00", "active": true, "source": "SOLAR1", "proton_speed": 1850.0, "overall_quality": 0},
+  {"time_tag": "2026-10-20T03:00:00", "active": false, "source": "ACE", "proton_speed": 402.3, "overall_quality": 0}
+]

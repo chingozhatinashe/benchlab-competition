@@ -1,0 +1,29 @@
+{"CDF": [{"name": "omni2_h0s_mrg1hr_fixture.cdf", "cdfVariables": {"variable": [
+  {"name": "Epoch_1800",
+   "cdfVarData": {"record": [
+     {"recNum": 0, "value": ["2024-01-01T00:30:00.000Z"]},
+     {"recNum": 1, "value": ["2024-01-01T01:30:00.000Z"]},
+     {"recNum": 2, "value": ["2024-01-01T02:30:00.000Z"]},
+     {"recNum": 3, "value": ["2024-01-01T03:30:00.000Z"]}]}},
+  {"name": "V1800",
+   "cdfVAttributes": {"attribute": [
+     {"name": "FILLVAL", "entry": [{"entryNum": 0, "value": "9999.0"}]}]},
+   "cdfVarData": {"record": [
+     {"recNum": 0, "value": ["306.0"]}, {"recNum": 1, "value": ["9999.0"]},
+     {"recNum": 2, "value": ["1500.0"]}, {"recNum": 3, "value": ["306.0"]}]}},
+  {"name": "V",
+   "cdfVAttributes": {"attribute": [
+     {"name": "VALIDMIN", "entry": [{"entryNum": 0, "value": "0.0"}]},
+     {"name": "VALIDMAX", "entry": [{"entryNum": 0, "value": "1200.0"}]},
+     {"name": "UNITS", "entry": [{"entryNum": 0, "value": "Km/s"}]},
+     {"name": "FILLVAL", "entry": [{"entryNum": 0, "value": "9999.0"}]}]},
+   "cdfVarData": {"record": [
+     {"recNum": 0, "value": ["306.0"]}, {"recNum": 1, "value": ["9999.0"]},
+     {"recNum": 2, "value": ["1500.0"]}, {"recNum": 3, "value": ["306.0"]}]}},
+  {"name": "Epoch",
+   "cdfVarData": {"record": [
+     {"recNum": 0, "value": ["2024-01-01T00:00:00.000Z"]},
+     {"recNum": 1, "value": ["2024-01-01T01:00:00.000Z"]},
+     {"recNum": 2, "value": ["2024-01-01T02:00:00.000Z"]},
+     {"recNum": 3, "value": ["2024-01-01T03:00:00.000Z"]}]}}
+]}}]}
