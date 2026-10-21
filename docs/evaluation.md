@@ -20,9 +20,10 @@ The dates are fixed, so re-pulling the data never moves the eval year.
 
 ## Rules
 
-1. **No model is trained on the eval year.** That covers fitting weights, early stopping, hyper-parameter search and choosing features by looking at eval data. Load data only through `training.datasets.load_train()`, or let the harness do it.
-2. **Every model is scored with `training.evaluate.evaluate(model)`.** The harness calls `model.fit()` itself with the training years only, then forecasts every eval `t0`.
-3. **Eval hours *before* `t0` may be used as inputs.** In the live run, a model sees recent observations, so `predict(history, t0)` gets every hour fully observed by `t0` (labels ≤ `t0 − 1h`), including earlier eval hours. It never sees hours at or after `t0`.
+1. **Hours at or after `t0` are never used for a forecast at `t0`.** `predict(history, t0)` gets only the hours fully observed by `t0` (labels ≤ `t0 − 1h`), as in the live run.
+2. **A model may refit on that history.** Coefficients don't have to be frozen: a model can refit inside `predict`, for example on the last 30 days before `t0` (`training.baselines.Rolling`). This uses only data that would be available live.
+3. **Design choices are made on the training years only.** Hyper-parameters (window length, lags, regularisation), features and model selection must not be chosen by looking at eval scores. The eval year is for scoring. `model.fit()` gets the training years, from `training.datasets.load_train()` or the harness.
+4. **Every model is scored with `training.evaluate.evaluate(model)`.** The harness calls `fit` with the training years, then forecasts every eval `t0`.
 
 ## Harness
 
@@ -34,7 +35,7 @@ evaluate(Persistence())
 # {"timse": ..., "run_timse_mean": ..., "run_timse_median": ..., ..., "rmse": ..., "n_forecasts": ...}
 ```
 
-- **Model interface:** `fit(train: pd.Series)` and `predict(history: pd.Series, t0) -> 72 floats`.
+- **Model interface:** `fit(train: pd.Series)` and `predict(history: pd.Series, t0) -> 72 floats`. A rolling model refits inside `predict`.
 - **Forecast times:** every 6 hours (00/06/12/18Z) from 2025-10-20 00Z, up to the last `t0` whose 72-hour window ends inside the eval year. That gives 1,448 forecasts.
 - **Target alignment:** lead *k* (1–72) is compared with the hour labelled `t0 + k h`. Benchlab hasn't said exactly how it bins hours against `t0+1h … t0+72h`, so this is an assumption.
 - **Scoring:** two views, both lower-is-better. Hours with a missing observation are excluded, following the TIMSE rule.
@@ -42,4 +43,4 @@ evaluate(Persistence())
   - **Per run** (`run_timse_mean`, `_median`, `_std`, `_p10`, `_p90`, `_max`): each 72-hour run is scored on its own hours, then summarised. A run needs at least two observed hours.
   - Benchlab hasn't said how it aggregates runs, so look at both.
 - **Raw forecasts:** `run_forecasts(model)` returns `(t0s, forecasts, actuals)` for diagnostics, using the same protocol.
-- **Reference scores:** the speed-only baselines in `src/experiments/baselines.ipynb`. Persistence wins pooled TIMSE; 27-day recurrence wins per run.
+- **Reference scores:** the speed-only baselines in `src/experiments/baselines.ipynb`, both frozen and refitted at every `t0` on the last 30 days. Rolling 27-day recurrence has the best pooled TIMSE and per-run mean; frozen 27-day recurrence has the best per-run median.

@@ -7,10 +7,12 @@ import pytest
 from training import baselines, datasets
 from training.baselines import (
     ALL,
+    WINDOW_HOURS,
     Autoregressive,
     ClimatologyBlend,
     Persistence,
     Recurrence27,
+    Rolling,
     last_observed,
     window_means,
 )
@@ -105,3 +107,67 @@ def test_every_baseline_runs_through_the_harness(rotating_csv, name):
     result = evaluate(ALL[name](), rotating_csv)
     assert np.isfinite(result["timse"]) and result["timse"] > 0
     assert np.isfinite(result["rmse"])
+
+
+def test_fit_with_start_uses_only_later_hours_as_samples():
+    values = rotating_signal()[:2000]
+    model = Recurrence27().fit(series(values), start=1000)
+    # sample t0s 1000..1999; lead k has a target for the first 1000 - k of them
+    observed = np.isfinite(values[1000:])
+    expected = [observed[k:].sum() for k in range(1, HORIZON + 1)]
+    np.testing.assert_array_equal(model.n_samples, expected)
+    assert model.mean == pytest.approx(np.nanmean(values[1000:]))
+
+
+def test_rolling_follows_a_level_shift_that_the_frozen_model_misses():
+    rng = np.random.default_rng(2)
+    train = 400 + rng.normal(0, 20, 5000)
+    shifted = 600 + rng.normal(0, 20, 2000)
+    history = series(np.concatenate([train, shifted]))
+    t0 = TIMES[len(history)]
+    frozen = ClimatologyBlend().fit(series(train))
+    rolled = Rolling(ClimatologyBlend).fit(series(train))
+    assert abs(frozen.predict(history, t0)[-1] - 400) < 20
+    assert abs(rolled.predict(history, t0)[-1] - 600) < 20
+    assert rolled.n_fallback == 0
+
+
+def test_rolling_refits_on_the_window_only():
+    seen = []
+
+    class Spy(ClimatologyBlend):
+        def fit(self, train, start=0):
+            seen.append((len(train), start, train.index[-1]))
+            return super().fit(train, start)
+
+    values = rotating_signal()[:5000]
+    model = Rolling(Spy, window=WINDOW_HOURS).fit(series(values[:3000]))
+    seen.clear()
+    history = series(values)
+    model.predict(history, TIMES[len(values)])
+    assert seen == [(WINDOW_HOURS + Spy.lookback, Spy.lookback, history.index[-1])]
+
+
+def test_rolling_falls_back_to_the_frozen_model_over_a_long_gap():
+    values = rotating_signal()[:5000]
+    model = Rolling(Recurrence27).fit(series(values[:3000]))
+    history = values.copy()
+    history[-WINDOW_HOURS:] = np.nan
+    forecast = model.predict(series(history), TIMES[len(history)])
+    assert model.n_fallback == 1
+    np.testing.assert_allclose(forecast, model.frozen.predict(series(history), TIMES[len(history)]))
+
+
+def test_autoregressive_matches_sklearn_ridge():
+    from sklearn.linear_model import Ridge
+
+    values = rotating_signal()[:3000]
+    model = Autoregressive().fit(series(values))
+    for k in (0, 35, HORIZON - 1):
+        positions = np.arange(1, len(values) - k - 1)
+        lags = model.features(values, positions)
+        y = values[positions + k + 1]
+        ok = np.isfinite(y)
+        ref = Ridge(alpha=model.alpha).fit(lags[ok], y[ok])
+        np.testing.assert_allclose(model.coef[k], ref.coef_, rtol=1e-6, atol=1e-9)
+        assert model.intercept[k] == pytest.approx(ref.intercept_)

@@ -9,9 +9,10 @@ A model has two methods:
     predict(history, t0)  history: every hour fully observed by t0 (labels <= t0 - 1h)
                           returns 72 forecasts for the hours labelled t0+1h .. t0+72h
 
-The harness calls fit itself, with the training years only, so a model is never
-fitted on eval data. Eval hours before t0 do reach predict as inputs, exactly as
-recent observations would in the live run.
+The harness calls fit itself, with the training years only. Eval hours before t0
+reach predict, exactly as recent observations would in the live run, so a model
+may also refit inside predict on that history (see training.baselines.Rolling).
+It never sees the hours being forecast.
 """
 
 import numpy as np

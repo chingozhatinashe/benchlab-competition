@@ -27,7 +27,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.pull_ace_rtsw          # pulls the pinned 5-year real-time ACE speed series into src/data/ace_rtsw/
 ```
 
-**Evaluation** (`docs/evaluation.md`): fit models only on `training.datasets.load_train()`, the first 4 years. Score every model with `training.evaluate.evaluate(model)`, which computes TIMSE on the held-out final year. Never fit, tune or select features on the eval year.
+**Evaluation** (`docs/evaluation.md`): score every model with `training.evaluate.evaluate(model)`, which computes TIMSE on the held-out final year. A forecast at `t0` may use, and refit on, only hours before `t0` (e.g. the last 30 days, `training.baselines.Rolling`). Choose hyper-parameters, features and models on the training years (`training.datasets.load_train()`), never by looking at eval scores.
 
 `test_local.sh` takes `CPU`/`MEM` env vars. CI sets them from `submission.json`.
 
