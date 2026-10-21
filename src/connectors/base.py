@@ -2,6 +2,7 @@
 
 import json
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -16,6 +17,14 @@ STATUS_FLAGGED = "flagged"  # source marks it bad, or value is outside the valid
 COLUMNS = ["Time", "status", "value"]
 
 USER_AGENT = "benchlab-swp-connector/0.1"
+
+_bytes_lock = threading.Lock()
+_bytes_downloaded = 0
+
+
+def bytes_downloaded():
+    """Total response bytes read by http_get_bytes in this process (for run reports)."""
+    return _bytes_downloaded
 
 
 def log(msg):
@@ -54,7 +63,11 @@ def http_get_bytes(url, headers=None, timeout=30, retries=3):
         try:
             req = urllib.request.Request(url, headers=req_headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read()
+                body = resp.read()
+            global _bytes_downloaded
+            with _bytes_lock:
+                _bytes_downloaded += len(body)
+            return body
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 raise HTTPNotFound(url) from e

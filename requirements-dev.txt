@@ -13,3 +13,4 @@ scipy>=1.13
 scikit-learn>=1.5
 nbformat
 nbclient
+h5py  # reads the GOES flare history (training.pull_features)
