@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from training.metrics import timse
+from training.metrics import tail_mse_curve, timse
 
 
 def reference_timse(actual, forecast):
@@ -92,3 +92,13 @@ def test_rejects_bad_input():
         timse([400.0, 500.0], [400.0, np.nan])
     with pytest.raises(ValueError, match="infinite"):
         timse([400.0, np.inf], [400.0, 500.0])
+
+
+def test_timse_is_the_area_under_the_tail_mse_curve():
+    rng = np.random.default_rng(3)
+    actual = rng.normal(450, 100, 500).round(-1)  # ties
+    forecast = actual + rng.normal(0, 40, 500)
+    thresholds, tail = tail_mse_curve(actual, forecast)
+    assert np.all(np.diff(thresholds) >= 0)
+    assert np.dot(np.diff(thresholds), tail[:-1]) == pytest.approx(timse(actual, forecast))
+    assert tail[0] == pytest.approx(np.mean((actual - forecast) ** 2))  # S_1 is every point

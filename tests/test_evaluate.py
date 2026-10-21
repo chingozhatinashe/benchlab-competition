@@ -6,7 +6,8 @@ import pytest
 
 from training import datasets
 from training.baselines import Persistence
-from training.evaluate import HORIZON, evaluate, forecast_times
+from training.evaluate import HORIZON, evaluate, forecast_times, run_forecasts, run_timse, score
+from training.metrics import timse
 
 
 @pytest.fixture(scope="module")
@@ -108,3 +109,33 @@ def test_rejects_malformed_forecasts(hourly_csv, bad):
 
     with pytest.raises(ValueError, match="72 finite values"):
         evaluate(Bad(), hourly_csv)
+
+
+def test_run_timse_scores_each_run_on_its_own_hours():
+    actual = np.array([[400.0, 500.0, 600.0], [400.0, np.nan, np.nan], [np.nan] * 3])
+    forecast = np.array([[410.0, 480.0, 600.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    scores = run_timse(forecast, actual)
+    assert scores[0] == pytest.approx(timse(actual[0], forecast[0]))
+    assert np.isnan(scores[1]) and np.isnan(scores[2])  # fewer than 2 observations
+
+
+def test_score_summarises_the_per_run_distribution():
+    rng = np.random.default_rng(0)
+    actual = rng.normal(450, 100, (50, HORIZON))
+    forecast = actual + rng.normal(0, 30, (50, HORIZON))
+    actual[0] = np.nan  # an unscorable run
+    result = score(forecast, actual)
+    runs = run_timse(forecast, actual)[1:]
+    assert result["n_forecasts"] == 50
+    assert result["n_runs_scored"] == 49
+    assert result["run_timse_mean"] == pytest.approx(runs.mean())
+    assert result["run_timse_median"] == pytest.approx(np.median(runs))
+    assert result["run_timse_p10"] <= result["run_timse_median"] <= result["run_timse_p90"]
+    assert result["run_timse_max"] == pytest.approx(runs.max())
+    assert result["timse"] == pytest.approx(timse(actual, forecast))
+
+
+def test_run_forecasts_returns_one_row_per_t0(hourly_csv):
+    t0s, forecasts, actuals = run_forecasts(Persistence(), hourly_csv)
+    assert forecasts.shape == actuals.shape == (len(forecast_times()), HORIZON)
+    assert (t0s == forecast_times()).all()

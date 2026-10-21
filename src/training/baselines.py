@@ -1,8 +1,73 @@
-"""Reference models for training.evaluate. They set the score a real model must beat."""
+"""Reference models that use only the hourly speed series.
+
+Results and analysis: src/experiments/baselines.ipynb.
+
+Every model follows the training.evaluate interface:
+
+    fit(train)            hourly speed Series, training years only
+    predict(history, t0)  72 forecasts for the hours labelled t0+1h .. t0+72h
+
+The fitted models learn one set of coefficients per lead hour, using every hour of
+the fitting data as a t0. Samples whose target is missing are dropped. Missing
+*inputs* fall back to the last observed speed or the fitting-period mean; the
+stored data itself is never filled.
+
+Each fitted model runs in one of two ways:
+
+    Recurrence27()               frozen: fitted once on the training years
+    Rolling(Recurrence27)        refitted at every t0 on the last 30 days of history
+"""
 
 import numpy as np
 
 from training.evaluate import HORIZON
+
+LEADS = np.arange(1, HORIZON + 1)
+ROTATION_HOURS = 27 * 24  # one synodic solar rotation, rounded to whole days
+RECURRENCE_HALF_WIDTH = 3  # hours either side of the lagged time
+N_LAGS = 48
+WINDOW_HOURS = 30 * 24  # rolling fit: sample t0s from the last 30 days of history
+MIN_SAMPLES = 7 * 24  # fewest observed targets per lead for a rolling fit
+
+
+def last_observed(values, positions):
+    """Last finite value strictly before each position (NaN if there is none)."""
+    n = len(values)
+    seen = np.where(np.isfinite(values), np.arange(n), -1)
+    seen = np.maximum.accumulate(seen) if n else seen
+    prev = positions - 1
+    src = np.full(len(positions), -1)
+    ok = (prev >= 0) & (prev < n)
+    src[ok] = seen[prev[ok]]
+    out = np.full(len(positions), np.nan)
+    out[src >= 0] = values[src[src >= 0]]
+    return out
+
+
+def window_means(values, centers, half_width):
+    """Mean of finite values in [c - half_width, c + half_width] for each center c."""
+    n = len(values)
+    finite = np.isfinite(values)
+    csum = np.concatenate([[0.0], np.cumsum(np.where(finite, values, 0.0))])
+    ccount = np.concatenate([[0], np.cumsum(finite)])
+    lo = np.clip(centers - half_width, 0, n)
+    hi = np.clip(centers + half_width + 1, 0, n)
+    count = ccount[hi] - ccount[lo]
+    total = csum[hi] - csum[lo]
+    return np.where(count > 0, total / np.maximum(count, 1), np.nan)
+
+
+def lag_matrix(values, positions, n_lags):
+    """values[p - n_lags : p] for each position p, NaN where out of range."""
+    idx = positions[:, None] + np.arange(-n_lags, 0)
+    out = np.full(idx.shape, np.nan)
+    ok = idx >= 0
+    out[ok] = values[idx[ok]]
+    return out
+
+
+def fill(x, fallback):
+    return np.where(np.isfinite(x), x, fallback)
 
 
 class Persistence:
@@ -17,3 +82,160 @@ class Persistence:
         observed = history.dropna()
         last = observed.iloc[-1] if len(observed) else self.fallback
         return np.full(HORIZON, last)
+
+
+class _PerLeadModel:
+    """Shared fit/predict plumbing: features at position p use only values[:p].
+
+    fit(series, start) uses the hours from position `start` on as sample t0s. The
+    hours before `start` only feed the inputs (lags, the recurrence window), so
+    `lookback` hours of extra history give every sample its full inputs. A target
+    past the end of the series counts as missing, so for a short lead the newest
+    samples are still used.
+    """
+
+    lookback = 0
+
+    def fit(self, train, start=0):
+        values = train.to_numpy(dtype=float)
+        self.mean = float(np.nanmean(values[start:]))
+        positions = np.arange(max(start, 1), len(values))
+        idx = positions[:, None] + LEADS
+        targets = np.full(idx.shape, np.nan)
+        inside = idx < len(values)
+        targets[inside] = values[idx[inside]]
+        self.n_samples = np.isfinite(targets).sum(axis=0)
+        self._fit(self.features(values, positions), targets)
+        return self
+
+    def predict(self, history, t0):
+        values = history.to_numpy(dtype=float)
+        return self._predict(self.features(values, np.array([len(values)])))[0]
+
+
+class ClimatologyBlend(_PerLeadModel):
+    """v(t0+k) = mean + w_k * (last - mean), with w_k in [0, 1]."""
+
+    lookback = 24  # lets the first samples find a last observed speed
+
+    def features(self, values, positions):
+        return fill(last_observed(values, positions), self.mean)
+
+    def _fit(self, last, targets):
+        x = last - self.mean
+        self.weights = np.empty(HORIZON)
+        for k in range(HORIZON):
+            ok = np.isfinite(targets[:, k])
+            w = np.dot(x[ok], targets[ok, k] - self.mean) / np.dot(x[ok], x[ok])
+            self.weights[k] = np.clip(w, 0.0, 1.0)
+
+    def _predict(self, last):
+        return self.mean + np.outer(last - self.mean, self.weights)
+
+
+class Recurrence27(_PerLeadModel):
+    """v(t0+k) = a_k + b_k * last + c_k * (speed one solar rotation before t0+k)."""
+
+    lookback = ROTATION_HOURS + RECURRENCE_HALF_WIDTH
+
+    def features(self, values, positions):
+        last = fill(last_observed(values, positions), self.mean)
+        centers = positions[:, None] + LEADS - ROTATION_HOURS
+        recur = fill(window_means(values, centers, RECURRENCE_HALF_WIDTH), self.mean)
+        return last, recur
+
+    def _fit(self, feats, targets):
+        last, recur = feats
+        self.coef = np.empty((HORIZON, 3))
+        for k in range(HORIZON):
+            ok = np.isfinite(targets[:, k])
+            design = np.column_stack([np.ones(ok.sum()), last[ok], recur[ok, k]])
+            self.coef[k] = np.linalg.lstsq(design, targets[ok, k], rcond=None)[0]
+
+    def _predict(self, feats):
+        last, recur = feats
+        a, b, c = self.coef.T
+        return a + np.outer(last, b) + c * recur
+
+
+class Autoregressive(_PerLeadModel):
+    """Ridge regression per lead on the last 48 hourly speeds (fixed alpha, not tuned)."""
+
+    alpha = 1.0
+    lookback = N_LAGS
+
+    def features(self, values, positions):
+        last = fill(last_observed(values, positions), self.mean)
+        lags = lag_matrix(values, positions, N_LAGS)
+        return np.where(np.isfinite(lags), lags, last[:, None])
+
+    def _fit(self, lags, targets):
+        # Ridge with an unpenalised intercept, as sklearn.linear_model.Ridge fits it.
+        n_lags = lags.shape[1]
+        self.coef = np.empty((HORIZON, n_lags))
+        self.intercept = np.empty(HORIZON)
+        for k in range(HORIZON):
+            ok = np.isfinite(targets[:, k])
+            x, y = lags[ok], targets[ok, k]
+            x_mean, y_mean = x.mean(axis=0), y.mean()
+            xc = x - x_mean
+            gram = xc.T @ xc + self.alpha * np.eye(n_lags)
+            self.coef[k] = np.linalg.solve(gram, xc.T @ (y - y_mean))
+            self.intercept[k] = y_mean - x_mean @ self.coef[k]
+
+    def _predict(self, lags):
+        return self.intercept + lags @ self.coef.T
+
+
+class Rolling:
+    """Refit a per-lead model at every t0 on the last `window` hours of history.
+
+    The coefficients and the climatological mean then follow recent conditions
+    instead of staying frozen at their training-year values. History is
+    everything observed by t0, so a refit never sees the hours being forecast.
+    The hyper-parameters (window, lags, alpha) stay fixed; choose them on the
+    training years only.
+
+    fit(train) fits the frozen model once. It is used only for a t0 whose window
+    has fewer than MIN_SAMPLES observed targets at some lead (a long data gap);
+    `n_fallback` counts those t0s.
+    """
+
+    def __init__(self, model_cls, window=WINDOW_HOURS):
+        self.model_cls = model_cls
+        self.window = window
+
+    def fit(self, train):
+        self.frozen = self.model_cls().fit(train)
+        self.n_fallback = 0
+        return self
+
+    def predict(self, history, t0):
+        need = self.window + self.model_cls.lookback
+        recent = history.iloc[-need:]
+        start = max(len(recent) - self.window, 0)
+        if np.isfinite(recent.to_numpy(dtype=float)[start:]).sum() >= MIN_SAMPLES:
+            model = self.model_cls().fit(recent, start)
+            if model.n_samples.min() >= MIN_SAMPLES:
+                return model.predict(recent, t0)
+        self.n_fallback += 1
+        return self.frozen.predict(history, t0)
+
+
+def rolling(model_cls, window=WINDOW_HOURS):
+    """A zero-argument factory, so rolling models can sit in ALL next to the classes."""
+    return lambda: Rolling(model_cls, window)
+
+
+FROZEN = {
+    "persistence": Persistence,
+    "climatology_blend": ClimatologyBlend,
+    "recurrence_27d": Recurrence27,
+    "autoregressive_48h": Autoregressive,
+}
+ROLLING = {
+    "climatology_blend_rolling": rolling(ClimatologyBlend),
+    "recurrence_27d_rolling": rolling(Recurrence27),
+    "autoregressive_48h_rolling": rolling(Autoregressive),
+}
+ALL = {**FROZEN, **ROLLING}
