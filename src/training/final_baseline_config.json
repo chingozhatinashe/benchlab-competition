@@ -1,0 +1,35 @@
+{
+  "lags_days": [
+    27.0,
+    13.5
+  ],
+  "half_width": 3,
+  "window_days": 60.0,
+  "rolling_weight": 0.25,
+  "tail_power": 1.0,
+  "loss": "run_timse",
+  "blend_persistence": true,
+  "stack_days": 365.0,
+  "min_samples": 48,
+  "ridge": 1e-06,
+  "tuning": {
+    "objective": "geometric mean over folds of run_timse_mean / persistence",
+    "folds": [
+      [
+        "2023-10-21",
+        "2024-10-20"
+      ],
+      [
+        "2024-10-20",
+        "2025-10-20"
+      ]
+    ],
+    "score": {
+      "timse_vs_persistence": 0.8092,
+      "run_timse_mean_vs_persistence": 0.5181,
+      "run_timse_median_vs_persistence": 1.1895,
+      "run_timse_p90_vs_persistence": 0.3401,
+      "rmse_vs_persistence": 1.0427
+    }
+  }
+}

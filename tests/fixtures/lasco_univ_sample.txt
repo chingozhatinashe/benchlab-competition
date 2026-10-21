@@ -1,0 +1,9 @@
+ ========= SOHO/LASCO CME CATALOG==========      LAST UPDATED: 2026/10/09 14:14
+ Date       Time     Central  Width  Linear   2nd order speed      Accel     Mass      Kinetic    MPA   Remarks
+                        PA           Speed  initial final   20R                        Energy                 
+2025/10/01  02:24:05    279     22    382     306    465    556      9.0*   3.7e+14    2.7e+29    269   Very Poor Event
+2025/10/01  07:24:05     85     37    301     142    455    986     39.2*   1.7e+14    7.9e+28     90   Very Poor Event; Only C2
+2025/10/02  04:12:05     72     10    272     320    225      0    -25.2*   -------    -------     72   Very Poor Event; Only C2
+2025/10/03  16:36:05     33     39    212       0    411    608     15.6*   1.0e+15    2.3e+29     42   Very Poor Event
+2025/10/03  16:48:05    125    188    221       0    428    434      8.1*   8.2e+15*   2.0e+30*   105   Poor Event; Partial Halo
+2025/10/21  20:24:05   Halo    360   1192    1370   1014   1144    -24.9    2.4e+16*   1.7e+32*   313   

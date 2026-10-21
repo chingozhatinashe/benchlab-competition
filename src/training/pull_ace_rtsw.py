@@ -17,19 +17,17 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
-from connectors.base import STATUS_MISSING, STATUS_OK, HTTPNotFound, http_get_bytes, to_utc
+# The live connector parses and averages the same way, so training and live data match.
+from connectors.ace_archive import BASE_URL, FILE_PATTERN, parse_minutes
+from connectors.base import STATUS_MISSING, HTTPNotFound, http_get_bytes, to_utc
+from feature_engineering.hourly import to_hourly
 from training.datasets import DATA_DIR, DATA_START, EVAL_END
 
-BASE_URL = "https://soho.nascom.nasa.gov/sdb/ace/daily"
-FILE_PATTERN = "{day:%Y%m%d}_ace_swepam_1m.txt"
-FILL_SPEED = -9999.9
 MINUTES_PER_DAY = 1440
 WORKERS = 4
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-COLUMNS = ["year", "month", "day", "hhmm", "mjd", "sod", "status", "density", "speed", "temp"]
 
 
 def log(msg):
@@ -56,34 +54,6 @@ def fetch_day(day, raw_dir):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     return text
-
-
-def parse_minutes(text):
-    """1-minute speeds from one file, NaN where the status is bad or the value is fill."""
-    rows = [line.split() for line in text.splitlines() if line[:1].isdigit()]
-    rows = [r for r in rows if len(r) == len(COLUMNS)]
-    if not rows:
-        return pd.Series(dtype=float, index=pd.DatetimeIndex([], tz="UTC", name="Time"))
-    df = pd.DataFrame(rows, columns=COLUMNS)
-    stamp = df["year"] + df["month"] + df["day"] + df["hhmm"]
-    times = pd.to_datetime(stamp, format="%Y%m%d%H%M", utc=True)
-    speed = df["speed"].astype(float)
-    valid = (df["status"].astype(int) == 0) & (speed != FILL_SPEED)
-    return pd.Series(
-        np.where(valid, speed, np.nan),
-        index=pd.DatetimeIndex(times, name="Time"),
-        name="speed",
-    )
-
-
-def to_hourly(minutes, start, end):
-    """Hourly mean of valid minutes over [start, end). No valid minutes gives NaN."""
-    hours = pd.date_range(start, end, freq="h", inclusive="left", name="Time")
-    grouped = minutes.groupby(minutes.index.floor("h"))
-    df = pd.DataFrame({"value": grouped.mean(), "n_valid": grouped.count()}).reindex(hours)
-    df["n_valid"] = df["n_valid"].fillna(0).astype(int)
-    df["status"] = np.where(df["n_valid"] > 0, STATUS_OK, STATUS_MISSING)
-    return df.reset_index()[["Time", "status", "value", "n_valid"]]
 
 
 def run(start=DATA_START, end=EVAL_END, out=DATA_DIR):

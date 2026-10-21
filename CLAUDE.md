@@ -25,6 +25,10 @@ uv venv --python 3.10 .venv && uv pip install --python .venv -r requirements-dev
 bash package_submission.sh                              # builds submission.zip from src/
 .venv/Scripts/python -m training.pull_omni              # pulls 2 years of OMNI hourly data into src/data/omni_hourly/
 .venv/Scripts/python -m training.pull_ace_rtsw          # pulls the pinned 5-year real-time ACE speed series into src/data/ace_rtsw/
+.venv/Scripts/python -m training.pull_lasco_cme --start 2021-10  # pulls the SOHO/LASCO CME catalogue into src/data/lasco_cme/ (analysis only: published months late)
+.venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
+.venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
+.venv/Scripts/python -m training.final_baseline evaluate # scores it on the eval year (once, after choosing)
 ```
 
 **Evaluation** (`docs/evaluation.md`): score every model with `training.evaluate.evaluate(model)`, which computes TIMSE on the held-out final year. A forecast at `t0` may use, and refit on, only hours before `t0` (e.g. the last 30 days, `training.baselines.Rolling`). Choose hyper-parameters, features and models on the training years (`training.datasets.load_train()`), never by looking at eval scores.
@@ -41,7 +45,8 @@ bash package_submission.sh                              # builds submission.zip 
 - `src/data/` is gitignored. `src/assets/` (weights) is tracked.
 
 **Runtime call chain:** `ENTRYPOINT /app/run.sh <t0>` → `python3 /app/model.py <t0> > /tmp/forecast.json` → `/app/upload.sh` POSTs to the presigned `$OUTPUT_POST`.
-- `model.py` owns only the CLI and the output format (`t0`, `valid_from`, `forecast_speed_kms`). Forecasting logic belongs behind `inference.run_forecast(t0)`. That function is currently a 420 km/s placeholder; it should orchestrate connectors → feature_engineering → models.
+- `model.py` owns only the CLI and the output format (`t0`, `valid_from`, `forecast_speed_kms`). Forecasting logic belongs behind `inference.run_forecast(t0)`, which orchestrates connectors → feature_engineering → models: it pulls ~3 months of 1-minute ACE speed (`ACEArchiveConnector`, the training-data source, topped up from the SWPC real-time feed), averages it to hourly exactly as the training data, and runs `models.final_baseline.FinalBaseline` loaded from `assets/final_baseline.json`. Every step falls back (persistence, then the training mean) rather than failing.
+- **The reference baseline** is `models.final_baseline` (`docs/final_baseline.md`). Every new model is compared against it. `SWP_OFFLINE=1` makes `run_forecast` skip the network (used by `tests/test_model_contract.py`).
 - The platform layer and the `ENTRYPOINT ["/app/run.sh"]` contract in the Dockerfile must stay intact.
 
 **Imports.** The packages are top-level, with no `src.` prefix.
