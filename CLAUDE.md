@@ -25,6 +25,7 @@ uv venv --python 3.10 .venv && uv pip install --python .venv -r requirements-dev
 bash package_submission.sh                              # builds submission.zip from src/
 .venv/Scripts/python -m training.pull_omni              # pulls 2 years of OMNI hourly data into src/data/omni_hourly/
 .venv/Scripts/python -m training.pull_ace_rtsw          # pulls the pinned 5-year real-time ACE speed series into src/data/ace_rtsw/
+.venv/Scripts/python -m training.pull_lasco_cme --start 2021-10  # pulls the SOHO/LASCO CME catalogue into src/data/lasco_cme/ (analysis only: published months late)
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
 .venv/Scripts/python -m training.final_baseline evaluate # scores it on the eval year (once, after choosing)
