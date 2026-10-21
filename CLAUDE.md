@@ -26,6 +26,8 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.pull_omni              # pulls 2 years of OMNI hourly data into src/data/omni_hourly/
 .venv/Scripts/python -m training.pull_ace_rtsw          # pulls the pinned 5-year real-time ACE speed series into src/data/ace_rtsw/
 .venv/Scripts/python -m training.pull_lasco_cme --start 2021-10  # pulls the SOHO/LASCO CME catalogue into src/data/lasco_cme/ (analysis only: published months late)
+.venv/Scripts/python -m training.pull_features all       # regressor history (ACE plasma/field/EPAM, AIA images, GOES flares, F10.7) -> src/data/features/table.csv.gz + assets/feature_climatology.json; resumable
+.venv/Scripts/python -m inference.check_features 20261021T180000Z  # live dry run of the regressors: sources, timing, MB, values
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
 .venv/Scripts/python -m training.final_baseline evaluate # scores it on the eval year (once, after choosing)
@@ -46,6 +48,10 @@ bash package_submission.sh                              # builds submission.zip 
 
 **Runtime call chain:** `ENTRYPOINT /app/run.sh <t0>` → `python3 /app/model.py <t0> > /tmp/forecast.json` → `/app/upload.sh` POSTs to the presigned `$OUTPUT_POST`.
 - `model.py` owns only the CLI and the output format (`t0`, `valid_from`, `forecast_speed_kms`). Forecasting logic belongs behind `inference.run_forecast(t0)`, which orchestrates connectors → feature_engineering → models: it pulls ~3 months of 1-minute ACE speed (`ACEArchiveConnector`, the training-data source, topped up from the SWPC real-time feed), averages it to hourly exactly as the training data, and runs `models.final_baseline.FinalBaseline` loaded from `assets/final_baseline.json`. Every step falls back (persistence, then the training mean) rather than failing.
+- **Regressors** (`docs/features.md`) are not used by the forecast yet.
+  - Pipeline: `inference.fetch_inputs` (all sources in parallel, 300 s budget) → `feature_engineering.build.build_table` → `feature_engineering.impute`.
+  - Each source has an availability rule (in-situ t0 − 10 min, AIA t0 − 1 h, flares by peak time, F10.7 up to the previous day).
+  - `tests/test_features.py` checks that scrambling everything not available at t0 leaves the features unchanged. Keep that test passing when adding a regressor.
 - **The reference baseline** is `models.final_baseline` (`docs/final_baseline.md`). Every new model is compared against it. `SWP_OFFLINE=1` makes `run_forecast` skip the network (used by `tests/test_model_contract.py`).
 - The platform layer and the `ENTRYPOINT ["/app/run.sh"]` contract in the Dockerfile must stay intact.
 

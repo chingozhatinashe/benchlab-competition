@@ -41,6 +41,30 @@ it falls back to persistence.
 **Runtime.** numpy and pandas only. A run downloads about 3 months of daily files
 (a few MB, typically under a minute) and computes the forecast in about a second.
 
+## Regressor inputs (built, not yet used by the forecast)
+
+`feature_engineering/` also builds 40 regressors that later models will use (see
+`docs/features.md` in the repository). They are not part of the forecast yet, and a
+run of `model.py` doesn't fetch them. `python3 -m inference.check_features <t0>`
+fetches and builds them as a dry run.
+- **Plasma:** density, temperature, dynamic pressure, CME temperature signature.
+- **Magnetic field:** Bt, Bz, sector polarity, field variability.
+- **CME and shock state:** shock timing, EPAM energetic protons.
+- **Coronal holes:** area from SDO/AIA 193 images.
+- **Eruptive activity:** GOES flares.
+- **Solar activity level:** F10.7.
+
+| Source | Host (declared) | Used for |
+|---|---|---|
+| ACE SWEPAM/MAG/EPAM daily lists | `soho.nascom.nasa.gov` | speed (forecast); plasma, field, particles |
+| SWPC real-time feeds, flares, F10.7 | `services.swpc.noaa.gov` | latest minutes; flares; F10.7 |
+| SDO/AIA 193 browse images | `sdo.gsfc.nasa.gov` | coronal holes (decoded with Pillow) |
+| CDAWeb OMNI | `cdaweb.gsfc.nasa.gov` | declared for history connectors; not contacted by a run |
+
+**Data rules:**
+- Only data published by `t0` is used: in-situ minutes before t0 − 10 min, AIA images taken before t0 − 1 h, flares that peaked by t0 − 10 min, and F10.7 up to the previous day.
+- Gaps are carried forward from the past for a short time only, then filled with the training-years median from `assets/feature_climatology.json`, with a flag.
+
 ## The contract
 
 | | |
@@ -69,13 +93,13 @@ submission/
 ├── upload.sh            # provided — or reimplement in your language
 ├── submission.json      # required
 ├── README.md            # required — this file
-├── requirements.txt     # runtime Python dependencies (numpy, pandas)
+├── requirements.txt     # runtime Python dependencies (numpy, pandas, Pillow)
 ├── model.py             # CLI and output format; calls inference.run_forecast
-├── connectors/          # data clients (ACE archive, SWPC real time, CDAWeb)
-├── feature_engineering/ # minutes -> hourly speeds, causal features
+├── connectors/          # data clients (ACE archive, SWPC, SDO/AIA, CDAWeb)
+├── feature_engineering/ # hourly speeds, recurrence features, regressors, imputation
 ├── models/              # the forecast model (models/final_baseline.py)
 ├── inference/           # fetch -> features -> model, with fallbacks
-├── assets/              # fitted weights (final_baseline.json)
+├── assets/              # fitted weights, regressor medians
 └── local_tests/         # run test_local.sh from here before you submit
     ├── test_local.sh
     └── mock_platform.py

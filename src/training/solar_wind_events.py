@@ -33,7 +33,19 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from connectors.ace_archive import parse_daily
 from connectors.base import HTTPNotFound, http_get_bytes
+from feature_engineering.insitu import (  # noqa: F401  (re-exported for the notebooks)
+    FIELD_SHOCK_DB,
+    FIELD_SHOCK_RATIO,
+    ICME_MIN_FIELD,
+    SHOCK_DV,
+    SHOCK_RATIO,
+    SHOCK_SEPARATION,
+    TEMP_RATIO,
+    detect_shocks,
+    expected_temperature,
+)
 from training.datasets import DATA_DIR
 
 PLASMA_DIR = DATA_DIR / "raw"
@@ -41,22 +53,10 @@ MAG_DIR = DATA_DIR.parent / "ace_mag" / "raw"
 ARCHIVE = "https://soho.nascom.nasa.gov/sdb/ace/daily"
 PLASMA_FILE = "{day:%Y%m%d}_ace_swepam_1m.txt"
 MAG_FILE = "{day:%Y%m%d}_ace_mag_1m.txt"
-PLASMA_COLUMNS = ["year", "month", "day", "hhmm", "mjd", "sod", "status",
-                  "density", "speed", "temperature"]
-MAG_COLUMNS = ["year", "month", "day", "hhmm", "mjd", "sod", "status",
-               "bx", "by", "bz", "bt", "lat", "lon"]
 
-# Shock (10-minute means compared across a 20-minute step)
-SHOCK_DV = 40.0
-SHOCK_RATIO = 1.3
-SHOCK_SEPARATION = pd.Timedelta(hours=6)
-FIELD_SHOCK_RATIO = 2.0
-FIELD_SHOCK_DB = 8.0
-# ICME
-TEMP_RATIO = 0.5
+# ICME (the shock and cold-plasma thresholds live in feature_engineering.insitu)
 ICME_MIN_HOURS = 8
 ICME_GAP_HOURS = 3
-ICME_MIN_FIELD = 8.0
 SHEATH_MAX = pd.Timedelta(hours=24)
 FLANK_HOURS = pd.Timedelta(hours=24)
 # Stream arrival
@@ -71,31 +71,14 @@ def log(msg):
 
 
 # ---------------------------------------------------------------------- data
-def _parse(text, columns, fields, fills):
-    rows = [line.split() for line in text.splitlines() if line[:1].isdigit()]
-    rows = [r for r in rows if len(r) == len(columns)]
-    if not rows:
-        return pd.DataFrame(columns=fields, dtype=float)
-    df = pd.DataFrame(rows, columns=columns)
-    times = pd.to_datetime(df["year"] + df["month"] + df["day"] + df["hhmm"],
-                           format="%Y%m%d%H%M", utc=True)
-    good = df["status"].astype(int) == 0
-    out = pd.DataFrame(index=pd.DatetimeIndex(times, name="Time"))
-    for f in fields:
-        v = df[f].astype(float).to_numpy()
-        out[f] = np.where(good & (v > fills[f]), v, np.nan)
-    return out[~out.index.duplicated(keep="first")]
-
-
 def parse_plasma(text):
     """1-minute density (cm^-3), speed (km/s) and temperature (K); NaN where flagged."""
-    fills = {"density": -9999.0, "speed": -9999.0, "temperature": 0.0}
-    return _parse(text, PLASMA_COLUMNS, ["density", "speed", "temperature"], fills)
+    return parse_daily(text, "swepam")
 
 
 def parse_mag(text):
-    """1-minute field magnitude Bt and GSM Bz (nT); NaN where flagged."""
-    return _parse(text, MAG_COLUMNS, ["bt", "bz"], {"bt": -999.0, "bz": -999.0})
+    """1-minute field components, magnitude Bt and angles (nT, GSM); NaN where flagged."""
+    return parse_daily(text, "mag")
 
 
 def _cached(day, directory, pattern):
@@ -130,38 +113,6 @@ def load_minutes(start, end, kind):
 def load_conditions(start, end):
     """Minute plasma + field on one index, for [start, end)."""
     return load_minutes(start, end, "plasma").join(load_minutes(start, end, "mag"), how="outer")
-
-
-# ---------------------------------------------------------------------- physics
-def expected_temperature(speed):
-    """Typical proton temperature (K) for a speed (km/s) in ambient wind (Lopez 1987)."""
-    v = np.asarray(speed, dtype=float)
-    slow = (0.031 * v - 5.1) ** 2 * 1e3
-    fast = (0.51 * v - 142.0) * 1e3
-    return np.where(v < 500, slow, fast)
-
-
-def detect_shocks(minutes):
-    """Times of fast-forward shocks: V, n, T and Bt jump within 20 minutes (or Bt alone)."""
-    ten = minutes[["speed", "density", "temperature", "bt"]].resample("10min").mean()
-    before = ten.rolling(2, min_periods=1).mean().shift(1)  # the 20 min before
-    after = ten.rolling(2, min_periods=1).mean().shift(-1)  # this and the next 10 min
-    plasma = (
-        (after["speed"] - before["speed"] >= SHOCK_DV)
-        & (after["density"] >= SHOCK_RATIO * before["density"])
-        & (after["temperature"] >= SHOCK_RATIO * before["temperature"])
-        & (after["bt"] >= SHOCK_RATIO * before["bt"])
-    )
-    field = (after["bt"] >= FIELD_SHOCK_RATIO * before["bt"]) & (
-        after["bt"] - before["bt"] >= FIELD_SHOCK_DB
-    )
-    jump = plasma | field
-    times = list(ten.index[jump.to_numpy()])
-    kept = []
-    for t in times:
-        if not kept or t - kept[-1] > SHOCK_SEPARATION:
-            kept.append(t)
-    return pd.DatetimeIndex(kept, name="shock")
 
 
 def _runs(mask):

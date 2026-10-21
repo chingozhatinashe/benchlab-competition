@@ -1,0 +1,23 @@
+:Data_list: 20261020_ace_epam_5m.txt
+:Created: 2026 Oct 21 0011 UT
+# Prepared by the U.S. Dept. of Commerce, NOAA, Space Weather Prediction Center
+# Please send comments and suggestions to SWPC.Webmaster@noaa.gov 
+# 
+# Units: Differential Flux particles/cm2-s-ster-MeV
+# Units: Anisotropy Index 0.0 - 2.0
+# Status(S): 0 = nominal, 4,6,7,8 = bad data, unable to process, 9 = no data
+# Missing data values: -1.00e+05, index = -1.00
+# Source: ACE Satellite - Electron, Proton, and Alpha Monitor
+#
+#
+#                      5-minute averaged Real-time Differential Electron and Proton Flux 
+# 
+#                Modified Seconds ---------------------------- Differential Flux ---------------------------
+# UT Date   Time  Julian  of the  ----- Electron -----   ------------------- Protons keV -------------------   Anis.
+# YR MO DA  HHMM    Day    Day    S    38-53   175-315   S    47-68   115-195   310-580   795-1193 1060-1900   Index
+#-------------------------------------------------------------------------------------------------------------------
+2026 10 20  0000   61333       0  0  2.14e+03  1.63e+01  0  5.21e+03  1.05e+01  1.51e+00  2.24e-01  1.23e-01  -1.00
+2026 10 20  0005   61333     300  0  2.19e+03  1.50e+01  0  5.54e+03  1.37e+01  1.50e+00  6.26e-01  6.15e-02  -1.00
+2026 10 20  0010   61333     600  0  1.74e+03  1.00e+01  0  5.54e+03  1.04e+01  1.70e+00  3.12e-01  1.02e-01  -1.00
+2026 10 20  0015   61333     900  0  1.75e+03  1.70e+01  0  5.12e+03  1.00e+01  1.34e+00  2.77e-01  1.25e-01  -1.00
+2026 10 20  0025   61333    1500  0  1.82e+03  1.52e+01  4 -1.00e+05 -1.00e+05 -1.00e+05 -1.00e+05 -1.00e+05  -1.00
