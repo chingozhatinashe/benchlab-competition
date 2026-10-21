@@ -19,7 +19,11 @@ def run(models=ALL):
         result = evaluate(cls())
         result["seconds"] = round(time.perf_counter() - started, 1)
         rows.append({"model": name, **result})
-        print(f"  {name:<20} TIMSE {result['timse']:.4g}  RMSE {result['rmse']:.1f}", flush=True)
+        print(
+            f"  {name:<20} TIMSE {result['timse']:.4g}  "
+            f"run TIMSE median {result['run_timse_median']:.4g}  RMSE {result['rmse']:.1f}",
+            flush=True,
+        )
     return pd.DataFrame(rows).sort_values("timse").reset_index(drop=True)
 
 

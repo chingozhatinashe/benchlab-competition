@@ -31,11 +31,15 @@ from training.baselines import Persistence
 from training.evaluate import evaluate
 
 evaluate(Persistence())
-# {"timse": ..., "n_forecasts": ..., "n_scored": ..., "n_missing_actual": ...}
+# {"timse": ..., "run_timse_mean": ..., "run_timse_median": ..., ..., "rmse": ..., "n_forecasts": ...}
 ```
 
 - **Model interface:** `fit(train: pd.Series)` and `predict(history: pd.Series, t0) -> 72 floats`.
 - **Forecast times:** every 6 hours (00/06/12/18Z) from 2025-10-20 00Z, up to the last `t0` whose 72-hour window ends inside the eval year. That gives 1,448 forecasts.
 - **Target alignment:** lead *k* (1–72) is compared with the hour labelled `t0 + k h`. Benchlab hasn't said exactly how it bins hours against `t0+1h … t0+72h`, so this is an assumption.
-- **Scoring:** all forecasts are pooled into one TIMSE. Hours with a missing observation are excluded, following the TIMSE rule.
-- **Reference score:** `Persistence` (the last observed hour, repeated) is the score a model must beat.
+- **Scoring:** two views, both lower-is-better. Hours with a missing observation are excluded, following the TIMSE rule.
+  - **Pooled** (`timse`): all forecasts are combined into one TIMSE, with thresholds from the whole year.
+  - **Per run** (`run_timse_mean`, `_median`, `_std`, `_p10`, `_p90`, `_max`): each 72-hour run is scored on its own hours, then summarised. A run needs at least two observed hours.
+  - Benchlab hasn't said how it aggregates runs, so look at both.
+- **Raw forecasts:** `run_forecasts(model)` returns `(t0s, forecasts, actuals)` for diagnostics, using the same protocol.
+- **Reference scores:** the speed-only baselines in `src/experiments/baselines.ipynb`. Persistence wins pooled TIMSE; 27-day recurrence wins per run.
