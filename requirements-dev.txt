@@ -9,5 +9,7 @@ ipykernel
 matplotlib
 requests
 statsmodels
+scipy>=1.13
+scikit-learn>=1.5
 nbformat
 nbclient

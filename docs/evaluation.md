@@ -43,4 +43,5 @@ evaluate(Persistence())
   - **Per run** (`run_timse_mean`, `_median`, `_std`, `_p10`, `_p90`, `_max`): each 72-hour run is scored on its own hours, then summarised. A run needs at least two observed hours.
   - Benchlab hasn't said how it aggregates runs, so look at both.
 - **Raw forecasts:** `run_forecasts(model)` returns `(t0s, forecasts, actuals)` for diagnostics, using the same protocol.
-- **Reference scores:** the speed-only baselines in `src/experiments/baselines.ipynb`, both frozen and refitted at every `t0` on the last 30 days. Rolling 27-day recurrence has the best pooled TIMSE and per-run mean; frozen 27-day recurrence has the best per-run median.
+- **Reference scores:** the speed-only baselines in `src/experiments/baselines.ipynb`, both frozen and refitted at every `t0` on the last 30 days. Rolling 27-day recurrence has the best pooled TIMSE and per-run mean of those; frozen 27-day recurrence has the best per-run median.
+- **The reference baseline** that ships, and that every new model is compared against, is `models.final_baseline` ([final_baseline.md](final_baseline.md)): per-run mean TIMSE 2.59 × 10⁶ and pooled TIMSE 5.58 × 10⁷ on the eval year. Its hyper-parameters were tuned with walk-forward folds inside the training years (`python -m training.final_baseline tune`).

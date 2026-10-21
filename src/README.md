@@ -1,11 +1,45 @@
-# Solar Wind Prediction Competition — submission template
+# Solar wind speed forecast — reference baseline (team TINASHE)
 
-This is your starting point. Replace what needs replacing, keep the contract,
-and this README, intact. `README.md` at the zip root is one of three files
-the platform checks for before it will even attempt a build (the others are
-`Dockerfile` and `submission.json`) — so leaving one out fails the build
-before your model ever runs. Once you've read this, replace the prose below
-with a description of your own model; the file just needs to exist.
+A 72-hour hourly forecast of solar wind speed at L1 from the speed history alone.
+This is the team's reference baseline: every later model is compared against it.
+
+## The submitted model
+
+**Input.** The real-time ACE SWEPAM 1-minute proton speed that NOAA SWPC
+publishes, read from the daily lists archived at `soho.nascom.nasa.gov` (the
+same source and processing as the training data) and topped up with the latest
+minutes from the SWPC real-time feed (`services.swpc.noaa.gov`). Only minutes
+stamped before `t0` are used. They are averaged to hourly speeds, with no
+imputation.
+
+**Model** (`models/final_baseline.py`). For each lead k = 1…72 h:
+
+    R_k = a_k + b_k·(last − μ) + Σ_j c_kj·(r_j(k) − μ)
+    F_k = w_k·last + (1 − w_k)·R_k
+
+- `last` is the last observed hourly speed before `t0`, and μ the training mean.
+- `r_j(k)` is the mean speed within ±3 h of `t0 + k − lag_j`. The lags are one
+  solar rotation (27 d) plus sub-rotation lags, for several streams per rotation.
+- **Frozen + rolling coefficients.** (a, b, c) blend coefficients fitted once on the
+  training years (baked into `assets/final_baseline.json`) with coefficients
+  refitted at every run on a recent window of history.
+- **Tail-weighted loss.** Both fits weight each hour's squared error by its share of
+  the run's TIMSE, so the loss is the competition metric.
+- **Persistence blend.** w_k ∈ [0, 1] blends in persistence; it is fitted out of
+  sample on the last training year.
+
+The hyper-parameters (lags, window, rolling weight, loss strength) were chosen on
+the training years only: lags of 27 d and 13.5 d, a 60-day rolling window with
+weight 0.25, and the full per-run TIMSE loss. Weights, choices and scores are in
+`docs/final_baseline.md` in the repository.
+
+**Robustness.** A run never fails for lack of data. If the archive or the feed is
+down, the model works with whatever history arrives (missing inputs become μ).
+With no data at all it forecasts the training mean, and if the model itself fails
+it falls back to persistence.
+
+**Runtime.** numpy and pandas only. A run downloads about 3 months of daily files
+(a few MB, typically under a minute) and computes the forecast in about a second.
 
 ## The contract
 
@@ -35,8 +69,13 @@ submission/
 ├── upload.sh            # provided — or reimplement in your language
 ├── submission.json      # required
 ├── README.md            # required — this file
-├── requirements.txt     # example — delete if you don't use Python
-├── model.py             # example — replace with anything
+├── requirements.txt     # runtime Python dependencies (numpy, pandas)
+├── model.py             # CLI and output format; calls inference.run_forecast
+├── connectors/          # data clients (ACE archive, SWPC real time, CDAWeb)
+├── feature_engineering/ # minutes -> hourly speeds, causal features
+├── models/              # the forecast model (models/final_baseline.py)
+├── inference/           # fetch -> features -> model, with fallbacks
+├── assets/              # fitted weights (final_baseline.json)
 └── local_tests/         # run test_local.sh from here before you submit
     ├── test_local.sh
     └── mock_platform.py
@@ -59,11 +98,9 @@ Everything else is here to make the contract easy to meet:
   what does the POSTing.
 - **`submission.json`** — declares your team and your resource request (see
   below). Read once, at build time.
-- **`requirements.txt`** — an example Python dependency list. If you're not
-  using Python, delete it.
-- **`model.py`** — an example model. It returns a flat 420 km/s forecast —
-  a floor, not a baseline. Replace it with anything that honours the
-  contract above.
+- **`requirements.txt`** — the image's Python dependencies.
+- **`model.py`** — parses `t0`, calls `inference.run_forecast(t0)` and writes
+  the output JSON. The model itself is described at the top of this file.
 - **`local_tests/`** — not required at submission time, but the fastest way
   to catch a packaging mistake before it costs you a build cycle.
   `test_local.sh` builds and runs your image exactly as the platform will;

@@ -1,7 +1,13 @@
-"""Output contract for src/model.py, as run by run.sh inside the container."""
+"""Output contract for src/model.py, as run by run.sh inside the container.
+
+The model runs offline here (SWP_OFFLINE=1), so these tests check the contract and
+the no-data fallback without the network. The live data path is covered by
+tests/test_inference.py and by the container job in CI.
+"""
 
 import json
 import math
+import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -19,6 +25,7 @@ def run_model(*args):
         capture_output=True,
         text=True,
         timeout=600,
+        env={**os.environ, "SWP_OFFLINE": "1"},
     )
 
 
