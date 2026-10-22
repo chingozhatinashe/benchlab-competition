@@ -1,0 +1,69 @@
+{
+  "features": [
+    "ch_cm_at_12h",
+    "bt_max_6h",
+    "density_mean_24h",
+    "bt_mean_6h",
+    "bz_min_24h",
+    "icme_mean_48h",
+    "log_p47_mean_1h",
+    "log_temperature_mean_48h",
+    "polarity_mean_48h",
+    "xray_peak_max_120h",
+    "log_t_ratio_mean_48h",
+    "density_lag13_72h",
+    "log_p310_mean_1h",
+    "polarity_lag27_72h",
+    "speed_mean_48h",
+    "pressure_lag27_72h",
+    "f107_mean_168h",
+    "density_lag27_72h",
+    "m_flares_count_120h",
+    "ch_cm_at_0h",
+    "ch_cm_at_24h",
+    "ch_cm_at_48h",
+    "ch_cm_at_72h",
+    "ch_east_at_24h",
+    "ch_disk_at_0h"
+  ],
+  "n_components": 3,
+  "max_components": 8,
+  "ml_runs": 1500,
+  "restarts": 2,
+  "max_iter": 200,
+  "jitter": 1e-06,
+  "seed": 0,
+  "selection": {
+    "set": "H_hybrid",
+    "fit_runs_per_fold": [
+      500,
+      500
+    ],
+    "objective": "geometric mean over folds of per-run mean TIMSE / persistence",
+    "folds": [
+      [
+        "2023-10-21",
+        "2024-10-20"
+      ],
+      [
+        "2024-10-20",
+        "2025-10-20"
+      ]
+    ],
+    "score": 0.63192,
+    "fold_ratios": [
+      0.69222,
+      0.57688
+    ],
+    "explained_fold2": [
+      0.6577,
+      0.1518,
+      0.0505,
+      0.0279,
+      0.016,
+      0.0153,
+      0.0112,
+      0.0068
+    ]
+  }
+}
