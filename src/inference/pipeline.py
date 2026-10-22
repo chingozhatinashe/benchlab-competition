@@ -142,16 +142,21 @@ def load_linear(path=None):
         return None
 
 
-def linear_features(linear, t0, inputs=None):
-    """The selected regressors at t0 as {name: value} (NaN where unknown; imputed later)."""
+def regressor_features(names, t0, inputs=None):
+    """The windowed regressors `names` at t0 as {name: value} (NaN where unknown)."""
     from feature_engineering import windows
     from inference.fetch_inputs import fetch_inputs
 
-    specs = [windows.WindowSpec.parse(n) for n in linear.config.features]
+    specs = [windows.WindowSpec.parse(n) for n in names]
     if inputs is None:
         inputs, _ = fetch_inputs(t0, ch_lag_hours=windows.ch_lags(specs))
     row = windows.window_table(inputs, [t0], specs).iloc[0]
     return {k: float(v) for k, v in row.items()}
+
+
+def linear_features(linear, t0, inputs=None):
+    """The selected regressors at t0 as {name: value} (NaN where unknown; imputed later)."""
+    return regressor_features(linear.config.features, t0, inputs)
 
 
 def run_linear_forecast(t0, linear=None, baseline=None, history=None, features=None):
@@ -214,8 +219,80 @@ def run_linear_forecast(t0, linear=None, baseline=None, history=None, features=N
     return [float(v) for v in forecast]
 
 
+def load_xgboost(path=None):
+    from models.xgboost_model import ASSET as XGB_ASSET
+    from models.xgboost_model import XGBoostModel
+
+    try:
+        return XGBoostModel.load(path or XGB_ASSET)
+    except Exception as e:
+        log(f"xgboost asset unusable ({e!r}); falling back to the linear model")
+        return None
+
+
+def run_xgboost_forecast(t0, model=None, history=None, features=None):
+    """XGBoost forecast (the linear + trees hybrid); the linear model if anything fails.
+
+    Live pipeline: the speed history and the regressors (the trees' and the linear
+    anchor's) are fetched in parallel. NaN regressors follow the trees' learned default
+    branches; the linear anchor imputes its own (medians, or its submodel).
+    """
+    started = time.monotonic()
+    t0 = to_utc(t0)
+    model = model or load_xgboost()
+    if model is None:
+        return run_linear_forecast(t0, history=history, features=features)
+    names = model.input_features
+    hours = model.config.history_hours
+    if model.base_model is not None:
+        hours = max(hours, model.base_model.config.history_hours)
+    offline = os.environ.get(OFFLINE_ENV) == "1"
+    if history is None and offline:
+        history = empty_history(t0, hours)
+    if features is None and offline:
+        features = {}
+    if history is None or features is None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            h = pool.submit(fetch_history, t0, hours) if history is None else None
+            f = pool.submit(regressor_features, names, t0) if features is None else None
+            if h is not None:
+                try:
+                    history = h.result()
+                except Exception as e:
+                    log(f"fetching history failed ({e!r}); continuing without data")
+                    history = empty_history(t0, hours)
+            if f is not None:
+                try:
+                    features = f.result()
+                except Exception as e:
+                    log(f"regressors failed ({e!r}); all missing")
+                    features = {}
+    missing = [n for n in names if not np.isfinite(features.get(n, np.nan))]
+    log(f"xgboost: {len(names) - len(missing)}/{len(names)} regressors observed; "
+        f"missing: {missing or 'none'}")
+    try:
+        forecast = np.asarray(model.predict(history, features), dtype=float)
+    except Exception as e:
+        log(f"xgboost failed ({e!r})")
+        forecast = None
+    if forecast is None or forecast.shape != (FORECAST_HOURS,) or not np.isfinite(forecast).all():
+        log("falling back to the linear model")
+        return run_linear_forecast(t0, history=history, features=features)
+    log(f"xgboost done in {time.monotonic() - started:.1f} s; "
+        f"forecast {forecast.min():.0f}..{forecast.max():.0f} km/s")
+    return [float(v) for v in forecast]
+
+
 def run_selected_forecast(t0):
-    """The forecast model.py submits: the final baseline, or the linear model if opted in."""
-    if os.environ.get(MODEL_ENV, "").lower() == "linear":
+    """The forecast model.py submits: the final baseline, or an opted-in model.
+
+    SWP_MODEL=linear runs the linear model; SWP_MODEL=xgboost the linear + trees hybrid.
+    """
+    choice = os.environ.get(MODEL_ENV, "").lower()
+    if choice == "linear":
         return run_linear_forecast(t0)
+    if choice == "xgboost":
+        return run_xgboost_forecast(t0)
     return run_forecast(t0)

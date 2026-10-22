@@ -11,6 +11,7 @@ requests
 statsmodels
 scipy>=1.13
 scikit-learn>=1.5
+xgboost-cpu==3.2.0  # trains models.xgboost_model; the image evaluates its trees in numpy
 nbformat
 nbclient
 h5py  # reads the GOES flare history (training.pull_features)

@@ -6,7 +6,8 @@ from inference.pipeline import (
     run_forecast,
     run_linear_forecast,
     run_selected_forecast,
+    run_xgboost_forecast,
 )
 
 __all__ = ["FORECAST_HOURS", "fetch_history", "run_forecast", "run_linear_forecast",
-           "run_selected_forecast"]
+           "run_selected_forecast", "run_xgboost_forecast"]
