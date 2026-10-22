@@ -34,19 +34,39 @@ Training pipeline: regressors -> selection (Config.features) -> GLM; rows with a
 missing selected regressor are dropped. Live pipeline: regressors -> imputation
 with the training medians -> selection -> GLM. Inference is numpy only: one matrix
 product and the inverse link.
+
+Config.optional names regressors that can be missing for long stretches (the
+coronal-hole strip: the SDO archive has gaps of weeks to months). For them the
+model also fits a submodel without them, on every run the other regressors cover,
+and a run with an optional regressor missing is forecast by that submodel instead
+of imputing the median.
+
+Config.despike removes isolated one-hour glitches from the speed series
+(feature_engineering.recurrence.despike) before it is used as a fitting target or
+in the recurrence terms. The last observed speed stays raw: its hour can't be
+checked against the hours after it. Scoring always uses the raw series.
 """
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
 
-from feature_engineering.recurrence import HORIZON, LEADS, last_observed, targets, window_means
+from feature_engineering.recurrence import (
+    HORIZON,
+    LEADS,
+    SPIKE_SIDE,
+    despike,
+    last_observed,
+    targets,
+    window_means,
+)
 from models.final_baseline import TAIL_FLOOR, VALID_RANGE, run_timse_weights, solve
 
 ASSET = Path(__file__).resolve().parents[1] / "assets" / "linear_model.json"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
+READABLE_FORMATS = (1, 2)  # 1: no submodel, no despike
 FAMILIES = ("gaussian", "gamma", "inverse_gaussian")
 WEIGHTS = ("run_timse", "uniform")
 SMEAR_QUANTILES = np.linspace(0.025, 0.975, 39)
@@ -65,12 +85,20 @@ class Config:
     half_width: int = 3
     max_iter: int = 30
     tol: float = 1e-6
+    despike: bool = False  # drop isolated one-hour glitches from targets and recurrence
+    optional: tuple = ()  # features that may be missing: a submodel without them
 
     def __post_init__(self):
         if self.family not in FAMILIES:
             raise ValueError(f"family must be one of {FAMILIES}")
         if self.weights not in WEIGHTS:
             raise ValueError(f"weights must be one of {WEIGHTS}")
+        if not set(self.optional) <= set(self.features):
+            raise ValueError("optional features must be among the features")
+        if self.despike:  # the cleaned recurrence window must end SPIKE_SIDE h before t0
+            for lag in self.lag_hours:
+                if lag - HORIZON - self.half_width < 1 + SPIKE_SIDE:
+                    raise ValueError(f"lag {lag} h is too short for despiking")
 
     @property
     def log_link(self):
@@ -133,8 +161,15 @@ class LinearModel:
         lam = 0.0 if self.config.log_link else self.config.boxcox
         return boxcox(v, lam)
 
+    def _clean(self, values):
+        return _despiked(values) if self.config.despike else values
+
     def speed_terms(self, values, positions):
-        """(n, 72, n_speed) transformed speed terms, centred; missing -> 0 (the mean)."""
+        """(n, 72, n_speed) transformed speed terms, centred; missing -> 0 (the mean).
+
+        The last observed speed is raw; the recurrence means use the despiked series
+        (their windows end long before t0, so despiking them uses only past hours).
+        """
         cfg = self.config
         values = np.asarray(values, dtype=float)
         positions = np.asarray(positions)
@@ -143,8 +178,9 @@ class LinearModel:
         last = last_observed(values, positions)
         s = self._speed_transform(last) - centre
         out[:, :, 0] = np.where(np.isfinite(s), s, 0.0)[:, None]
+        clean = self._clean(values)
         for j, lag in enumerate(cfg.lag_hours):
-            r = window_means(values, positions[:, None] + LEADS - lag, cfg.half_width)
+            r = window_means(clean, positions[:, None] + LEADS - lag, cfg.half_width)
             s = self._speed_transform(r) - centre
             out[:, :, 1 + j] = np.where(np.isfinite(s), s, 0.0)
         return out, last
@@ -196,8 +232,14 @@ class LinearModel:
             raise ValueError(f"regressors shape {x_raw.shape}, expected "
                              f"({len(positions)}, {len(cfg.features)})")
         hist_end = len(values) if end is None else end
-        self.mean = float(np.nanmean(values[:hist_end]))
+        clean = self._clean(values[:hist_end])  # despiked up to `end` only
+        self.mean = float(np.nanmean(clean))
         self.medians = (np.nanmedian(x_raw, axis=0) if cfg.features else np.zeros(0))
+        self.fallback = None
+        if cfg.optional:
+            keep = [i for i, f in enumerate(cfg.features) if f not in cfg.optional]
+            sub_cfg = replace(cfg, features=tuple(cfg.features[i] for i in keep), optional=())
+            self.fallback = LinearModel(sub_cfg).fit(values, positions, x_raw[:, keep], end)
         complete = np.isfinite(x_raw).all(axis=1)
         x_raw, positions = x_raw[complete], positions[complete]
         self.x_mean = x_raw.mean(axis=0) if cfg.features else np.zeros(0)
@@ -205,7 +247,7 @@ class LinearModel:
         self.x_std = np.where(std > 1e-12, std, 1.0)
 
         x, last = self.design(values, positions, x_raw)
-        y = targets(values, positions, end)
+        y = targets(clean, positions, end)
         q = self.loss_weights(y)
         offset = self._offset(last)
         if cfg.relative:
@@ -222,6 +264,11 @@ class LinearModel:
             self.smear = weighted_quantiles(np.where(q > 0, resid, 0.0), q, SMEAR_QUANTILES)
         self.fit_info = {"runs": int(len(positions)), "dropped_incomplete": int((~complete).sum()),
                          "targets": int((q > 0).sum())}
+        if cfg.despike:
+            self.fit_info["despiked_hours"] = int(np.isnan(clean).sum()
+                                                  - np.isnan(values[:hist_end]).sum())
+        if self.fallback is not None:
+            self.fit_info["fallback_runs"] = self.fallback.fit_info["runs"]
         return self
 
     def _wls(self, x, t, w):
@@ -253,10 +300,33 @@ class LinearModel:
         return np.where(np.isfinite(x), x, self.medians)
 
     def forecast(self, values, positions, regressors=None):
-        """Forecasts (len(positions) x 72), imputing missing regressors with the medians."""
+        """Forecasts (len(positions) x 72).
+
+        A run missing an optional regressor goes to the submodel without it; other
+        missing regressors are imputed with the training medians.
+        """
         positions = np.asarray(positions)
-        x_raw = (self.impute(regressors) if self.config.features
-                 else np.zeros((len(positions), 0)))
+        cfg = self.config
+        raw = (np.asarray(regressors, dtype=float).reshape(len(positions), len(cfg.features))
+               if cfg.features else np.zeros((len(positions), 0)))
+        out = self._forecast(values, positions, raw)
+        rows = self.uses_fallback(raw)
+        if rows.any():
+            keep = [i for i, f in enumerate(cfg.features) if f not in cfg.optional]
+            out[rows] = self.fallback.forecast(values, positions[rows], raw[rows][:, keep])
+        return out
+
+    def uses_fallback(self, regressors):
+        """Which rows the submodel forecasts (an optional regressor is missing)."""
+        cfg = self.config
+        if getattr(self, "fallback", None) is None:
+            return np.zeros(len(np.asarray(regressors)), dtype=bool)
+        raw = np.asarray(regressors, dtype=float).reshape(-1, len(cfg.features))
+        opt = [i for i, f in enumerate(cfg.features) if f in cfg.optional]
+        return np.isnan(raw[:, opt]).any(axis=1)
+
+    def _forecast(self, values, positions, raw):
+        x_raw = self.impute(raw) if self.config.features else raw
         x, last = self.design(values, positions, x_raw)
         eta = np.einsum("nkf,kf->nk", x, self.coef)
         offset = self._offset(last)[:, None]
@@ -282,6 +352,8 @@ class LinearModel:
         cfg = asdict(self.config)
         cfg["features"] = list(cfg["features"])
         cfg["lags_days"] = list(cfg["lags_days"])
+        cfg["optional"] = list(cfg["optional"])
+        fallback = getattr(self, "fallback", None)
         return {
             "model": "LinearModel",
             "format": FORMAT_VERSION,
@@ -293,15 +365,17 @@ class LinearModel:
             "coef": np.round(self.coef, 10).tolist(),
             "smear": None if self.smear is None else np.round(self.smear, 8).tolist(),
             "fit_info": getattr(self, "fit_info", {}),
+            "fallback": None if fallback is None else fallback.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, d):
-        if d.get("format") != FORMAT_VERSION or d.get("model") != "LinearModel":
+        if d.get("format") not in READABLE_FORMATS or d.get("model") != "LinearModel":
             raise ValueError(f"unsupported model asset {d.get('model')!r} v{d.get('format')!r}")
         cfg = dict(d["config"])
         cfg["features"] = tuple(cfg["features"])
         cfg["lags_days"] = tuple(cfg["lags_days"])
+        cfg["optional"] = tuple(cfg.get("optional", ()))
         model = cls(Config(**cfg))
         model.mean = float(d["mean"])
         model.x_mean = np.asarray(d["x_mean"], dtype=float)
@@ -310,6 +384,9 @@ class LinearModel:
         model.coef = np.asarray(d["coef"], dtype=float)
         model.smear = None if d["smear"] is None else np.asarray(d["smear"], dtype=float)
         model.fit_info = d.get("fit_info", {})
+        model.fallback = cls.from_dict(d["fallback"]) if d.get("fallback") else None
+        if model.config.optional and model.fallback is None:
+            raise ValueError("asset lists optional features but has no fallback submodel")
         if model.coef.shape != (HORIZON, model.config.n_columns):
             raise ValueError(f"coef shape {model.coef.shape}")
         return model
@@ -320,6 +397,22 @@ class LinearModel:
     @classmethod
     def load(cls, path=ASSET):
         return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+_DESPIKED = {}
+
+
+def _despiked(values):
+    """despike(values), cached: selection cleans the same series thousands of times."""
+    v = np.ascontiguousarray(values, dtype=float)
+    key = (v.shape, hash(v.tobytes()))
+    out = _DESPIKED.get(key)
+    if out is None:
+        if len(_DESPIKED) >= 8:
+            _DESPIKED.clear()
+        out = _DESPIKED[key] = despike(v)
+        out.flags.writeable = False
+    return out
 
 
 def _get(features, name):

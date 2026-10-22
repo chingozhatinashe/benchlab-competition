@@ -195,8 +195,12 @@ def run_linear_forecast(t0, linear=None, baseline=None, history=None, features=N
 
     missing = [n for n in linear.config.features
                if not np.isfinite(features.get(n, np.nan))]
+    optional = set(getattr(linear.config, "optional", ()))
+    sub = [n for n in missing if n in optional]
+    imputed = [n for n in missing if n not in optional]
     log(f"linear model: {len(linear.config.features) - len(missing)}/"
-        f"{len(linear.config.features)} regressors observed; imputed: {missing or 'none'}")
+        f"{len(linear.config.features)} regressors observed; imputed: {imputed or 'none'}"
+        + (f"; submodel without {sub}" if sub else ""))
     try:
         forecast = np.asarray(linear.predict(history, features), dtype=float)
     except Exception as e:

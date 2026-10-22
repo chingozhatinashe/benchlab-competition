@@ -4,6 +4,8 @@ Every feature at position p (a forecast made at t0 = hour p) uses only values[:p
 the hours fully observed by t0. Lead k targets values[p + k].
 """
 
+import warnings
+
 import numpy as np
 
 HORIZON = 72
@@ -35,6 +37,41 @@ def window_means(values, centers, half_width):
     count = ccount[hi] - ccount[lo]
     total = csum[hi] - csum[lo]
     return np.where(count > 0, total / np.maximum(count, 1), np.nan)
+
+
+SPIKE_KMS = 150.0  # an isolated hour this far from both sides is a glitch
+SPIKE_SIDE = 3  # hours on each side compared with
+
+
+def despike(values, threshold=SPIKE_KMS, side=SPIKE_SIDE):
+    """Copy of `values` with isolated one-hour spikes set to NaN.
+
+    Hour h is a spike when the medians of the `side` hours before and after it
+    (at least 2 observed on each side) agree within threshold / 2, and h differs
+    from both by more than `threshold`, in the same direction. A shock or a stream
+    onset is a step, not a spike: its two sides disagree, so it is kept.
+
+    Flagging hour h uses hours up to h + side, so an input built from the cleaned
+    series must end at least `side` hours before t0. The last `side` hours of the
+    array can't be checked and are left as they are.
+    """
+    v = np.asarray(values, dtype=float)
+    n = len(v)
+    out = v.copy()
+    if n < 2 * side + 1:
+        return out
+    pad = np.concatenate([np.full(side, np.nan), v, np.full(side, np.nan)])
+    before = np.stack([pad[i : i + n] for i in range(side)], axis=1)
+    after = np.stack([pad[side + 1 + i : side + 1 + i + n] for i in range(side)], axis=1)
+    enough = (np.isfinite(before).sum(1) >= 2) & (np.isfinite(after).sum(1) >= 2)
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN sides
+        mb, ma = np.nanmedian(before, axis=1), np.nanmedian(after, axis=1)
+        db, da = v - mb, v - ma
+        spike = (enough & np.isfinite(v) & (np.abs(db) > threshold) & (np.abs(da) > threshold)
+                 & (np.sign(db) == np.sign(da)) & (np.abs(mb - ma) < threshold / 2))
+    out[spike] = np.nan
+    return out
 
 
 def check_lags(lag_hours, half_width):

@@ -7,7 +7,8 @@ same `window_table` builds the training table and the live row, under the same
 availability rules as feature_engineering.build:
 
     in-situ   hourly rows labelled before t0 (shifted by insitu.LATENCY)
-    AIA       the image for cut-off t0 - CH_LATENCY - lag
+    AIA       the image for cut-off t0 - CH_LATENCY - lag; if it is missing, the image
+              CH_FALLBACK_HOURS older (6 h, then 12 h), else NaN
     flares    peaks by t0 - FLARE_LATENCY
     F10.7     days before the UTC day of t0
 
@@ -30,6 +31,7 @@ CH_LAG_HOURS = tuple(range(0, 121, 6))
 FLARE_HOURS = (24, 48, 72, 120)
 F107_DAYS = (1, 7, 27)
 LAG_HOURS = {"lag27": 648, "lag13": 324}
+CH_FALLBACK_HOURS = (6, 12)  # older images to try when the one at the lag is missing
 
 
 @dataclass(frozen=True)
@@ -68,9 +70,10 @@ def candidates():
     return specs
 
 
-def ch_lags(specs):
-    """Image lags (hours before t0 - CH_LATENCY) that the specs need."""
-    return sorted({s.hours for s in specs if s.signal == "ch_cm"})
+def ch_lags(specs, fallback=CH_FALLBACK_HOURS):
+    """Image lags (hours before t0 - CH_LATENCY) that the specs need, fallbacks included."""
+    return sorted({s.hours + extra for s in specs if s.signal == "ch_cm"
+                   for extra in (0, *fallback)})
 
 
 def _at(series, labels):
@@ -134,7 +137,18 @@ def _f107(daily, spec, t0s):
     return out
 
 
-def window_table(inputs, t0s, specs):
+def _ch_at(series, t0s, hours, fallback):
+    """The strip at lag `hours`, else at each fallback lag in turn (NaN if none)."""
+    out = np.full(len(t0s), np.nan)
+    for lag in (hours, *(hours + extra for extra in fallback)):
+        missing = np.isnan(out)
+        if not missing.any():
+            break
+        out[missing] = _at(series, t0s[missing] - build.CH_LATENCY - lag * HOUR)
+    return out
+
+
+def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
     """One column per spec (NaN where unknown), one row per t0."""
     t0s = pd.DatetimeIndex(t0s)
     last = t0s - HOUR
@@ -146,9 +160,8 @@ def window_table(inputs, t0s, specs):
                                else _insitu(hourly, spec, last))
         elif spec.signal == "ch_cm":
             ch = inputs.coronal_holes
-            cut = t0s - build.CH_LATENCY - spec.hours * HOUR
             cols[spec.name] = (np.full(len(t0s), np.nan) if ch is None or ch.empty
-                               else _at(ch["ch_cm"], cut))
+                               else _ch_at(ch["ch_cm"], t0s, spec.hours, ch_fallback))
         elif spec.signal in ("xray_peak", "m_flares"):
             cols[spec.name] = _flares(inputs.flares, spec, t0s)
         elif spec.signal == "f107":

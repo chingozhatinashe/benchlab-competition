@@ -1,5 +1,7 @@
 """models.linear_model and feature_engineering.windows: fitting, transforms, pipelines."""
 
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -243,3 +245,131 @@ def test_submission_default_stays_the_final_baseline(monkeypatch):
     monkeypatch.setenv(pipeline.MODEL_ENV, "linear")
     pipeline.run_selected_forecast(T0)
     assert calls == ["baseline", "linear"]
+
+
+# ---------------------------------------------------------------------- data fixes
+def test_despike_drops_isolated_spikes_and_keeps_steps():
+    from feature_engineering.recurrence import despike
+
+    v = np.full(60, 450.0)
+    v[20] = 1087.0  # glitch
+    v[40:] = 750.0  # a shock: a step, not a spike
+    v[52] = 300.0  # downward glitch
+    v[58] = 2000.0  # within the last 3 hours: can't be checked
+    out = despike(v)
+    assert np.isnan(out[20]) and np.isnan(out[52])
+    assert np.isfinite(out).sum() == len(v) - 2
+    assert out[40] == 750.0 and out[58] == 2000.0
+
+
+def test_despike_flags_an_hour_from_at_most_three_hours_after_it():
+    from feature_engineering.recurrence import SPIKE_SIDE, despike
+
+    rng = np.random.default_rng(4)
+    v = 450 + rng.normal(0, 5, 200)
+    v[100] = 900.0
+    for cut in range(100 + SPIKE_SIDE + 1, 200):
+        changed = v.copy()
+        changed[cut:] = rng.uniform(250, 1200, 200 - cut)
+        assert np.array_equal(np.isnan(despike(changed)[:101]), np.isnan(despike(v)[:101]))
+
+
+def test_despiked_fit_ignores_a_glitch_hour():
+    speed, positions, x = synthetic()
+    glitch = 1001  # not the last observed hour of any run
+    assert glitch + 1 not in set(positions)
+    spiked = speed.copy()
+    spiked[glitch] = 1500.0
+    masked = speed.copy()
+    masked[glitch] = np.nan
+    cfg = Config(features=("a", "b"), lags_days=(27.0,), despike=True)
+    a = LinearModel(cfg).fit(spiked, positions, x)
+    b = LinearModel(cfg).fit(masked, positions, x)
+    assert a.fit_info["despiked_hours"] == b.fit_info["despiked_hours"] + 1
+    assert np.allclose(a.coef, b.coef)
+
+
+def test_despiked_forecast_uses_no_future_hours():
+    speed, positions, x = synthetic()
+    model = LinearModel(Config(features=("a", "b"), relative=True, lags_days=(27.0, 13.5),
+                               despike=True)).fit(speed, positions, x)
+    p = positions[-30]
+    full = model.forecast(speed, [p], x[-30:-29])
+    scrambled = speed.copy()
+    scrambled[p:] = np.random.default_rng(5).uniform(250, 1200, len(speed) - p)
+    assert np.allclose(model.forecast(scrambled, [p], x[-30:-29]), full)
+
+
+def test_coronal_hole_falls_back_to_older_images():
+    cut = T0 - build.CH_LATENCY
+    index = pd.date_range(cut - pd.Timedelta(hours=48), cut, freq="6h")
+    ch = pd.DataFrame({"ch_cm": np.arange(len(index), dtype=float)}, index=index)
+    spec = windows.WindowSpec("ch_cm", "at", 12)
+    at = {h: ch["ch_cm"][cut - h * H] for h in (12, 18, 24)}
+    inputs = build.Inputs(coronal_holes=ch)
+    assert windows.window_table(inputs, [T0], [spec]).iloc[0, 0] == at[12]
+    ch.loc[cut - 12 * H, "ch_cm"] = np.nan
+    assert windows.window_table(inputs, [T0], [spec]).iloc[0, 0] == at[18]
+    ch.loc[cut - 18 * H, "ch_cm"] = np.nan
+    assert windows.window_table(inputs, [T0], [spec]).iloc[0, 0] == at[24]
+    assert np.isnan(windows.window_table(inputs, [T0], [spec], ch_fallback=()).iloc[0, 0])
+    ch.loc[cut - 24 * H, "ch_cm"] = np.nan
+    assert np.isnan(windows.window_table(inputs, [T0], [spec]).iloc[0, 0])
+    assert windows.ch_lags([spec]) == [12, 18, 24]
+
+
+def test_missing_optional_regressor_uses_the_submodel():
+    speed, positions, x = synthetic(n_feat=3)
+    x = x.copy()
+    x[::4, 0] = np.nan  # the optional regressor has gaps
+    cfg = Config(features=("a", "b", "c"), relative=True, lags_days=(27.0,), optional=("a",))
+    model = LinearModel(cfg).fit(speed, positions, x)
+    sub = model.fallback
+    assert sub.config.features == ("b", "c") and sub.fit_info["runs"] == len(positions)
+    assert model.fit_info["runs"] == int(np.isfinite(x[:, 0]).sum())
+    rows = np.isnan(x[:, 0])
+    out = model.forecast(speed, positions, x)
+    assert np.allclose(out[rows], sub.forecast(speed, positions[rows], x[rows][:, 1:]))
+    full = LinearModel(replace(cfg, optional=())).fit(speed, positions, x)
+    assert np.allclose(out[~rows], full.forecast(speed, positions[~rows], x[~rows]))
+    p = positions[np.flatnonzero(rows)[-1]]
+    assert np.allclose(model.predict(speed[:p], {"b": 0.3, "c": -1.0}),
+                       sub.predict(speed[:p], {"b": 0.3, "c": -1.0}))
+
+
+def test_submodel_round_trips_and_old_assets_still_load(tmp_path):
+    speed, positions, x = synthetic(n_feat=2)
+    x = x.copy()
+    x[::3, 0] = np.nan
+    model = LinearModel(Config(features=("a", "b"), lags_days=(27.0,), optional=("a",),
+                               despike=True)).fit(speed, positions, x)
+    model.save(tmp_path / "m.json")
+    again = LinearModel.load(tmp_path / "m.json")
+    assert np.allclose(again.forecast(speed, positions, x), model.forecast(speed, positions, x))
+    old = LinearModel(Config(features=("a", "b"), lags_days=(27.0,))).fit(speed, positions, x)
+    d = old.to_dict()
+    d["format"] = 1
+    for key in ("fallback",):
+        d.pop(key)
+    for key in ("despike", "optional"):
+        d["config"].pop(key)
+    v1 = LinearModel.from_dict(d)
+    assert v1.fallback is None and not v1.config.despike
+    assert np.allclose(v1.forecast(speed, positions, x), old.forecast(speed, positions, x))
+
+
+def test_shipped_asset_has_the_fixes():
+    model = LinearModel.load()
+    assert model.config.despike
+    assert model.config.optional == tuple(f for f in model.config.features
+                                          if f.startswith("ch_cm"))
+    assert model.fallback is not None
+    assert not set(model.config.optional) & set(model.fallback.config.features)
+
+
+def test_speed_terms_only_model_forecasts_with_fixes():
+    speed, positions, _ = synthetic()
+    model = LinearModel(Config(lags_days=(27.0,), despike=True)).fit(speed, positions)
+    out = model.forecast(speed, positions[:5])
+    assert out.shape == (5, HORIZON) and np.isfinite(out).all()
+    assert not model.uses_fallback(np.zeros((5, 0))).any()
