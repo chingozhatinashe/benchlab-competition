@@ -8,10 +8,15 @@
   "half_width": 3,
   "max_iter": 30,
   "tol": 1e-06,
+  "despike": true,
+  "optional": [
+    "ch_cm_at_6h"
+  ],
   "features": [
     "ch_cm_at_6h",
-    "log_p47_slope_6h",
-    "b_var_mean_1h"
+    "b_var_mean_1h",
+    "polarity_lag27_72h",
+    "log_t_ratio_mean_48h"
   ],
   "selection": {
     "runs": 500,
@@ -31,46 +36,52 @@
       {
         "step": 0,
         "added": "(speed terms only)",
-        "objective": 0.59181,
+        "objective": 0.58713,
         "gain": NaN
       },
       {
         "step": 1,
         "added": "ch_cm_at_6h",
-        "objective": 0.53782,
-        "gain": 0.09123
+        "objective": 0.52666,
+        "gain": 0.103
       },
       {
         "step": 2,
-        "added": "log_p47_slope_6h",
-        "objective": 0.5269,
-        "gain": 0.02029
+        "added": "b_var_mean_1h",
+        "objective": 0.51583,
+        "gain": 0.02056
       },
       {
         "step": 3,
-        "added": "b_var_mean_1h",
-        "objective": 0.52142,
-        "gain": 0.01041
+        "added": "polarity_lag27_72h",
+        "objective": 0.50919,
+        "gain": 0.01287
+      },
+      {
+        "step": 4,
+        "added": "log_t_ratio_mean_48h",
+        "objective": 0.505,
+        "gain": 0.00823
       }
     ],
     "ridge": [
       {
         "ridge": 0.0,
-        "objective": 0.526788289583912
+        "objective": 0.5070832400430828
       },
       {
         "ridge": 0.1,
-        "objective": 0.5214163836708205
+        "objective": 0.5049958509936706
       },
       {
         "ridge": 1.0,
-        "objective": 0.5823358185771725
+        "objective": 0.5814494323614309
       },
       {
         "ridge": 10.0,
-        "objective": 0.7448060289414695
+        "objective": 0.7481292789359693
       }
     ],
-    "score": 0.52142
+    "score": 0.505
   }
 }

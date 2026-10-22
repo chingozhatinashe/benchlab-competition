@@ -44,8 +44,9 @@ it falls back to persistence.
 ## Optional linear model (not the submitted forecast)
 
 Setting `SWP_MODEL=linear` replaces the forecast with `models/linear_model.py`:
-- a per-lead linear model on the same speed terms plus five regressors (coronal-hole area from an SDO/AIA image 12 h before t0, 24 h mean density, 48 h peak X-ray flare flux, 48 h field variability, 7-day F10.7);
-- missing regressors take their training medians;
+- a per-lead linear model on the same speed terms plus four regressors (coronal-hole area from an SDO/AIA image 12 h before t0, 24 h mean density, 48 h peak X-ray flare flux, 48 h field variability);
+- the coronal-hole area falls back to an image 6 h, then 12 h older; if it is still missing, a second linear model fitted without it is used;
+- other missing regressors take their training medians;
 - any failure falls back to the baseline above.
 
 Without the variable, the forecast is the baseline. Weights are in `assets/linear_model.json` (numpy only, no new dependencies).

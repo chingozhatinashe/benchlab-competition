@@ -21,6 +21,13 @@ re-tuned on the selected set.
 --sample N draws N runs at random (fixed seed) from the training runs and uses only
 those; results go to *_pilot files, with the time each part took and an estimate
 for the full run.
+
+Data fixes (with_fixes), applied to every config that is scored or trained:
+- despike: isolated one-hour glitches in the training speeds (e.g. 1,087 km/s at
+  2022-10-05 02:00) are dropped from the fitting targets and recurrence inputs;
+- the coronal-hole strip falls back to an image 6 h, then 12 h older
+  (feature_engineering.windows), and is "optional": a run still missing it is
+  forecast by a submodel fitted without it, not by imputing the median.
 """
 
 import argparse
@@ -65,20 +72,30 @@ def log(msg):
 
 
 # ---------------------------------------------------------------------- data
-def candidate_table(t0s):
+def candidate_table(t0s, ch_fallback=windows.CH_FALLBACK_HOURS):
     """Every windowed candidate at each t0, from the pulled history (training.pull_features)."""
     from training import pull_features as pf
 
     inputs = build.Inputs(hourly=pf.load_hourly(), shocks=pf.load_shocks(),
                           coronal_holes=pf.load_coronal_holes(), flares=pf.load_flares(),
                           f107=pf.load_f107())
-    return windows.window_table(inputs, t0s, windows.candidates())
+    return windows.window_table(inputs, t0s, windows.candidates(), ch_fallback=ch_fallback)
+
+
+def with_fixes(config, on=True):
+    """`config` with the data fixes: despiking, and coronal-hole regressors optional."""
+    if not on:
+        return replace(config, despike=False, optional=())
+    optional = tuple(f for f in config.features
+                     if windows.WindowSpec.parse(f).signal == "ch_cm")
+    return replace(config, despike=True, optional=optional)
 
 
 class Folds:
     """Everything selection needs: speed, run positions, candidates, fold splits, references."""
 
-    def __init__(self, series, table, positions):
+    def __init__(self, series, table, positions, fixes=True):
+        self.fixes = fixes
         self.values = series.to_numpy(dtype=float)
         self.index = series.index
         self.table = table
@@ -105,6 +122,7 @@ class Folds:
 
     def objective(self, config):
         """Geometric mean over folds of per-run mean TIMSE / persistence's (lower is better)."""
+        config = with_fixes(config, self.fixes)
         ratios = []
         for f in self.folds:
             model = LinearModel(config).fit(self.values, self.positions[f["fit"]],
@@ -247,7 +265,7 @@ def select(sample=None, seed=0, max_seconds=None, fresh=False):
         obj, ratios = folds.objective(replace(base, features=features, ridge=ridge))
         ridge_rows.append({"ridge": ridge, "objective": obj})
     best_ridge = min(ridge_rows, key=lambda r: r["objective"])
-    config = replace(base, features=features, ridge=best_ridge["ridge"])
+    config = with_fixes(replace(base, features=features, ridge=best_ridge["ridge"]))
     peak = tracemalloc.get_traced_memory()[1] / 1e6
     tracemalloc.stop()
     elapsed = time.perf_counter() - started
@@ -305,7 +323,7 @@ def load_config(path=CONFIG_PATH):
 
 
 def train(config=None, out=ASSET):
-    config = config or load_config()
+    config = with_fixes(config or load_config())
     series = load_train()
     t0s = training_runs(series)
     table = candidate_table(t0s)
@@ -347,6 +365,7 @@ def evaluate(model=None):
     overall = pd.DataFrame({m: {k: score(f, actual)[k] for k in metrics}
                             for m, f in forecasts.items()}).T
     imputed = pd.Series(np.isnan(x).mean(axis=0), index=model.config.features)
+    imputed["(runs forecast by the submodel)"] = model.uses_fallback(x).mean()
 
     runs = pd.DataFrame({m: run_timse(f, actual) for m, f in forecasts.items()}, index=t0s)
     minutes = ev.load_conditions(TRAIN_END - pd.Timedelta(days=30), EVAL_END)
@@ -373,7 +392,7 @@ def evaluate(model=None):
     with pd.option_context("display.width", 160, "display.float_format", "{:.4g}".format):
         log(f"eval year: {len(t0s)} runs\n\n{overall}\n\nby regime:\n{by_regime}\n\n"
             f"mean residual (actual - forecast, km/s):\n{bias}\n\n"
-            f"share of eval runs with each regressor imputed:\n{imputed}")
+            f"share of eval runs with each regressor missing:\n{imputed}")
     return overall, by_regime, bias, imputed
 
 
