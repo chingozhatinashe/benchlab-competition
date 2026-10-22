@@ -13,10 +13,34 @@ Every model in development is scored the same way: with **TIMSE** (see [timse.md
 
 | Set | Window (UTC, end exclusive) | Hours | Use |
 |---|---|---|---|
-| train | 2021-10-20 → 2025-10-20 | 35,064 | fitting, tuning, feature selection |
+| train | 2016-10-20 → 2025-10-20 | 78,888 | fitting, tuning, feature selection |
 | eval | 2025-10-20 → 2026-10-20 | 8,760 | **scoring only** |
 
 The dates are fixed, so re-pulling the data never moves the eval year.
+
+**The training history was extended back from 2021-10-20 to 2016-10-20** (branch `history_extension`). The eval year and the 2021–2026 values are unchanged.
+- **Coverage:** hours with a speed are 67% in late 2016, 76% in 2017, 84% in 2018 and over 90% from 2019. The older real-time ACE data is gappier.
+- **Sanity check:** where it exists, it matches OMNI hourly speed (correlation 0.994, mean difference 2 km/s, in 2016-11).
+- **Models trained so far** were fitted on 2021-10 → 2025-10 unless their docs say otherwise.
+
+## Validation folds (`src/training/folds.py`)
+
+Model choices are made on walk-forward folds inside the training years. Each fold fits on the hours before its start and scores the fold's 6-hourly runs. The objective is per-run mean TIMSE relative to persistence, as a geometric mean over folds.
+- `OLD`: the two folds used by every selection so far, 2023-10 → 2024-10 and 2024-10 → 2025-10.
+- `YEARLY`: six yearly folds, 2019-10 → 2025-10, possible with the longer history.
+
+**Does the longer history help?** `python -m training.compare_history` refits the shipped configs of the final baseline, the linear model and the XGBoost hybrid on hours since 2016 or since 2021. Results are in `src/experiments/history_comparison.csv`; lower is better.
+
+| Folds | History | Final baseline | Linear | Hybrid |
+|---|---|---|---|---|
+| 2022-10 → 2025-10 (common) | since 2021 | 0.5101 | 0.4747 | 0.4674 |
+| 2022-10 → 2025-10 (common) | since 2016 | 0.5030 | 0.4533 | **0.4421** |
+| 2019-10 → 2025-10 (all six) | since 2016 | 0.4843 | 0.4523 | **0.4342** |
+
+- **Overall:** the longer history helps every model, the regression models most (−4.5% linear, −5.4% hybrid).
+- **The year closest to the eval year gains most:** −12% for the linear model and the hybrid on fold 2024-10.
+- **At solar maximum the old years don't help:** on fold 2023-10, the quiet 2016–2020 years leave the linear model level and make the baseline 4.5% worse.
+- **The hybrid beats the linear model and the baseline in all six folds.**
 
 ## Rules
 

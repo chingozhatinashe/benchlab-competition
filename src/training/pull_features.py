@@ -1,9 +1,9 @@
 """Pull the regressor sources' history and build the training feature table.
 
     python -m training.pull_features all           # every step below, in order
-    python -m training.pull_features insitu        # ACE SWEPAM + MAG + EPAM -> hourly frame, shocks
+    python -m training.pull_features insitu --max-seconds 420  # ACE -> hourly, shocks; resumable
     python -m training.pull_features aia --max-seconds 1800   # resumable
-    python -m training.pull_features flares       # GOES-16/18 flare summaries (NCEI)
+    python -m training.pull_features flares       # GOES-15/16/18 flare summaries (NCEI)
     python -m training.pull_features f107          # OMNI daily F10.7 (CDAWeb)
     python -m training.pull_features table         # features for every 6-hourly t0 + climatology
 
@@ -12,8 +12,9 @@ feature_engineering.*), on the same sources where they keep history:
 - ACE lists from the SOHO mirror, cached per day in src/data/ace_{rtsw,mag,epam}/raw/.
 - AIA 193 browse images, one per 6-hourly t0 cut-off, cached in src/data/aia193/;
   their coronal-hole metrics in src/data/features/coronal_holes.csv.
-- Flares: the live feed keeps 7 days, so history comes from NCEI's GOES-R XRS
-  science flare summaries (GOES-16 to 2025-04, GOES-18 from 2022-06), peaks merged.
+- Flares: the live feed keeps 7 days, so history comes from NCEI's XRS science
+  flare summaries: GOES-15 (reprocessed, 2010 -> 2020-03), GOES-16 (2017-02 ->
+  2025-04) and GOES-18 (from 2022-06), peaks merged (the larger flux wins).
 - F10.7: the live feed keeps ~40 days, so history comes from OMNI (CDAWeb).
 
 Output in src/data/features/: insitu_hourly.csv.gz, shocks.csv, coronal_holes.csv,
@@ -45,9 +46,12 @@ AIA_DIR = ROOT / "aia193"
 FLARE_DIR = ROOT / "goes_flares"
 NCEI = "https://data.ngdc.noaa.gov/platforms/solar-space-observing-satellites/goes"
 FLSUM = "{sat}/l2/data/xrsf-l2-flsum_science/sci_xrsf-l2-flsum_{name}_v2-2-2.nc"
-FLARE_FILES = {
-    "g16": FLSUM.format(sat="goes16", name="g16_s20170209_e20250406"),
-    "g18": FLSUM.format(sat="goes18", name="g18_s20220617_e20261020"),
+NCEI_GOES15 = ("https://www.ncei.noaa.gov/data/goes-space-environment-monitor/access/science/xrs/"
+               "goes15/xrsf-l2-flsum_science/sci_xrsf-l2-flsum_g15_s20100407_e20200304_v2-3-0.nc")
+FLARE_FILES = {  # full URLs
+    "g15": NCEI_GOES15,
+    "g16": f"{NCEI}/" + FLSUM.format(sat="goes16", name="g16_s20170209_e20250406"),
+    "g18": f"{NCEI}/" + FLSUM.format(sat="goes18", name="g18_s20220617_e20261020"),
 }
 FLARE_MERGE = pd.Timedelta(minutes=5)
 STEP = pd.Timedelta(hours=6)
@@ -68,20 +72,37 @@ def t0_grid(start=DATA_START, end=EVAL_END):
 
 
 # ---------------------------------------------------------------------- in-situ
-def pull_insitu(start=HISTORY_START, end=EVAL_END, out=OUT):
-    """ACE minutes -> the shifted hourly frame and the shock list, 30 days at a time."""
+def pull_insitu(start=HISTORY_START, end=EVAL_END, out=OUT, max_seconds=None):
+    """ACE minutes -> the shifted hourly frame and the shock list, 30 days at a time.
+
+    Each 30-day chunk is cached in out/insitu_chunks/, so a run stopped by
+    `max_seconds` continues where it left off. Returns None until every chunk is done.
+    """
     archives = {p: ACEDailyArchive(p, budget=3600, cache_dir=CACHE[p]) for p in CACHE}
     pad = pd.Timedelta(days=1)
+    chunks = out / "insitu_chunks"
+    chunks.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
     frames, shocks = [], []
     for a in pd.date_range(start, end, freq=CHUNK):
         b = min(a + CHUNK, end)
-        got = {p: arc.minutes(a - pad, b + pad) for p, arc in archives.items()}
-        minutes = insitu.minute_frame(got["swepam"], got["mag"], got["epam"])
-        frames.append(insitu.hourly_frame(minutes, a, b))
-        found = insitu.detect_shocks(minutes)
-        shocks.append(found[(found >= a) & (found < b)])
-        log(f"{a:%Y-%m-%d}: {frames[-1]['bt'].notna().mean():.0%} field hours, "
-            f"{len(shocks[-1])} shocks")
+        path = chunks / f"{a:%Y%m%d}_{b:%Y%m%d}.pkl"
+        if path.exists():
+            frame, found = pd.read_pickle(path)
+        else:
+            if max_seconds and time.monotonic() - started > max_seconds:
+                log("in-situ: time limit reached; run again to continue")
+                return None
+            got = {p: arc.minutes(a - pad, b + pad) for p, arc in archives.items()}
+            minutes = insitu.minute_frame(got["swepam"], got["mag"], got["epam"])
+            frame = insitu.hourly_frame(minutes, a, b)
+            found = insitu.detect_shocks(minutes)
+            found = found[(found >= a) & (found < b)]
+            pd.to_pickle((frame, found), path)
+            log(f"{a:%Y-%m-%d}: {frame['bt'].notna().mean():.0%} field hours, "
+                f"{len(found)} shocks")
+        frames.append(frame)
+        shocks.append(found)
     hourly = pd.concat(frames)
     shock_index = pd.DatetimeIndex(np.concatenate([s.to_numpy() for s in shocks]), name="shock")
     out.mkdir(parents=True, exist_ok=True)
@@ -174,11 +195,11 @@ def merge_flares(frames):
 
 def pull_flares(out=OUT):
     frames = []
-    for sat, rel in FLARE_FILES.items():
-        path = FLARE_DIR / Path(rel).name
+    for sat, url in FLARE_FILES.items():
+        path = FLARE_DIR / Path(url).name
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(http_get_bytes(f"{NCEI}/{rel}", timeout=300))
+            path.write_bytes(http_get_bytes(url, timeout=600))
         frames.append(read_flsum(path))
         log(f"flares {sat}: {len(frames[-1])} peaks")
     flares = merge_flares(frames)
@@ -252,10 +273,11 @@ def load_table(out=OUT):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("step", choices=["all", "insitu", "aia", "flares", "f107", "table"])
-    parser.add_argument("--max-seconds", type=float, default=None, help="AIA step time limit")
+    parser.add_argument("--max-seconds", type=float, default=None,
+                        help="time limit for the resumable in-situ and AIA steps")
     args = parser.parse_args(argv)
-    if args.step in ("all", "insitu"):
-        pull_insitu()
+    if args.step in ("all", "insitu") and pull_insitu(max_seconds=args.max_seconds) is None:
+        return 0
     if args.step in ("all", "flares"):
         pull_flares()
     if args.step in ("all", "f107"):
