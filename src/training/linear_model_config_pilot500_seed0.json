@@ -1,0 +1,76 @@
+{
+  "family": "gaussian",
+  "boxcox": 0.5,
+  "relative": true,
+  "weights": "run_timse",
+  "ridge": 0.1,
+  "lags_days": "27/13.5",
+  "half_width": 3,
+  "max_iter": 30,
+  "tol": 1e-06,
+  "features": [
+    "ch_cm_at_6h",
+    "log_p47_slope_6h",
+    "b_var_mean_1h"
+  ],
+  "selection": {
+    "runs": 500,
+    "sample_seed": 0,
+    "objective": "geometric mean over folds of per-run mean TIMSE / persistence",
+    "folds": [
+      [
+        "2023-10-21",
+        "2024-10-20"
+      ],
+      [
+        "2024-10-20",
+        "2025-10-20"
+      ]
+    ],
+    "path": [
+      {
+        "step": 0,
+        "added": "(speed terms only)",
+        "objective": 0.59181,
+        "gain": NaN
+      },
+      {
+        "step": 1,
+        "added": "ch_cm_at_6h",
+        "objective": 0.53782,
+        "gain": 0.09123
+      },
+      {
+        "step": 2,
+        "added": "log_p47_slope_6h",
+        "objective": 0.5269,
+        "gain": 0.02029
+      },
+      {
+        "step": 3,
+        "added": "b_var_mean_1h",
+        "objective": 0.52142,
+        "gain": 0.01041
+      }
+    ],
+    "ridge": [
+      {
+        "ridge": 0.0,
+        "objective": 0.526788289583912
+      },
+      {
+        "ridge": 0.1,
+        "objective": 0.5214163836708205
+      },
+      {
+        "ridge": 1.0,
+        "objective": 0.5823358185771725
+      },
+      {
+        "ridge": 10.0,
+        "objective": 0.7448060289414695
+      }
+    ],
+    "score": 0.52142
+  }
+}

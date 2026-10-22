@@ -50,9 +50,17 @@ def _before(df, cutoff):
     return None if df is None else df[df.index < cutoff]
 
 
-def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS):
-    """(build.Inputs, report) for a forecast at t0, using data available by t0."""
+def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None):
+    """(build.Inputs, report) for a forecast at t0, using data available by t0.
+
+    `ch_lag_hours` lists the AIA image lags (hours before t0 - CH_LATENCY) to fetch;
+    by default the daily lags of the fixed regressors (build.ch_cutoffs).
+    """
     t0 = to_utc(t0)
+    if ch_lag_hours is None:
+        ch_cutoffs = build.ch_cutoffs(t0)
+    else:
+        ch_cutoffs = [t0 - build.CH_LATENCY - pd.Timedelta(hours=h) for h in ch_lag_hours]
     started, bytes_before = time.monotonic(), bytes_downloaded()
     sources = sources or default_sources(budget)
     cutoff = t0 - insitu.LATENCY
@@ -63,7 +71,7 @@ def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS):
         "epam": lambda: sources["epam"].minutes(start, cutoff),
         "swepam_rt": lambda: sources["swepam_rt"].minutes(start, cutoff),
         "mag_rt": lambda: sources["mag_rt"].minutes(start, cutoff),
-        "sdo": lambda: sources["sdo"].latest(build.ch_cutoffs(t0), accept=_accept),
+        "sdo": lambda: sources["sdo"].latest(ch_cutoffs, accept=_accept),
         "flares": lambda: sources["flares"].flares(),
         "f107": lambda: sources["f107"].daily(),
     }
