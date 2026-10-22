@@ -1,0 +1,13 @@
+variant,n_features,min_child_weight,n_trees,objective,fold1,fold2,min_leaf_days,thin_leaves,max_thin_correction,runs_thin_over_20,splits_on_flares
+shipped,25,100,25,0.453156,0.533834,0.384671,3,36,149.555,99,"m_flares_count_120h, xray_peak_max_120h"
+min_child_weight 1000,25,1000,50,0.449488,0.535998,0.376941,3,58,196.28,158,"m_flares_count_120h, xray_peak_max_120h"
+min_child_weight 3000,25,3000,50,0.450219,0.530911,0.38179,9,38,110.316,581,"m_flares_count_120h, xray_peak_max_120h"
+min_child_weight 5000,25,5000,50,0.451802,0.537724,0.37961,19,25,62.2737,380,"m_flares_count_120h, xray_peak_max_120h"
+min_child_weight 10000,25,10000,50,0.455004,0.540703,0.382888,44,0,0,0,"m_flares_count_120h, xray_peak_max_120h"
+min_child_weight 20000,25,20000,100,0.452557,0.539244,0.379806,72,0,0,0,"m_flares_count_120h, xray_peak_max_120h"
+min_child_weight 40000,25,40000,100,0.455791,0.546178,0.380362,193,0,0,0,"m_flares_count_120h, xray_peak_max_120h"
+"min_child_weight 10000, depth 3",25,10000,25,0.453836,0.537971,0.382859,49,0,0,0,xray_peak_max_120h
+"no flare count, mcw 100",24,100,50,0.454514,0.536926,0.384752,2,44,72.2069,479,xray_peak_max_120h
+"no flare count, mcw 1000",24,1000,50,0.450861,0.534951,0.379989,5,42,77.0376,386,xray_peak_max_120h
+"no flare count, mcw 3000",24,3000,50,0.450527,0.532188,0.381396,9,27,49.2583,621,xray_peak_max_120h
+"no flare inputs, mcw 3000",23,3000,50,0.45181,0.534098,0.3822,14,17,52.7565,223,

@@ -8,7 +8,9 @@ availability rules as feature_engineering.build:
 
     in-situ   hourly rows labelled before t0 (shifted by insitu.LATENCY)
     AIA       the image for cut-off t0 - CH_LATENCY - lag; if it is missing, the image
-              CH_FALLBACK_HOURS older (6 h, then 12 h), else NaN
+              CH_FALLBACK_HOURS older (6 h, then 12 h), else NaN. A cut-off between the
+              6-hourly images of the pulled history (hourly training t0s) takes the
+              latest image at or before it, at most CH_GRID older.
     flares    peaks by t0 - FLARE_LATENCY
     F10.7     days before the UTC day of t0
 
@@ -32,6 +34,8 @@ FLARE_HOURS = (24, 48, 72, 120)
 F107_DAYS = (1, 7, 27)
 LAG_HOURS = {"lag27": 648, "lag13": 324}
 CH_FALLBACK_HOURS = (6, 12)  # older images to try when the one at the lag is missing
+CH_SIGNALS = ("ch_cm", "ch_east", "ch_disk")  # coronal-hole strips (coronal_holes.NAMES)
+CH_GRID = pd.Timedelta(hours=6)  # spacing of the pulled AIA cut-offs
 
 
 @dataclass(frozen=True)
@@ -72,7 +76,7 @@ def candidates():
 
 def ch_lags(specs, fallback=CH_FALLBACK_HOURS):
     """Image lags (hours before t0 - CH_LATENCY) that the specs need, fallbacks included."""
-    return sorted({s.hours + extra for s in specs if s.signal == "ch_cm"
+    return sorted({s.hours + extra for s in specs if s.signal in CH_SIGNALS
                    for extra in (0, *fallback)})
 
 
@@ -137,6 +141,19 @@ def _f107(daily, spec, t0s):
     return out
 
 
+def _asof(series, labels, within=CH_GRID):
+    """Value at the latest index label <= each label, if less than `within` older."""
+    if not series.index.is_monotonic_increasing:
+        series = series.sort_index()
+    labels = pd.DatetimeIndex(labels)
+    out = np.full(len(labels), np.nan)
+    i = series.index.searchsorted(labels, side="right") - 1
+    ok = i >= 0
+    ok[ok] = (labels[ok] - series.index[i[ok]]) < within
+    out[ok] = series.to_numpy(dtype=float)[i[ok]]
+    return out
+
+
 def _ch_at(series, t0s, hours, fallback):
     """The strip at lag `hours`, else at each fallback lag in turn (NaN if none)."""
     out = np.full(len(t0s), np.nan)
@@ -144,7 +161,7 @@ def _ch_at(series, t0s, hours, fallback):
         missing = np.isnan(out)
         if not missing.any():
             break
-        out[missing] = _at(series, t0s[missing] - build.CH_LATENCY - lag * HOUR)
+        out[missing] = _asof(series, t0s[missing] - build.CH_LATENCY - lag * HOUR)
     return out
 
 
@@ -158,10 +175,10 @@ def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
             hourly = inputs.hourly
             cols[spec.name] = (np.full(len(t0s), np.nan) if hourly is None or hourly.empty
                                else _insitu(hourly, spec, last))
-        elif spec.signal == "ch_cm":
+        elif spec.signal in CH_SIGNALS:
             ch = inputs.coronal_holes
             cols[spec.name] = (np.full(len(t0s), np.nan) if ch is None or ch.empty
-                               else _ch_at(ch["ch_cm"], t0s, spec.hours, ch_fallback))
+                               else _ch_at(ch[spec.signal], t0s, spec.hours, ch_fallback))
         elif spec.signal in ("xray_peak", "m_flares"):
             cols[spec.name] = _flares(inputs.flares, spec, t0s)
         elif spec.signal == "f107":
