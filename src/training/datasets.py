@@ -1,6 +1,7 @@
 """Pinned train/eval split of the hourly real-time ACE speed series (see docs/evaluation.md).
 
-    train  [DATA_START, TRAIN_END)   4 years, for fitting models
+    train  [DATA_START, TRAIN_END)   9 years, for fitting models (2016-10 -> 2025-10;
+                                     before history_extension it started 2021-10)
     eval   [TRAIN_END, EVAL_END)     1 year, for TIMSE scoring only
 
 The dates are fixed so that re-pulling the data never moves the eval year.
@@ -10,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-DATA_START = pd.Timestamp("2021-10-20T00:00Z")
+DATA_START = pd.Timestamp("2016-10-20T00:00Z")
 TRAIN_END = pd.Timestamp("2025-10-20T00:00Z")
 EVAL_END = pd.Timestamp("2026-10-20T00:00Z")
 

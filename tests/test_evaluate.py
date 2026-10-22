@@ -31,7 +31,7 @@ def test_split_is_contiguous_and_disjoint(hourly_csv):
     assert train.index[-1] == datasets.TRAIN_END - pd.Timedelta(hours=1)
     assert held_out.index[0] == datasets.TRAIN_END
     assert held_out.index[-1] == datasets.EVAL_END - pd.Timedelta(hours=1)
-    assert len(train) == 35064  # 4 years incl. 29 Feb 2024
+    assert len(train) == 78888  # 9 years incl. 29 Feb 2020 and 2024
     assert len(held_out) == 8760
 
 

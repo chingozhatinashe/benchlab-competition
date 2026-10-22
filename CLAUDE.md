@@ -24,7 +24,7 @@ uv venv --python 3.10 .venv && uv pip install --python .venv -r requirements-dev
 (cd src/local_tests && ./test_local.sh 20261111T060000Z) # full Docker build + run + upload + validate
 bash package_submission.sh                              # builds submission.zip from src/
 .venv/Scripts/python -m training.pull_omni              # pulls 2 years of OMNI hourly data into src/data/omni_hourly/
-.venv/Scripts/python -m training.pull_ace_rtsw          # pulls the pinned 5-year real-time ACE speed series into src/data/ace_rtsw/
+.venv/Scripts/python -m training.pull_ace_rtsw          # pulls the pinned real-time ACE speed series (2016-10 -> 2026-10) into src/data/ace_rtsw/
 .venv/Scripts/python -m training.pull_lasco_cme --start 2021-10  # pulls the SOHO/LASCO CME catalogue into src/data/lasco_cme/ (analysis only: published months late)
 .venv/Scripts/python -m training.pull_features all       # regressor history (ACE plasma/field/EPAM, AIA images, GOES flares, F10.7) -> src/data/features/table.csv.gz + assets/feature_climatology.json; resumable
 .venv/Scripts/python -m inference.check_features 20261021T180000Z  # live dry run of the regressors: sources, timing, MB, values
@@ -32,6 +32,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.linear_model select|train|evaluate  # full selection (resumable, --max-seconds), fit -> src/assets/linear_model.json, eval year once
 .venv/Scripts/python -m training.xgboost_model select --base linear --sample-frac 0.1  # timed pilot of the XGBoost hybrid's selection
 .venv/Scripts/python -m training.xgboost_model select|train|evaluate --base linear     # full selection (resumable), fit -> src/assets/xgboost_model.json, eval year once
+.venv/Scripts/python -m training.compare_history       # refits the shipped configs on history since 2016 vs 2021 over the yearly folds (training.folds)
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
 .venv/Scripts/python -m training.final_baseline evaluate # scores it on the eval year (once, after choosing)

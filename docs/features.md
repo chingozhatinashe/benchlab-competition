@@ -126,6 +126,8 @@ weak point if a model comes to depend on them.
 ```
 
 It writes `src/data/features/table.csv.gz`, with one row of raw regressors per 6-hourly t0 from
-2021-10-20 to 2026-10-20 and NaN where unknown. It also refits the imputation medians on the
+2016-10-20 to 2026-10-20 (14,608 t0s; every regressor present for at least 85% of them) and NaN
+where unknown. Flares before GOES-16 (Feb 2017) come from NCEI's reprocessed GOES-15 science flare
+summaries; their fluxes read about 10% below GOES-16's for the same flares. It also refits the imputation medians on the
 training years and writes them to `src/assets/feature_climatology.json`.
 `src/experiments/feature_screening.ipynb` looks at the table on the training years only.
