@@ -51,6 +51,15 @@ Setting `SWP_MODEL=linear` replaces the forecast with `models/linear_model.py`:
 
 Without the variable, the forecast is the baseline. Weights are in `assets/linear_model.json` (numpy only, no new dependencies).
 
+## Optional XGBoost hybrid (not the submitted forecast)
+
+Setting `SWP_MODEL=xgboost` uses `models/xgboost_model.py`:
+- 100 shallow gradient-boosted trees that correct the linear model's forecast above (every leaf supported by at least 72 training days);
+- inputs: lead, the speed terms and 25 regressors (solar wind, coronal-hole strips at several lags, flares, F10.7);
+- missing regressors follow each tree's learned default branch;
+- the trees are evaluated in numpy from `assets/xgboost_model.json`, so the image gets no xgboost and no new dependency;
+- any failure falls back to the linear model, then the baseline.
+
 ## Regressor inputs (built, not yet used by the forecast)
 
 `feature_engineering/` also builds 40 regressors that later models will use (see

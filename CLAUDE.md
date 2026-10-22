@@ -30,6 +30,8 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m inference.check_features 20261021T180000Z  # live dry run of the regressors: sources, timing, MB, values
 .venv/Scripts/python -m training.linear_model select --sample 500 --seed 0  # timed pilot of the linear model's variant search + forward selection; run before a full selection
 .venv/Scripts/python -m training.linear_model select|train|evaluate  # full selection (resumable, --max-seconds), fit -> src/assets/linear_model.json, eval year once
+.venv/Scripts/python -m training.xgboost_model select --base linear --sample-frac 0.1  # timed pilot of the XGBoost hybrid's selection
+.venv/Scripts/python -m training.xgboost_model select|train|evaluate --base linear     # full selection (resumable), fit -> src/assets/xgboost_model.json, eval year once
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
 .venv/Scripts/python -m training.final_baseline evaluate # scores it on the eval year (once, after choosing)
@@ -55,6 +57,7 @@ bash package_submission.sh                              # builds submission.zip 
   - Each source has an availability rule (in-situ t0 − 10 min, AIA t0 − 1 h, flares by peak time, F10.7 up to the previous day).
   - `tests/test_features.py` checks that scrambling everything not available at t0 leaves the features unchanged. Keep that test passing when adding a regressor.
 - **Linear model** (`models.linear_model`, `docs/linear_model.md`): a per-lead GLM on the speed terms plus selected windowed regressors (`feature_engineering.windows`). It is opt-in live with `SWP_MODEL=linear` (`inference.run_linear_forecast`, falling back to the final baseline). Training drops isolated one-hour speed glitches (`recurrence.despike`) from targets and recurrence terms. The coronal-hole regressor falls back to older images, and if it is still missing, a submodel fitted without it is used (`Config.optional`). `model.py` calls `inference.run_selected_forecast`, which runs the final baseline by default.
+- **XGBoost hybrid** (`models.xgboost_model`, `docs/xgboost_model.md`): gradient-boosted trees, pooled over leads, that correct the linear model's forecast. It is trained with `xgboost-cpu` (dev only) and evaluated in numpy from `assets/xgboost_model.json`, with no xgboost in the image. It is opt-in live with `SWP_MODEL=xgboost` (`inference.run_xgboost_forecast`, falling back to the linear model).
 - **The reference baseline** is `models.final_baseline` (`docs/final_baseline.md`). Every new model is compared against it. `SWP_OFFLINE=1` makes `run_forecast` skip the network (used by `tests/test_model_contract.py`).
 - The platform layer and the `ENTRYPOINT ["/app/run.sh"]` contract in the Dockerfile must stay intact.
 
