@@ -4,17 +4,26 @@ The first model to use the regressors from `docs/features.md`. It's a per-lead
 generalised linear model (`src/models/linear_model.py`), selected and trained by
 `src/training/linear_model.py`.
 
-On the eval year it beats the final baseline on pooled TIMSE (−15%), per-run mean
-TIMSE (−6%) and per-run median TIMSE (−15%). It is worse on the p90 of per-run TIMSE
-(+25%). The submission stays the final baseline; the linear model runs live only
-when `SWP_MODEL=linear` is set.
+**The shipped model** is the one re-selected after the [data fixes](#data-fixes): four
+regressors (coronal-hole strip 12 h before t0, 24 h density, 48 h peak flare flux, 48 h field
+variability), with glitches removed from the training speeds and a submodel for runs without a
+coronal-hole image. On the eval year it beats the final baseline on:
+- pooled TIMSE (−15%);
+- per-run mean TIMSE (−8%);
+- per-run median TIMSE (−20%).
+
+It is worse on the p90 of per-run TIMSE (+17%).
+
+The submission stays the final baseline; the linear model runs live only when
+`SWP_MODEL=linear` is set. The sections up to "Eval year" describe the first fit, which
+was replaced after the eval analysis (`src/experiments/linear_model.ipynb`).
 
 ## Pipelines
 
 | | Steps |
 |---|---|
 | **Training** | input features → feature selection → regression. A run with any selected regressor missing is dropped (441 of 5,844 training runs). |
-| **Live** | input features → imputation (training medians) → feature selection → regression. The selected regressors are built for t0 by the same code as in training (`feature_engineering.windows`); a missing one takes its training median. |
+| **Live** | input features → imputation (training medians) → feature selection → regression. The selected regressors are built for t0 by the same code as in training (`feature_engineering.windows`); a missing one takes its training median, except the coronal-hole strip: a run without it goes to a submodel fitted without it (see [Data fixes](#data-fixes)). |
 
 For each lead k = 1…72 h:
 
@@ -90,6 +99,8 @@ What the variants show:
 
 ## Eval year (2025-10-20 → 2026-10-20, 1,448 runs; scored once)
 
+These are the results for the first fit, before the [data fixes](#data-fixes).
+
 | | Linear model | Final baseline | Persistence |
 |---|---|---|---|
 | Pooled TIMSE | **4.75e7** | 5.58e7 | 8.13e7 |
@@ -114,22 +125,99 @@ By regime (median per-run TIMSE ratio; regimes as in `final_baseline_analysis.ip
 - **The over-forecast remains:** the mean residual is −49 km/s at 24 h and −103 km/s at 72 h (baseline: −59 and −105). Five regressors reduce it at short leads only.
 - **Coronal-hole gap:** `ch_cm_at_12h` was imputed in 20% of eval runs because of the SDO archive gap (about 2025-09-12 to 2025-12-16). The other regressors were imputed in under 1% of runs.
 
-**Full analysis:** `src/experiments/linear_model.ipynb`. It covers:
-- the regimes, the bias and the stream arrivals;
-- the coefficients, an ablation of each regressor, and the coronal-hole gap.
+The eval analysis of this first fit found:
+- **One event dominated the gain:** 69% of the per-run-mean gain came from the January 2026 CME.
+- **Large coronal holes:** the model over-forecast when the hole at the central meridian was large.
+- **A glitch in the training data** (1,087 km/s at 2022-10-05 02:00) made the coefficients jump every sixth lead.
 
-Main additional findings:
-- **One event dominates the gain:** 69% of the per-run-mean gain comes from the January 2026 CME.
-- **Large coronal holes:** the model over-forecasts when the hole at the central meridian is large.
-- **A glitch in the training data** (1,087 km/s at 2022-10-05 02:00) makes the coefficients jump every sixth lead.
+These led to the data fixes below. **The notebook `src/experiments/linear_model.ipynb` now analyses the shipped model** (after the fixes). It covers:
+- the regimes, the bias and the stream arrivals;
+- the coefficients, contributions and ablation of each regressor;
+- the coronal-hole gap, the despiking, and forecasts along the year.
+
+## Data fixes
+
+The eval analysis found two data problems. Both are fixed for every config scored on the
+folds and for the shipped fit (`training.linear_model.with_fixes`).
+
+**1. Glitches in the training speeds (`Config.despike`).**
+- **The glitch:** one hour read 1,087 km/s at 2022-10-05 02:00, between hours of about 500 km/s. Runs start every 6 hours, so it was the target of leads 2, 8, 14, … h. Because TIMSE weights favour a run's fastest hours, it took up to 2% of the fitting weight at each of those leads, and the coefficients jumped every sixth lead.
+- **The rule:** `feature_engineering.recurrence.despike` drops hour h when the medians of the 3 hours before and the 3 hours after agree within 75 km/s and h differs from both by more than 150 km/s in the same direction. A shock or a stream onset is a step, so its two sides disagree and it is kept. The threshold was set on the training years: it flags 4 hours in 2021–2025.
+- **Where it applies:** the cleaned series is used for the fitting targets and the recurrence terms. Their windows end at least 246 h before t0, so cleaning them uses only past hours. The last observed speed stays raw: its hour can't be checked against later hours.
+- **Scoring is unchanged:** it always uses the raw series, as the platform does.
+- **Result:** the lead-to-lead jumps in the coefficients are 3–7× smaller.
+
+**2. The coronal-hole gaps (`windows.CH_FALLBACK_HOURS`, `Config.optional`).**
+- **Fallback image:** if the image at the lag is missing, the strip comes from the image 6 h, then 12 h older. This covers short outages live. It recovers only 7 of the 332 missing training runs and 6 of the 285 missing eval runs: almost all missing values come from long archive gaps (40 days in Nov 2024 – Jan 2025, 96 days in Sep – Dec 2025, 9 days in Mar 2026).
+- **Submodel:** the coronal-hole regressor is "optional". The model also fits a submodel without it, on every run the other regressors cover (5,735). A run still missing the strip is forecast by the submodel instead of with the median strip. Both models are in the asset (format 2).
+
+**Fold scores** for the first fit's five regressors (lower is better; eval year not used):
+
+| | Score | Fold 1 | Fold 2 |
+|---|---|---|---|
+| First fit (no fixes) | 0.4740 | 0.5562 | 0.4039 |
+| despike only | 0.4735 | 0.5453 | 0.4111 |
+| image fallback only | 0.4732 | 0.5564 | 0.4024 |
+| submodel only | 0.4664 | 0.5562 | 0.3911 |
+| fallback + submodel | 0.4659 | 0.5564 | 0.3901 |
+| **all fixes (shipped)** | **0.4646** | 0.5455 | 0.3956 |
+
+- **The submodel brings most of the gain,** in fold 2, which contains the Nov 2024 – Jan 2025 gap.
+- **Despiking is about neutral on the score.** Its value is the stable fit.
+- **The regressors were selected before the fixes,** so the selection was re-run with them.
+
+### Re-selection with the fixes (the shipped model)
+
+The full variant search and forward selection were run again with both fixes:
+- **Timing:** the 500-run pilot took 52 s; the full run took 8.5 min.
+- **Variant:** the same winner, Gaussian with no transform, relative to persistence.
+
+| Step | Added | Score | Gain |
+|---|---|---|---|
+| 0 | speed terms only | 0.5347 | |
+| 1 | `ch_cm_at_12h` | 0.4861 | 9.1% |
+| 2 | `density_mean_24h` | 0.4701 | 3.3% |
+| 3 | `xray_peak_max_48h` | 0.4660 | 0.9% |
+| 4 | `b_var_mean_48h` | 0.4633 | 0.6% |
+| (5) | `bt_max_6h` | 0.4624 | 0.2%, below the threshold |
+
+- **Same regressors, minus F10.7:** the first four regressors and their windows are unchanged. F10.7 no longer clears the 0.5% gain.
+- **Ridge:** it re-tunes to 0 (0.4614, against 0.4633 at 0.1).
+- **Fold score:** 0.4614, against 0.4740 for the first fit and 0.518 for the final baseline.
+
+**Eval year, scored once after the re-selection:**
+
+| | Shipped (fixes) | First fit | Final baseline | Persistence |
+|---|---|---|---|---|
+| Pooled TIMSE | **4.74e7** | 4.75e7 | 5.58e7 | 8.13e7 |
+| Per-run mean | **2.37e6** | 2.44e6 | 2.59e6 | 5.57e6 |
+| Per-run median | **6.76e5** | 7.21e5 | 8.45e5 | 7.76e5 |
+| Per-run p90 | 3.76e6 | 4.00e6 | **3.21e6** | 1.38e7 |
+| RMSE (km/s) | **102.2** | 105.5 | 109.7 | 110.0 |
+
+| Regime | Runs | Shipped / baseline (median) | Beats baseline | First fit / baseline (median) |
+|---|---|---|---|---|
+| CME | 295 | **0.89** | 66% | 0.93 |
+| possible CME | 81 | **0.82** | 70% | 1.02 |
+| stream arrival | 304 | 1.12 | 41% | 1.13 |
+| fast stream | 105 | **0.98** | 51% | 1.07 |
+| slow wind | 186 | **0.62** | 83% | 0.75 |
+| intermediate | 477 | **0.76** | 73% | 0.88 |
+
+- **Every summary score improves on the first fit.** The gains are largest on the typical run: the median is 20% below the baseline's, and the model wins 83% of slow-wind and 73% of intermediate runs.
+- **Stream arrivals remain the weak spot** (median ratio 1.12), and so does the p90.
+- **The 72 h over-forecast is unchanged** (−105 km/s, as for the baseline). At 24 h it is −49 km/s, against −59 for the baseline.
+- **Submodel use:** 19% of eval runs had no coronal-hole image and went to the submodel. On those runs the model now beats the baseline (median ratio 0.88, wins 61%), where the first fit only tied it.
+- **The gain is broader:** the January 2026 CME accounts for 49% of the per-run-mean gain (first fit 69%), and the model wins more runs than it loses in 11 of 13 months.
+- **A smaller six-lead pattern remains.** It is structural: with 6-hourly runs, each lead is fitted only on target hours at one time of day modulo 6. Training on hourly forecast times would remove it.
 
 ## Live
 
 - `SWP_MODEL=linear` makes `model.py` use `inference.run_linear_forecast`.
   - The speed history and the regressors are fetched in parallel. Only the AIA image lags the model uses are fetched.
-  - Missing regressors take their medians.
+  - Missing regressors take their medians. A missing coronal-hole strip (after the 12 h → 18 h → 24 h image fallback) switches to the submodel without it.
   - Any failure falls back to the final baseline, then persistence.
-- **In the image** (4 vCPU / 16 GiB, t0 2026-10-22 06Z): 5 of 5 regressors observed, 21 s, a valid forecast, image unchanged at 90 MiB.
+- **In the image** (4 vCPU / 16 GiB, t0 2026-10-22 06Z): all regressors observed (5 of 5 for the first fit; 4 of 4 for the shipped model, re-checked locally), 21 s, a valid forecast, image unchanged at 90 MiB. The image fallback fetches three AIA images (12, 18, 24 h) instead of one.
 - Without the variable, `model.py` runs the final baseline as before.
 
 ## Reproduce
