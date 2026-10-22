@@ -8,11 +8,12 @@ import json
 import sys
 from datetime import datetime, timedelta, timezone
 
-from inference import FORECAST_HOURS, run_forecast
+from inference import FORECAST_HOURS, run_selected_forecast
 
 
 def predict(t0):
-    return run_forecast(t0)
+    # the final baseline; SWP_MODEL=linear opts in to the linear model
+    return run_selected_forecast(t0)
 
 
 def main():

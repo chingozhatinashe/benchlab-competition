@@ -41,6 +41,15 @@ it falls back to persistence.
 **Runtime.** numpy and pandas only. A run downloads about 3 months of daily files
 (a few MB, typically under a minute) and computes the forecast in about a second.
 
+## Optional linear model (not the submitted forecast)
+
+Setting `SWP_MODEL=linear` replaces the forecast with `models/linear_model.py`:
+- a per-lead linear model on the same speed terms plus five regressors (coronal-hole area from an SDO/AIA image 12 h before t0, 24 h mean density, 48 h peak X-ray flare flux, 48 h field variability, 7-day F10.7);
+- missing regressors take their training medians;
+- any failure falls back to the baseline above.
+
+Without the variable, the forecast is the baseline. Weights are in `assets/linear_model.json` (numpy only, no new dependencies).
+
 ## Regressor inputs (built, not yet used by the forecast)
 
 `feature_engineering/` also builds 40 regressors that later models will use (see
@@ -99,7 +108,7 @@ submission/
 ├── feature_engineering/ # hourly speeds, recurrence features, regressors, imputation
 ├── models/              # the forecast model (models/final_baseline.py)
 ├── inference/           # fetch -> features -> model, with fallbacks
-├── assets/              # fitted weights, regressor medians
+├── assets/              # fitted weights (baseline, linear model), regressor medians
 └── local_tests/         # run test_local.sh from here before you submit
     ├── test_local.sh
     └── mock_platform.py
