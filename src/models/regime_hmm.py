@@ -21,7 +21,7 @@ so they only use data available at t0. Features (`features`):
     hmm_state_hours   hours since the most probable filtered state last changed
                       (capped at MAX_DURATION)
 
-Experimental (training.regime_hmm); not used by the live forecast.
+Experimental (training.regime_hmm, docs/regime_hmm.md); not used by the live forecast.
 """
 
 import json
