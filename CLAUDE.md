@@ -33,6 +33,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.xgboost_model select --base linear --sample-frac 0.1  # timed pilot of the XGBoost hybrid's selection
 .venv/Scripts/python -m training.xgboost_model select|tame|train|evaluate --base linear  # full selection (resumable; --sets, XGB_NTHREAD=2 caps threads/memory on this laptop), fit -> src/assets/xgboost_model.json
 .venv/Scripts/python -m training.compare_history       # refits the shipped configs on history since 2016 vs 2021 over the yearly folds (training.folds)
+.venv/Scripts/python -m training.regime_models         # regime-model feasibility study (oracle, classifiers, routing) on the yearly folds; not built, see src/experiments/regime_models.ipynb
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
 .venv/Scripts/python -m training.final_baseline evaluate # scores it on the eval year (once, after choosing)
