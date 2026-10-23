@@ -9,6 +9,10 @@ folds instead, the best correction (one GP on each run's TIMSE-weighted mean
 offset, the XGBoost hybrid's 25 inputs) reached 0.4587, a 0.6% gain; the
 XGBoost hybrid gains 1.9%.
 
+On 9 years and the six yearly folds (training.gaussian_process_folds,
+2026-10-23) the offset GP gains 1.6% over the linear model but stays 1.4%
+behind the hybrid; ML-II is 29-51% worse. Write-up: docs/gaussian_process.md.
+
     python -m training.gaussian_process select --sample 500 --seed 0   # timed pilot
     python -m training.gaussian_process select [--max-seconds 480]     # full selection
     python -m training.gaussian_process train                          # fit the chosen config
