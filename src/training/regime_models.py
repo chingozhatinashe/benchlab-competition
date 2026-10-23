@@ -21,7 +21,8 @@ Every validation run's true regime, probabilities and member forecasts are cache
 in src/data/regime_cache/{year}.pkl; the combinations (oracle, hard and soft
 routing, soft routing shrunk towards the global model) are computed from them
 without refitting (`scores`). Results: src/experiments/regime_models.csv; the
-analysis is src/experiments/regime_models.ipynb. Dev-only; nothing here ships.
+analysis is src/experiments/regime_models.ipynb, write-up docs/regime_models.md. Dev-only;
+nothing here ships.
 """
 
 import argparse

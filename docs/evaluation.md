@@ -42,29 +42,12 @@ Model choices are made on walk-forward folds inside the training years. Each fol
 - **At solar maximum the old years don't help:** on fold 2023-10, the quiet 2016–2020 years leave the linear model level and make the baseline 4.5% worse.
 - **The hybrid beats the linear model and the baseline in all six folds.**
 
-## Regime models (feasibility, not built)
+## Studies that were not built
 
-**The question:** would one model per regime, routed by a regime classifier, beat the single
-hybrid? Run with `python -m training.regime_models` on the six yearly folds; the analysis is
-`src/experiments/regime_models.ipynb`.
-
-**Setup:**
-- **Regimes:** CME (with possible CMEs), stream arrival, fast stream, intermediate and slow wind, labelled from each run's 72 target hours (`training.solar_wind_events.label_runs`).
-- **Per-regime models:** the shipped linear and hybrid configs, fitted on one regime's runs.
-- **Classifiers:** logistic and XGBoost, on the hybrid's inputs at t0.
-
-| Method | Fold score | vs the hybrid | Folds won |
-|---|---|---|---|
-| oracle (route by the true regime) | 0.330 | −22.6% | 6 |
-| soft routing shrunk towards the hybrid (weight 0.3) | 0.4215 | −1.0% | 3 |
-| global hybrid | 0.4258 | | |
-| soft routing (Σ P × regime model) | 0.444 | +4.2% | 1 |
-| hard routing (most probable regime) | 0.535 | +25.6% | 0 |
-
-**Not built:** the rule asked for more than 2% in at least 4 folds. Why:
-- **The oracle's gain is mostly the label leaking the future.** A "slow wind" model, fitted on runs that stay below 450 km/s, reaches 0.22× the hybrid's error on them. The CME model doesn't beat the hybrid even on true CME runs.
-- **Regimes are poorly predictable at t0:** the XGBoost classifier calls 50% of CME runs and 46% of stream-arrival runs quiet. P(CME) only rises once the CME reaches L1.
-- **The wrong model is expensive:** the slow-wind model on a stream arrival costs 3.9× the hybrid.
+Scored on the yearly folds and documented, but not built:
+- [Regime models](regime_models.md): one model per regime, routed by a classifier. The oracle would gain 22.6%, but the best realistic method gains only 1.0%.
+- [Gaussian-process correction](gaussian_process.md): a GP correction to the linear model. It gains 1.6% over the linear model but stays 1.4% behind the hybrid.
+- [HMM regimes](regime_hmm.md): hidden-Markov regime features for the hybrid. They add +0.1% at best.
 
 ## Rules
 
