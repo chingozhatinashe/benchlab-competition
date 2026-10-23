@@ -11,7 +11,7 @@ with the data fixes) is fitted on the fold's 6-hourly fit runs, exactly as in th
 linear model's own selection; `train` uses the shipped linear model.
 
 Selection never touches the eval year. It uses the walk-forward folds of the
-final baseline (training.final_baseline.FOLDS): fit on the runs before the fold
+selection folds (training.folds.SELECTION): fit on the runs before the fold
 (targets cut at the fold start), forecast the fold's 6-hourly runs, and score
 per-run mean TIMSE relative to persistence, as a geometric mean over the folds
 (the same objective as the linear model).
@@ -54,7 +54,7 @@ from models.final_baseline import run_timse_weights
 from models.xgboost_model import ASSET, Config, XGBoostModel
 from training import linear_model as tl
 from training.datasets import DATA_START, TRAIN_END, load_train
-from training.final_baseline import FOLDS
+from training.folds import SELECTION as FOLDS
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "xgboost_model_config.json"
@@ -225,12 +225,13 @@ def _scored(folds, config, label, cache, timer):
     result, gain = folds.objective(config, timer=timer)
     rows = [{"label": label, "set": label.split("|")[0], "max_depth": config.max_depth,
              "min_child_weight": config.min_child_weight, "n_trees": n,
-             "n_features": len(config.features), "objective": obj, "fold1": r[0], "fold2": r[1]}
+             "n_features": len(config.features), "objective": obj,
+             **{f"fold{i + 1}": v for i, v in enumerate(r)}}
             for n, (obj, r) in result.items()]
     path.write_text(json.dumps({"rows": rows, "gain": gain.to_dict()}), encoding="utf-8")
     best = min(rows, key=lambda r: r["objective"])
     log(f"  {label}: best {best['objective']:.4f} at {best['n_trees']} trees "
-        f"(folds {best['fold1']:.4f} / {best['fold2']:.4f})")
+        f"(folds {' / '.join(f'{best[k]:.4f}' for k in best if k.startswith('fold'))})")
     return rows, gain
 
 
@@ -238,7 +239,8 @@ def _name(base):
     return "xgboost" if base == "persistence" else "xgboost_hybrid"
 
 
-def select(sample_frac=None, seed=0, max_seconds=None, fresh=False, base="persistence"):
+def select(sample_frac=None, seed=0, max_seconds=None, fresh=False, base="persistence",
+           only_sets=None):
     started = time.perf_counter()
     timer = Timer()
     depths, min_child = GRID[base]
@@ -253,6 +255,8 @@ def select(sample_frac=None, seed=0, max_seconds=None, fresh=False, base="persis
     series = load_train()
     fit_t0s = hourly_runs(series, sample_frac, seed)
     sets = candidate_sets()
+    if only_sets:
+        sets = {k: v for k, v in sets.items() if k.split("_")[0] in only_sets}
     names = tuple(dict.fromkeys([*(n for s in sets.values() for n in s),
                                  *tl.load_config().features]))
     t0s = fit_t0s.union(tl.training_runs(series))
@@ -319,7 +323,7 @@ def select(sample_frac=None, seed=0, max_seconds=None, fresh=False, base="persis
         "objective": "geometric mean over folds of per-run mean TIMSE / persistence",
         "folds": [[f"{a:%Y-%m-%d}", f"{b:%Y-%m-%d}"] for a, b in FOLDS],
         "score": round(best["objective"], 5),
-        "fold_ratios": [round(best["fold1"], 5), round(best["fold2"], 5)],
+        "fold_ratios": [round(best[k], 5) for k in best if k.startswith("fold")],
         "gain_share": {k: round(float(v), 4) for k, v in gain.sort_values(ascending=False)
                        .items()}}}
     path = config_path(base, suffix)
@@ -342,13 +346,14 @@ def report_time(timer, elapsed, frac, sets, series, grid):
     if frac:
         configs = len(sets) + grid + 1
         fit = timer.mean("fit") / frac  # fitting time grows with rows
-        est = (timer.total["feature table"] / frac + configs * 2 * fit
-               + configs * 2 * timer.mean("score"))
+        n_folds = len(FOLDS)
+        est = (timer.total["feature table"] / frac + configs * n_folds * fit
+               + configs * n_folds * timer.mean("score"))
         runs = len(hourly_runs(series))
         cols = max(len(v) for v in sets.values()) + 4
         rows = runs * Config().leads_per_run
         data_mb = rows * cols * (4 + 1) / 1e6 + runs * cols * 4 / 1e6  # rows + bins + table
-        log(f"  estimate for the full selection ({configs} configs x 2 folds): "
+        log(f"  estimate for the full selection ({configs} configs x {n_folds} folds): "
             f"~{est / 60:.0f} min (one fit on all runs ~{fit / 60:.1f} min)")
         log(f"  memory for the largest set on all {runs} runs: ~{data_mb:.0f} MB of data "
             f"on top of the process (pilot peak {timer.peak:.0f} MB)")
@@ -379,7 +384,7 @@ def leaf_support(model, values, positions, regressors, t0s):
     return pd.DataFrame(out)
 
 
-def tame():
+def tame(max_seconds=None):
     """Variants of the chosen hybrid that remove rules resting on one flare episode.
 
     Each variant is scored on the training folds (as in selection) and refitted on all
@@ -399,7 +404,8 @@ def tame():
     table = feature_table(fit_t0s.union(tl.training_runs(series)), names,
                           CACHE_DIR / "table_full.pkl")
     folds = Folds(series, table, fit_t0s)
-    cache = CACHE_DIR / "tame"
+    cache = CACHE_DIR / f"tame_{len(FOLDS)}folds"
+    started = time.perf_counter()
     cache.mkdir(parents=True, exist_ok=True)
     timer = Timer()
 
@@ -420,6 +426,13 @@ def tame():
     positions = series.index.get_indexer(fit_t0s)
     rows = []
     for label, cfg in variants.items():
+        row_path = cache / f"row_{label.replace(' ', '_').replace(',', '')}_{_key(cfg)}.json"
+        if row_path.exists():
+            rows.append(json.loads(row_path.read_text(encoding="utf-8")))
+            continue
+        if max_seconds and time.perf_counter() - started > max_seconds:
+            log("time limit reached; run the same command again to continue")
+            return None
         scored, _ = _scored(folds, cfg, f"tame {label}", cache, timer)
         best = min(scored, key=lambda r: r["objective"])
         model = XGBoostModel(replace(cfg, n_trees=best["n_trees"]), LinearModel.load())
@@ -437,12 +450,14 @@ def tame():
         split_on = {cols[f] for f in model.trees.feature[inner]}
         rows.append({"variant": label, "n_features": len(cfg.features),
                      "min_child_weight": cfg.min_child_weight, "n_trees": best["n_trees"],
-                     "objective": best["objective"], "fold1": best["fold1"],
-                     "fold2": best["fold2"], "min_leaf_days": int(support["days"].min()),
+                     "objective": best["objective"],
+                     **{k: v for k, v in best.items() if k.startswith("fold")},
+                     "min_leaf_days": int(support["days"].min()),
                      "thin_leaves": int(len(thin)),
                      "max_thin_correction": float(np.abs(thin_corr).max()),
                      "runs_thin_over_20": int((np.abs(thin_corr) > 20).sum()),
                      "splits_on_flares": ", ".join(sorted(split_on & set(FLARE_INPUTS)))})
+        row_path.write_text(json.dumps(rows[-1], default=float), encoding="utf-8")
         log(f"  {label}: {best['objective']:.4f} at {best['n_trees']} trees; smallest leaf "
             f"{rows[-1]['min_leaf_days']} days; thin leaves move a run by up to "
             f"{rows[-1]['max_thin_correction']:.0f} km/s")
@@ -554,15 +569,18 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-seconds", type=float, default=None)
     parser.add_argument("--fresh", action="store_true", help="clear this run's cache first")
+    parser.add_argument("--sets", nargs="+", default=None, choices=["A", "B", "C", "D"],
+                        help="candidate regressor sets to try (default all)")
     parser.add_argument("--base", choices=["persistence", "linear"], default="persistence",
                         help="what the trees correct (linear = the hybrid)")
     args = parser.parse_args(argv)
     if args.command == "select":
-        select(args.sample_frac, args.seed, args.max_seconds, args.fresh, args.base)
+        select(args.sample_frac, args.seed, args.max_seconds, args.fresh, args.base,
+               args.sets)
     elif args.command == "train":
         train(base=args.base)
     elif args.command == "tame":
-        tame()
+        tame(args.max_seconds)
     else:
         evaluate()
     return 0
