@@ -27,6 +27,7 @@ the field from the matching MAG files, cached in src/data/ace_mag/raw/.
 """
 
 import sys
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -252,4 +253,63 @@ def classify_runs(t0s, actual, cme, arrivals, possible=None, horizon=72):
             labels.append("slow wind")
         else:
             labels.append("intermediate")
+    return pd.Categorical(labels, categories=REGIMES)
+
+
+# ---------------------------------------------------------------------- routing regimes
+# The regime-model study (training.regime_models) routes on 5 groups: possible CMEs
+# join the CMEs, since both are cold ejecta-like intervals.
+ROUTES = ["CME", "stream arrival", "fast stream", "intermediate", "slow wind"]
+ROUTE_OF = {"CME": "CME", "possible CME": "CME", "stream arrival": "stream arrival",
+            "fast stream": "fast stream", "intermediate": "intermediate",
+            "slow wind": "slow wind"}
+
+
+def hourly_events(start, end, index):
+    """CME hours, possible-CME hours (bool Series on `index`) and stream arrival times.
+
+    Detected from the cached 1-minute ACE plasma and field over [start, end).
+    """
+    minutes = load_conditions(start, end)
+    hourly = minutes.resample("h").mean().reindex(
+        pd.date_range(start, end, freq="h", inclusive="left", name="Time"))
+    events = detect_icmes(hourly, detect_shocks(minutes))
+    cme = cme_mask(hourly.index, events)
+    possible = cme_mask(hourly.index, events, ("possible ICME",))
+    arrivals = detect_stream_arrivals(hourly["speed"], cme | possible)
+    return (cme.reindex(index, fill_value=False), possible.reindex(index, fill_value=False),
+            arrivals)
+
+
+def label_runs(positions, values, cme, possible, arrivals, horizon=72):
+    """classify_runs, vectorised: one regime per run at index `positions` of `cme`.
+
+    `values` is the hourly speed on the same index as `cme` and `possible` (bool
+    Series); a run at position p targets positions p+1 .. p+horizon.
+    """
+    positions = np.asarray(positions)
+    n = len(cme)
+
+    def any_in_window(mask):
+        c = np.concatenate([[0], np.cumsum(np.asarray(mask, dtype=int))])
+        lo = np.clip(positions + 1, 0, n)
+        hi = np.clip(positions + horizon + 1, 0, n)
+        return c[hi] - c[lo] > 0
+
+    at = cme.index.get_indexer(pd.DatetimeIndex(arrivals))
+    arrival_hours = np.zeros(n, dtype=bool)
+    arrival_hours[at[at >= 0]] = True
+    values = np.asarray(values, dtype=float)
+    idx = positions[:, None] + np.arange(1, horizon + 1)
+    actual = np.full(idx.shape, np.nan)
+    inside = idx < len(values)
+    actual[inside] = values[idx[inside]]
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        mean, peak = np.nanmean(actual, axis=1), np.nanmax(actual, axis=1)
+    labels = np.select(
+        [any_in_window(cme), any_in_window(possible), any_in_window(arrival_hours),
+         mean >= 550, peak < 450],
+        ["CME", "possible CME", "stream arrival", "fast stream", "slow wind"],
+        "intermediate")
     return pd.Categorical(labels, categories=REGIMES)
