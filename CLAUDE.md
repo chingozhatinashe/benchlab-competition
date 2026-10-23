@@ -35,6 +35,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.compare_history       # refits the shipped configs on history since 2016 vs 2021 over the yearly folds (training.folds)
 .venv/Scripts/python -m training.regime_models         # regime-model feasibility study (oracle, classifiers, routing) on the yearly folds; not built, see src/experiments/regime_models.ipynb
 .venv/Scripts/python -m training.regime_hmm           # HMM regime features (models.regime_hmm) added to the shipped models on the yearly folds; resumable; no gain, see src/experiments/regime_hmm.ipynb
+.venv/Scripts/python -m training.regime_switching      # standalone HMM-gated experts (models.regime_switching) on the yearly folds; resumable; not built, see docs/regime_switching.md
 .venv/Scripts/python -m training.gaussian_process_folds  # GP correction re-scored on the yearly folds; resumable; not built, see docs/gaussian_process.md
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
