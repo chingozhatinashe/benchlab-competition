@@ -48,6 +48,7 @@ Scored on the yearly folds and documented, but not built:
 - [Regime models](regime_models.md): one model per regime, routed by a classifier. The oracle would gain 22.6%, but the best realistic method gains only 1.0%.
 - [Gaussian-process correction](gaussian_process.md): a GP correction to the linear model. It gains 1.6% over the linear model but stays 1.4% behind the hybrid.
 - [HMM regimes](regime_hmm.md): hidden-Markov regime features for the hybrid. They add +0.1% at best.
+- [Regime switching](regime_switching.md): a standalone model with one expert per HMM regime, weighted by the filtered state. It gains 2.1% only for experts without the regressors; with them, every multi-regime version is worse than one regression.
 
 ## Rules
 

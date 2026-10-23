@@ -224,6 +224,31 @@ class RegimeHMM:
     def feature_names(self):
         return [*(f"hmm_p_{n}" for n in self.names), "hmm_state_hours"]
 
+    def mean_forecast(self, probs, last, horizon=72):
+        """The HMM's own multi-step forecast (n, horizon) from filtered probs at t0 - 1h.
+
+        State probabilities propagate through the transition matrix; each state's
+        conditional mean follows its AR(1) (level model: its mean), collapsed over
+        the previous state:
+            m_k(j) = sum_i P(i at k-1 | j at k) * (c_j + phi_j * m_{k-1}(i))
+        starting from the last observed speed (the state mean where it is missing).
+        """
+        p = np.asarray(probs, dtype=float)
+        if self.config.autoregressive:
+            c, phi = self.c, self.phi
+        else:
+            c, phi = self.m, np.zeros_like(self.m)
+        last = np.asarray(last, dtype=float)
+        m = np.where(np.isfinite(last)[:, None], last[:, None], self.m[None, :])
+        out = np.empty((len(p), horizon))
+        for k in range(horizon):
+            joint = p[:, :, None] * self.trans[None, :, :]  # P(i at k-1, j at k)
+            p = joint.sum(axis=1)
+            back = joint / np.maximum(p[:, None, :], 1e-300)
+            m = c[None, :] + phi[None, :] * np.einsum("nij,ni->nj", back, m)
+            out[:, k] = (p * m).sum(axis=1)
+        return out
+
     def summary(self):
         """Per-state parameters as a DataFrame (for checking the states make sense)."""
         stay = np.diag(self.trans)
