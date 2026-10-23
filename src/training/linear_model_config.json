@@ -3,28 +3,44 @@
   "boxcox": 1.0,
   "relative": true,
   "weights": "run_timse",
-  "ridge": 0.0,
+  "ridge": 0.1,
   "lags_days": "27/13.5",
   "half_width": 3,
   "max_iter": 30,
   "tol": 1e-06,
   "despike": true,
   "optional": [
-    "ch_cm_at_12h"
+    "ch_cm_at_24h"
   ],
   "features": [
-    "ch_cm_at_12h",
-    "density_mean_24h",
-    "xray_peak_max_48h",
-    "b_var_mean_48h"
+    "bt_mean_1h",
+    "ch_cm_at_24h",
+    "xray_peak_max_72h",
+    "density_mean_24h"
   ],
   "selection": {
-    "runs": 5844,
+    "runs": 13148,
     "sample_seed": null,
     "objective": "geometric mean over folds of per-run mean TIMSE / persistence",
     "folds": [
       [
-        "2023-10-21",
+        "2019-10-20",
+        "2020-10-20"
+      ],
+      [
+        "2020-10-20",
+        "2021-10-20"
+      ],
+      [
+        "2021-10-20",
+        "2022-10-20"
+      ],
+      [
+        "2022-10-20",
+        "2023-10-20"
+      ],
+      [
+        "2023-10-20",
         "2024-10-20"
       ],
       [
@@ -36,52 +52,52 @@
       {
         "step": 0,
         "added": "(speed terms only)",
-        "objective": 0.53469,
+        "objective": 0.49491,
         "gain": NaN
       },
       {
         "step": 1,
-        "added": "ch_cm_at_12h",
-        "objective": 0.48614,
-        "gain": 0.0908
+        "added": "bt_mean_1h",
+        "objective": 0.47587,
+        "gain": 0.03847
       },
       {
         "step": 2,
-        "added": "density_mean_24h",
-        "objective": 0.47008,
-        "gain": 0.03303
+        "added": "ch_cm_at_24h",
+        "objective": 0.45634,
+        "gain": 0.04104
       },
       {
         "step": 3,
-        "added": "xray_peak_max_48h",
-        "objective": 0.46599,
-        "gain": 0.00871
+        "added": "xray_peak_max_72h",
+        "objective": 0.44228,
+        "gain": 0.03081
       },
       {
         "step": 4,
-        "added": "b_var_mean_48h",
-        "objective": 0.46327,
-        "gain": 0.00583
+        "added": "density_mean_24h",
+        "objective": 0.43872,
+        "gain": 0.00805
       }
     ],
     "ridge": [
       {
         "ridge": 0.0,
-        "objective": 0.46136833132143845
+        "objective": 0.4423830901986841
       },
       {
         "ridge": 0.1,
-        "objective": 0.46327495832156906
+        "objective": 0.4387191905510006
       },
       {
         "ridge": 1.0,
-        "objective": 0.506956868195428
+        "objective": 0.4855622032560745
       },
       {
         "ridge": 10.0,
-        "objective": 0.6059304478423801
+        "objective": 0.6025890474323601
       }
     ],
-    "score": 0.46137
+    "score": 0.43872
   }
 }
