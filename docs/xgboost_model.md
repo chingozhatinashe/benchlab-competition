@@ -6,12 +6,19 @@
 - selection, taming and training: `src/training/xgboost_model.py`;
 - eval analysis: `src/experiments/xgboost_model.ipynb`.
 
-**Eval year:** the shipped (tamed) hybrid beats the linear model on:
-- pooled TIMSE (−7.9%);
-- per-run mean TIMSE (−6.5%);
-- p90 (−3.8%).
+**The shipped hybrid** was re-selected, tamed and refitted on 9 years with six yearly folds
+([Nine years of history](#nine-years-of-history)). On the eval year, against its 9-year linear
+anchor, it:
+- wins 62% of runs;
+- has a 5% lower per-run mean (2.22e6) and a 3% lower median (6.45e5), with RMSE 100.8 km/s;
+- is better on pooled TIMSE (−2%).
 
-It is slightly worse on the per-run median (+4.1%) and RMSE (+2.4 km/s).
+Against the final baseline:
+- per-run mean −14%;
+- median −24%;
+- 66% of runs won.
+
+The sections before "Nine years of history" describe the 4-year hybrid.
 
 **How it runs live:** the submission stays the final baseline. The hybrid runs only when
 `SWP_MODEL=xgboost` is set; any failure falls back to the linear model, then the final baseline.
@@ -162,3 +169,50 @@ python -m training.xgboost_model evaluate                                       
 
 - **Config:** the tamed settings are in `src/training/xgboost_hybrid_config.json`, with the taming record under `selection.taming`.
 - **XGBoost alone:** without `--base linear` the same commands run XGBoost alone, the comparison above. Its results are in `src/experiments/xgboost_selection.csv` and `src/training/xgboost_model_config.json`.
+
+## Nine years of history
+
+**Setup:**
+- **History:** the hybrid was rebuilt on the training history extended to 2016-10 → 2025-10.
+- **Folds:** six yearly walk-forward folds, 2019-10 → 2025-10 (`training.folds.SELECTION`).
+- **Anchor:** the re-selected 9-year linear model.
+
+**Selection** (pilot on 10% of the hourly runs, then the full run on 78,888 hourly runs):
+
+| Setting | Fold score |
+|---|---|
+| Set C (30 regressors), depth 4, min child weight 100, 100 trees | 0.4247 |
+| Set C, default settings | 0.4253 |
+| Set B (24) / set A (the linear model's 4) | 0.4332 / 0.4390 |
+| 9-year linear model alone | 0.4387 |
+
+- **Set D left out:** set D (all 120 regressors) was not run; it lost in the 4-year selection and in this pilot, and it would have needed 3–4 GB.
+- **Memory:** the run fits on this 7.7 GB laptop with `XGB_NTHREAD=2` and a linear anchor computed in chunks of 4,000 runs, peaking at 640 MB.
+
+**Taming** (`tame`, resumable, six folds):
+- **The problem:** the selected setting had 644 leaves reached on fewer than 30 training days, one of them on a single day, moving some runs by up to 297 km/s.
+- **The choice, by the same rule:** min child weight 10,000, depth 4, 100 trees. Fold score 0.4258, giving up 0.3%; every leaf is reached on at least 43 days.
+- **Against the 9-year linear model** on the folds: −2.9%.
+
+**Eval year** (`src/experiments/xgboost_model.ipynb`):
+
+| | 9-year hybrid | 4-year hybrid | 9-year linear | Final baseline |
+|---|---|---|---|---|
+| Pooled TIMSE | 4.73e7 | **4.36e7** | 4.82e7 | 5.58e7 |
+| Per-run mean | 2.22e6 | **2.22e6** | 2.34e6 | 2.59e6 |
+| Per-run median | **6.45e5** | 7.04e5 | 6.67e5 | 8.45e5 |
+| Runs won against its linear anchor | **62%** | 52% | | |
+
+- **Typical runs improve:** the trees now help them (p10 to the median 3–11% below the linear model), and they win against it in every regime except stream arrivals (level). Big stream arrivals improve most (pooled −21%).
+- **The corrections now depend on the lead,** which is split on 42 times.
+- **No leaf rests on one episode.**
+- **Remaining weaknesses:**
+  - downward corrections on the eve of the big CMEs (18 Jan 2026, 10 Nov 2025);
+  - the unchanged 72 h over-forecast of quiet wind;
+  - pooled TIMSE, where the few largest CME runs favoured the 4-year hybrid.
+
+```bash
+XGB_NTHREAD=2 python -m training.xgboost_model select --base linear --sets A B C --max-seconds 240
+XGB_NTHREAD=2 python -m training.xgboost_model tame --max-seconds 240
+XGB_NTHREAD=2 python -m training.xgboost_model train --base linear
+```

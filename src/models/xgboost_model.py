@@ -226,7 +226,12 @@ class XGBoostModel:
             last = last_observed(np.asarray(values, dtype=float), positions)
             return np.repeat(last[:, None], HORIZON, axis=1)
         x = self._columns(regressors, len(positions), self.base_model.config.features)
-        return self.base_model.forecast(values, positions, x)
+        out = np.empty((len(positions), HORIZON))
+        chunk = 4000  # bounds the linear model's (runs x 72 x columns) design in memory
+        for s in range(0, len(positions), chunk):
+            out[s : s + chunk] = self.base_model.forecast(
+                values, positions[s : s + chunk], None if x is None else x[s : s + chunk])
+        return out
 
     def _clean(self, values):
         return _despiked(values) if self.config.despike else values
@@ -296,6 +301,10 @@ class XGBoostModel:
         return x[keep], y.ravel()[keep], w.ravel()[keep]
 
     def params(self, nthread=0):
+        """xgboost parameters; nthread 0 = all cores, or $XGB_NTHREAD if set (dev)."""
+        import os
+
+        nthread = nthread or int(os.environ.get("XGB_NTHREAD", "0"))
         cfg = self.config
         return {"objective": "reg:squarederror", "tree_method": "hist",
                 "max_depth": cfg.max_depth, "min_child_weight": cfg.min_child_weight,

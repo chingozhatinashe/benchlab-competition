@@ -6,7 +6,7 @@
     python -m training.linear_model evaluate                        # eval year, once, at the end
 
 Selection never touches the eval year. It uses the baseline's two walk-forward folds
-(training.final_baseline.FOLDS): fit on the runs before the fold (targets cut at the
+(training.folds.SELECTION): fit on the runs before the fold (targets cut at the
 fold start), forecast every run in the fold through the live pipeline (missing
 regressors imputed with the fit's medians). The objective is per-run mean TIMSE
 relative to persistence, as a geometric mean over the folds.
@@ -48,7 +48,7 @@ from models.final_baseline import CYCLE_HOURS, run_timse_weights
 from models.linear_model import ASSET, Config, LinearModel
 from training.datasets import DATA_START, TRAIN_END, load_train
 from training.evaluate import MIN_RUN_POINTS
-from training.final_baseline import FOLDS
+from training.folds import SELECTION as FOLDS
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "linear_model_config.json"
@@ -152,14 +152,29 @@ def training_runs(series, sample=None, seed=0):
 
 
 # ---------------------------------------------------------------------- selection
-def stage1(folds, timer):
+def stage1(folds, timer, cache=None, max_seconds=None, started=None):
+    """The variant grid; each scored variant is cached, so a stopped run resumes.
+
+    Returns None if `max_seconds` runs out before every variant is scored.
+    """
     rows = []
-    for variant, weights, ridge in itertools.product(VARIANTS, WEIGHTS, RIDGES):
+    for i, (variant, weights, ridge) in enumerate(
+            itertools.product(VARIANTS, WEIGHTS, RIDGES)):
+        path = cache / f"stage1_{i:03d}.json" if cache else None
+        if path is not None and path.exists():
+            rows.append(json.loads(path.read_text(encoding="utf-8")))
+            continue
+        if max_seconds and time.perf_counter() - started > max_seconds:
+            return None
         cfg = Config(features=SHORTLIST, weights=weights, ridge=ridge, **variant)
         t = time.perf_counter()
         obj, ratios = folds.objective(cfg)
         timer.add(f"stage 1 fit+score ({cfg.family})", time.perf_counter() - t)
-        rows.append({**_describe(cfg), "objective": obj, "fold1": ratios[0], "fold2": ratios[1]})
+        row = {**_describe(cfg), "objective": obj,
+               **{f"fold{k + 1}": r for k, r in enumerate(ratios)}}
+        rows.append(row)
+        if path is not None:
+            path.write_text(json.dumps(row, default=float), encoding="utf-8")
     df = pd.DataFrame(rows).sort_values("objective").reset_index(drop=True)
     return df
 
@@ -245,14 +260,18 @@ def select(sample=None, seed=0, max_seconds=None, fresh=False):
     if s1_path.exists():
         s1 = pd.read_csv(s1_path)
     else:
-        s1 = stage1(folds, timer)
+        s1 = stage1(folds, timer, cache, max_seconds, started)
+        if s1 is None:
+            log("time limit reached in stage 1; run the same command again to continue")
+            return None
         s1.to_csv(s1_path, index=False)
     best = s1.iloc[0]
     base = Config(family=best["family"], boxcox=float(best["boxcox"]),
                   relative=bool(best["relative"]), weights=best["weights"],
                   ridge=float(best["ridge"]))
     log("stage 1 (shortlist), best 8 of " + f"{len(s1)}:\n" + s1.head(8)[
-        ["family", "boxcox", "relative", "weights", "ridge", "objective", "fold1", "fold2"]
+        ["family", "boxcox", "relative", "weights", "ridge", "objective",
+         *(f"fold{i + 1}" for i in range(len(FOLDS)))]
     ].to_string(index=False, float_format="{:.4f}".format))
 
     path, scored, done = stage2(folds, base, timer, cache, max_seconds, started)

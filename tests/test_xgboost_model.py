@@ -220,4 +220,7 @@ def test_regressor_never_missing_in_training_is_imputed_with_its_median():
 
 def test_shipped_asset_imputes_the_feeds_never_missing_in_training():
     model = XGBoostModel.load()
-    assert {"m_flares_count_120h", "f107_mean_168h"} <= set(model.impute_values)
+    # flare and F10.7 feeds are never missing in training, so their default branch is untrained
+    activity = {f for f in model.config.features
+                if f.startswith(("m_flares_", "xray_peak_", "f107_"))}
+    assert activity and activity <= set(model.impute_values)

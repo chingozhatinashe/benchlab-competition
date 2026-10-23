@@ -4,19 +4,27 @@ The first model to use the regressors from `docs/features.md`. It's a per-lead
 generalised linear model (`src/models/linear_model.py`), selected and trained by
 `src/training/linear_model.py`.
 
-**The shipped model** is the one re-selected after the [data fixes](#data-fixes): four
-regressors (coronal-hole strip 12 h before t0, 24 h density, 48 h peak flare flux, 48 h field
-variability), with glitches removed from the training speeds and a submodel for runs without a
-coronal-hole image. On the eval year it beats the final baseline on:
-- pooled TIMSE (−15%);
-- per-run mean TIMSE (−8%);
-- per-run median TIMSE (−20%).
+**The shipped model** was re-selected and refitted on 9 years with six yearly folds
+([Nine years of history](#nine-years-of-history)). It has four regressors:
+- Bt, mean of the last hour;
+- the coronal-hole strip 24 h before t0;
+- peak flare flux over 72 h;
+- density, 24 h mean.
 
-It is worse on the p90 of per-run TIMSE (+17%).
+It keeps the [data fixes](#data-fixes): glitches removed from the training speeds, and a submodel
+for runs without a coronal-hole image.
+
+On the eval year it beats the final baseline on:
+- pooled TIMSE (−14%);
+- per-run mean TIMSE (−10%);
+- per-run median TIMSE (−21%);
+- 66% of runs won.
+
+It is worse on the p90 of per-run TIMSE (+7%).
 
 The submission stays the final baseline; the linear model runs live only when
-`SWP_MODEL=linear` is set. The sections up to "Eval year" describe the first fit, which
-was replaced after the eval analysis (`src/experiments/linear_model.ipynb`).
+`SWP_MODEL=linear` is set. The sections before "Nine years of history" describe the 4-year
+fits, and the analysis is `src/experiments/linear_model.ipynb`.
 
 ## Pipelines
 
@@ -228,3 +236,41 @@ python -m training.linear_model select --max-seconds 480       # full; re-run un
 python -m training.linear_model train
 python -m training.linear_model evaluate                       # eval year, once
 ```
+
+## Nine years of history
+
+**Data and folds.** The training history was extended to 2016-10 → 2025-10 (`docs/evaluation.md`),
+and the selection now uses six yearly walk-forward folds, 2019-10 → 2025-10
+(`training.folds.SELECTION`).
+
+**Selection:**
+- **Process:** a 1,000-run pilot (4 min), then the full run (about 1 h, in resumable slices; stage 1 now caches each variant).
+- **Variant:** the same winner, Gaussian, no transform, relative to persistence (0.4487 on the shortlist).
+
+| Step | Added | Fold score |
+|---|---|---|
+| 0 | speed terms only | 0.4949 |
+| 1 | `bt_mean_1h` | 0.4759 |
+| 2 | `ch_cm_at_24h` | 0.4563 |
+| 3 | `xray_peak_max_72h` | 0.4423 |
+| 4 | `density_mean_24h` | 0.4387 |
+| (5) | `polarity_mean_48h` | 0.4376, a 0.26% gain, below the threshold |
+
+- **Score:** 0.4387 on the six folds, against 0.4523 for the 4-year settings refitted on the same 9 years (−3.0%). The ridge stays at 0.1.
+- **Fit:** 11,301 runs, 6 glitch hours despiked, and 11,632 runs for the no-coronal-hole submodel.
+
+**Eval year** (`src/experiments/linear_model.ipynb`):
+
+| | 9-year linear | 4-year linear | Final baseline |
+|---|---|---|---|
+| Pooled TIMSE | 4.82e7 | **4.74e7** | 5.58e7 |
+| Per-run mean | **2.34e6** | 2.37e6 | 2.59e6 |
+| Per-run median | **6.67e5** | 6.76e5 | 8.45e5 |
+| Per-run p90 | 3.43e6 | 3.76e6 | **3.21e6** |
+
+- **Stream arrivals are now level with the baseline** (median ratio 0.98, against 1.12).
+- **The model wins more runs than the baseline in 12 of 13 months.**
+- **New failure:**
+  - **The run:** 2026-01-20 00Z, at 15× the baseline's TIMSE.
+  - **The cause:** the last hour's Bt was 61 nT, far outside the training range, and the linear Bt term extrapolated it into a large over-forecast.
+  - **The fix:** cap the regressors at a high training quantile, chosen on the folds.

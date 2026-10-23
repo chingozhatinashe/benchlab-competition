@@ -1,0 +1,103 @@
+{
+  "family": "gaussian",
+  "boxcox": 0.5,
+  "relative": true,
+  "weights": "run_timse",
+  "ridge": 0.1,
+  "lags_days": "27/13.5",
+  "half_width": 3,
+  "max_iter": 30,
+  "tol": 1e-06,
+  "despike": true,
+  "optional": [
+    "ch_cm_at_24h"
+  ],
+  "features": [
+    "ch_cm_at_24h",
+    "xray_peak_max_48h",
+    "density_mean_48h",
+    "bt_mean_1h"
+  ],
+  "selection": {
+    "runs": 1000,
+    "sample_seed": 0,
+    "objective": "geometric mean over folds of per-run mean TIMSE / persistence",
+    "folds": [
+      [
+        "2019-10-20",
+        "2020-10-20"
+      ],
+      [
+        "2020-10-20",
+        "2021-10-20"
+      ],
+      [
+        "2021-10-20",
+        "2022-10-20"
+      ],
+      [
+        "2022-10-20",
+        "2023-10-20"
+      ],
+      [
+        "2023-10-20",
+        "2024-10-20"
+      ],
+      [
+        "2024-10-20",
+        "2025-10-20"
+      ]
+    ],
+    "path": [
+      {
+        "step": 0,
+        "added": "(speed terms only)",
+        "objective": 0.51847,
+        "gain": NaN
+      },
+      {
+        "step": 1,
+        "added": "ch_cm_at_24h",
+        "objective": 0.49651,
+        "gain": 0.04236
+      },
+      {
+        "step": 2,
+        "added": "xray_peak_max_48h",
+        "objective": 0.47543,
+        "gain": 0.04244
+      },
+      {
+        "step": 3,
+        "added": "density_mean_48h",
+        "objective": 0.46833,
+        "gain": 0.01493
+      },
+      {
+        "step": 4,
+        "added": "bt_mean_1h",
+        "objective": 0.46244,
+        "gain": 0.01258
+      }
+    ],
+    "ridge": [
+      {
+        "ridge": 0.0,
+        "objective": 0.46923807418716357
+      },
+      {
+        "ridge": 0.1,
+        "objective": 0.46244085128229107
+      },
+      {
+        "ridge": 1.0,
+        "objective": 0.5114954111609484
+      },
+      {
+        "ridge": 10.0,
+        "objective": 0.6306747615045838
+      }
+    ],
+    "score": 0.46244
+  }
+}

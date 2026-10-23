@@ -44,7 +44,7 @@ it falls back to persistence.
 ## Optional linear model (not the submitted forecast)
 
 Setting `SWP_MODEL=linear` replaces the forecast with `models/linear_model.py`:
-- a per-lead linear model on the same speed terms plus four regressors (coronal-hole area from an SDO/AIA image 12 h before t0, 24 h mean density, 48 h peak X-ray flare flux, 48 h field variability);
+- a per-lead linear model on the same speed terms plus four regressors (last-hour Bt, coronal-hole area from an SDO/AIA image 24 h before t0, 72 h peak X-ray flare flux, 24 h mean density), fitted on 2016-10 → 2025-10;
 - the coronal-hole area falls back to an image 6 h, then 12 h older; if it is still missing, a second linear model fitted without it is used;
 - other missing regressors take their training medians;
 - any failure falls back to the baseline above.
@@ -54,8 +54,8 @@ Without the variable, the forecast is the baseline. Weights are in `assets/linea
 ## Optional XGBoost hybrid (not the submitted forecast)
 
 Setting `SWP_MODEL=xgboost` uses `models/xgboost_model.py`:
-- 100 shallow gradient-boosted trees that correct the linear model's forecast above (every leaf supported by at least 72 training days);
-- inputs: lead, the speed terms and 25 regressors (solar wind, coronal-hole strips at several lags, flares, F10.7);
+- 100 gradient-boosted trees of depth 4 that correct the linear model's forecast above (every leaf supported by at least 43 training days), fitted on 2016-10 → 2025-10;
+- inputs: lead, the speed terms and 30 regressors (solar wind, coronal-hole strips at several lags, flares, F10.7);
 - missing regressors follow each tree's learned default branch;
 - the trees are evaluated in numpy from `assets/xgboost_model.json`, so the image gets no xgboost and no new dependency;
 - any failure falls back to the linear model, then the baseline.
