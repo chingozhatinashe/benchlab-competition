@@ -153,3 +153,75 @@ def metrics(jpeg, taken, threshold=THRESHOLD):
     if not usable(img, taken):
         return dict.fromkeys(NAMES, np.nan)
     return area_fractions(segment(img, taken, threshold), taken)
+
+
+# ---------------------------------------------------------------------- latitude grid (study)
+# Central-meridian strip split by heliographic latitude, with Earth's B0 tilt taken into
+# account, and a darkness-weighted area (training.coronal_grid; not used by the models yet).
+INCLINATION = 7.25  # deg, solar equator to the ecliptic
+GRID_NAMES = ("ch_cm_b0", "ch_cm_low", "ch_cm_earth", "ch_cm_toward", "ch_cm_away",
+              "ch_cm_depth")
+LOW_LAT = 30.0
+EARTH_BAND = 15.0
+HEMISPHERE_MIN = 10.0  # |lat| above this counts for the toward / away hemispheres
+
+
+def b0_angle(t):
+    """Heliographic latitude of the disk centre seen from Earth (deg), to about 0.1 deg.
+
+    `t` is a pandas Timestamp or DatetimeIndex (UTC).
+    """
+    jd = np.asarray(t.to_julian_date(), dtype=float)
+    d = jd - 2451545.0
+    g = np.radians(357.529 + 0.98560028 * d)
+    lam = np.radians(280.459 + 0.98564736 * d + 1.915 * np.sin(g) + 0.020 * np.sin(2 * g))
+    omega = np.radians(73.6667 + 0.013958 * (jd - 2396758.0) / 365.25)
+    return np.degrees(np.arcsin(np.sin(lam - omega) * np.sin(np.radians(INCLINATION))))
+
+
+def heliographic_b0(radius, b0, size=SIZE):
+    """Latitude, longitude (deg) and mu for each pixel, with the disk centre at latitude b0."""
+    yy, xx = np.mgrid[:size, :size]
+    x = (xx - CENTER) / radius
+    y = (CENTER - yy) / radius
+    rho2 = x**2 + y**2
+    on = rho2 < 1.0
+    z = np.sqrt(np.clip(1.0 - rho2, 0.0, None))
+    sb, cb = np.sin(np.radians(b0)), np.cos(np.radians(b0))
+    lat = np.degrees(np.arcsin(np.clip(y * cb + z * sb, -1, 1)))
+    lon = np.degrees(np.arctan2(x, z * cb - y * sb))
+    return (np.where(on, lat, np.nan), np.where(on, lon, np.nan), np.where(on, z, np.nan))
+
+
+def grid_metrics(jpeg, taken, threshold=THRESHOLD):
+    """GRID_NAMES for one image (all NaN if unusable), plus its B0 as "b0"."""
+    b0 = float(b0_angle(taken))
+    img = grayscale(jpeg)
+    if not usable(img, taken):
+        return {**dict.fromkeys(GRID_NAMES, np.nan), "b0": b0}
+    radius = disk_radius(taken)
+    smooth = box_smooth(img, SMOOTH)
+    level = threshold * disk_median(smooth, radius)
+    lat, lon, mu = heliographic_b0(radius, b0)
+    on = np.isfinite(mu)
+    mask = on & (smooth < level)
+    depth = np.where(mask, np.clip(1.0 - smooth / level, 0.0, 1.0), 0.0)
+    weight = np.where(on, 1.0 / np.maximum(np.nan_to_num(mu), 0.2), 0.0)
+    lat0, lon0 = np.nan_to_num(lat, nan=999.0), np.nan_to_num(lon, nan=999.0)
+    strip = on & (np.abs(lon0) <= 10.0)
+    toward = lat0 * (1.0 if b0 >= 0 else -1.0)
+    regions = {
+        "ch_cm_b0": strip & (np.abs(lat0) <= MAX_LAT),
+        "ch_cm_low": strip & (np.abs(lat0) <= LOW_LAT),
+        "ch_cm_earth": strip & (np.abs(lat0 - b0) <= EARTH_BAND),
+        "ch_cm_toward": strip & (toward > HEMISPHERE_MIN) & (toward <= MAX_LAT),
+        "ch_cm_away": strip & (toward < -HEMISPHERE_MIN) & (toward >= -MAX_LAT),
+    }
+    out = {}
+    for name, region in regions.items():
+        w = weight[region]
+        out[name] = float((w * mask[region]).sum() / w.sum()) if w.sum() > 0 else np.nan
+    region = regions["ch_cm_b0"]
+    w = weight[region]
+    out["ch_cm_depth"] = float((w * depth[region]).sum() / w.sum()) if w.sum() > 0 else np.nan
+    return {**out, "b0": b0}

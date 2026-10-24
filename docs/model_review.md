@@ -114,7 +114,7 @@ they aren't comparable with our eval-year RMSE (about 100 km/s, solar maximum, C
 
    Each is chosen on the folds.
 3. **Feature work:**
-   - lead-aligned coronal-hole features;
-   - B0 and a latitude grid;
-   - the hybrid forward-add test.
+   - lead-aligned coronal-hole features. *Studied 2026-10-24:* the image 72 h before each forecast hour gains 2.7% (linear) / 1.7% (hybrid), 5 of 6 folds; to be built ([lead_aligned_ch.md](lead_aligned_ch.md));
+   - B0 and a latitude grid. *Done 2026-10-24:* not built; best +0.3%, and the low-latitude band reverses between solar maximum and minimum ([coronal_grid.md](coronal_grid.md));
+   - the hybrid forward-add test. *Done 2026-10-24:* none kept (best −0.27%, 3 of 6 folds); every family is already in ([hybrid_forward_add.md](hybrid_forward_add.md)).
 4. **Larger builds, if time allows:** the PFSS magnetic-field features, or a coronagraph CME feature.
