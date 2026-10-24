@@ -41,6 +41,10 @@ model also fits a submodel without them, on every run the other regressors cover
 and a run with an optional regressor missing is forecast by that submodel instead
 of imputing the median.
 
+Config.cap_quantile clips each regressor to its training [q, 1 - q] quantiles, in
+fitting and forecasting, so an extreme value outside the training range (a 61 nT field
+on 2026-01-20) can't be extrapolated linearly into a large forecast error.
+
 Config.despike removes isolated one-hour glitches from the speed series
 (feature_engineering.recurrence.despike) before it is used as a fitting target or
 in the recurrence terms. The last observed speed stays raw: its hour can't be
@@ -87,12 +91,15 @@ class Config:
     tol: float = 1e-6
     despike: bool = False  # drop isolated one-hour glitches from targets and recurrence
     optional: tuple = ()  # features that may be missing: a submodel without them
+    cap_quantile: float = 0.0  # clip each regressor to its training [q, 1 - q] quantiles; 0 = off
 
     def __post_init__(self):
         if self.family not in FAMILIES:
             raise ValueError(f"family must be one of {FAMILIES}")
         if self.weights not in WEIGHTS:
             raise ValueError(f"weights must be one of {WEIGHTS}")
+        if not 0.0 <= self.cap_quantile < 0.5:
+            raise ValueError("cap_quantile must be in [0, 0.5)")
         if not set(self.optional) <= set(self.features):
             raise ValueError("optional features must be among the features")
         if self.despike:  # the cleaned recurrence window must end SPIKE_SIDE h before t0
@@ -217,15 +224,21 @@ class LinearModel:
         scale = w[observed].mean() if observed.any() else 1.0
         return np.where(observed, np.maximum(w / max(scale, 1e-12), TAIL_FLOOR), 0.0)
 
-    def fit(self, values, positions, regressors=None, end=None):
+    def fit(self, values, positions, regressors=None, end=None, run_weights=None):
         """Fit on the runs at `positions` of the hourly speed array `values`.
 
         Targets at or after `end` (a position) are ignored, so a fold's fit never sees
         its validation hours. Runs with a missing selected regressor are dropped.
+        `run_weights` (one per run, optional) multiply the loss weights, e.g. to weight
+        recent runs more (training.recency_weights).
         """
         cfg = self.config
         values = np.asarray(values, dtype=float)
         positions = np.asarray(positions)
+        run_w = (np.ones(len(positions)) if run_weights is None
+                 else np.asarray(run_weights, dtype=float))
+        if run_w.shape != (len(positions),):
+            raise ValueError(f"run_weights shape {run_w.shape}, expected ({len(positions)},)")
         x_raw = np.zeros((len(positions), 0)) if not cfg.features else np.asarray(
             regressors, dtype=float)
         if x_raw.shape != (len(positions), len(cfg.features)):
@@ -239,16 +252,22 @@ class LinearModel:
         if cfg.optional:
             keep = [i for i, f in enumerate(cfg.features) if f not in cfg.optional]
             sub_cfg = replace(cfg, features=tuple(cfg.features[i] for i in keep), optional=())
-            self.fallback = LinearModel(sub_cfg).fit(values, positions, x_raw[:, keep], end)
+            self.fallback = LinearModel(sub_cfg).fit(values, positions, x_raw[:, keep], end,
+                                                     run_w)
         complete = np.isfinite(x_raw).all(axis=1)
-        x_raw, positions = x_raw[complete], positions[complete]
+        x_raw, positions, run_w = x_raw[complete], positions[complete], run_w[complete]
+        self.x_low = self.x_high = None
+        if cfg.cap_quantile > 0 and cfg.features:
+            self.x_low = np.quantile(x_raw, cfg.cap_quantile, axis=0)
+            self.x_high = np.quantile(x_raw, 1.0 - cfg.cap_quantile, axis=0)
+            x_raw = self.cap(x_raw)
         self.x_mean = x_raw.mean(axis=0) if cfg.features else np.zeros(0)
         std = x_raw.std(axis=0) if cfg.features else np.zeros(0)
         self.x_std = np.where(std > 1e-12, std, 1.0)
 
         x, last = self.design(values, positions, x_raw)
         y = targets(clean, positions, end)
-        q = self.loss_weights(y)
+        q = self.loss_weights(y) * run_w[:, None]
         offset = self._offset(last)
         if cfg.relative:
             q = np.where(np.isfinite(last)[:, None], q, 0.0)  # no persistence to be relative to
@@ -299,6 +318,12 @@ class LinearModel:
         x = np.asarray(regressors, dtype=float).reshape(-1, len(self.config.features))
         return np.where(np.isfinite(x), x, self.medians)
 
+    def cap(self, x):
+        """Regressors clipped to the training quantile bounds (Config.cap_quantile)."""
+        if getattr(self, "x_low", None) is None:
+            return x
+        return np.clip(x, self.x_low, self.x_high)
+
     def forecast(self, values, positions, regressors=None):
         """Forecasts (len(positions) x 72).
 
@@ -326,7 +351,7 @@ class LinearModel:
         return np.isnan(raw[:, opt]).any(axis=1)
 
     def _forecast(self, values, positions, raw):
-        x_raw = self.impute(raw) if self.config.features else raw
+        x_raw = self.cap(self.impute(raw)) if self.config.features else raw
         x, last = self.design(values, positions, x_raw)
         eta = np.einsum("nkf,kf->nk", x, self.coef)
         offset = self._offset(last)[:, None]
@@ -366,6 +391,10 @@ class LinearModel:
             "smear": None if self.smear is None else np.round(self.smear, 8).tolist(),
             "fit_info": getattr(self, "fit_info", {}),
             "fallback": None if fallback is None else fallback.to_dict(),
+            "x_low": None if getattr(self, "x_low", None) is None
+            else np.round(self.x_low, 10).tolist(),
+            "x_high": None if getattr(self, "x_high", None) is None
+            else np.round(self.x_high, 10).tolist(),
         }
 
     @classmethod
@@ -385,6 +414,10 @@ class LinearModel:
         model.smear = None if d["smear"] is None else np.asarray(d["smear"], dtype=float)
         model.fit_info = d.get("fit_info", {})
         model.fallback = cls.from_dict(d["fallback"]) if d.get("fallback") else None
+        model.x_low = None if d.get("x_low") is None else np.asarray(d["x_low"], dtype=float)
+        model.x_high = None if d.get("x_high") is None else np.asarray(d["x_high"], dtype=float)
+        if model.config.cap_quantile > 0 and model.config.features and model.x_low is None:
+            raise ValueError("asset sets cap_quantile but has no cap bounds")
         if model.config.optional and model.fallback is None:
             raise ValueError("asset lists optional features but has no fallback submodel")
         if model.coef.shape != (HORIZON, model.config.n_columns):

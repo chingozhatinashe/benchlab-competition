@@ -145,8 +145,9 @@ These led to the data fixes below. **The notebook `src/experiments/linear_model.
 
 ## Data fixes
 
-The eval analysis found two data problems. Both are fixed for every config scored on the
-folds and for the shipped fit (`training.linear_model.with_fixes`).
+The eval analysis found three data problems. All are fixed for every config scored on the
+folds and for the shipped fit (`training.linear_model.with_fixes`). The third, the regressor
+cap, came later (2026-10-24) and is described after the re-selection below.
 
 **1. Glitches in the training speeds (`Config.despike`).**
 - **The glitch:** one hour read 1,087 km/s at 2022-10-05 02:00, between hours of about 500 km/s. Runs start every 6 hours, so it was the target of leads 2, 8, 14, … h. Because TIMSE weights favour a run's fastest hours, it took up to 2% of the fitting weight at each of those leads, and the coefficients jumped every sixth lead.
@@ -218,6 +219,24 @@ The full variant search and forward selection were run again with both fixes:
 - **Submodel use:** 19% of eval runs had no coronal-hole image and went to the submodel. On those runs the model now beats the baseline (median ratio 0.88, wins 61%), where the first fit only tied it.
 - **The gain is broader:** the January 2026 CME accounts for 49% of the per-run-mean gain (first fit 69%), and the model wins more runs than it loses in 11 of 13 months.
 - **A smaller six-lead pattern remains.** It is structural: with 6-hourly runs, each lead is fitted only on target hours at one time of day modulo 6. Training on hourly forecast times would remove it.
+
+### 3. The regressor cap (`Config.cap_quantile`, 2026-10-24)
+
+- **The problem:** the eval-year run of 2026-01-20 00Z had a last-hour Bt of 61 nT, far above anything in training, and the linear Bt term extrapolated it into a large over-forecast (15× the baseline's TIMSE).
+- **The fix:** each regressor is clipped to its training [q, 1 − q] quantiles, in fitting and in forecasting. The bounds are stored in the asset; the coronal-hole submodel has its own.
+- **Chosen on the six yearly folds** (`python -m training.regressor_cap`, `src/experiments/regressor_cap.ipynb`), refitting the linear model and the hybrid's trees on top for each q:
+
+| q | Linear | Hybrid | Linear vs no cap | Hybrid vs no cap | Folds won (linear / hybrid) |
+|---|---|---|---|---|---|
+| 0 (before) | 0.4387 | 0.4258 | | | |
+| 0.001 | 0.4377 | 0.4254 | −0.24% | −0.10% | 6 / 3 |
+| **0.005 (shipped)** | **0.4375** | **0.4253** | −0.27% | −0.11% | 5 / 4 |
+| 0.01 | 0.4375 | 0.4263 | −0.28% | +0.12% | 5 / 3 |
+| 0.025 | 0.4379 | 0.4254 | −0.18% | −0.08% | 3 / 2 |
+
+- **The score gain is small,** near fold-to-fold noise; the point is robustness. The shipped nine-year bounds are Bt 1.47–19.2 nT, X-ray peak 10⁻⁷–10⁻³·²⁴ W/m², density 0.22–12.9 cm⁻³, coronal-hole strip 0–0.284.
+- **Where it acts:** Bt in up to 2% of fold runs; the X-ray peak in 7–11% of runs in the 2021 and 2023 folds, whose training years were near solar minimum.
+- **Both assets were retrained** with the cap (`training.linear_model.CAP_QUANTILE`). The eval year was not re-scored.
 
 ## Live
 

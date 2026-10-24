@@ -27,7 +27,10 @@ Data fixes (with_fixes), applied to every config that is scored or trained:
   2022-10-05 02:00) are dropped from the fitting targets and recurrence inputs;
 - the coronal-hole strip falls back to an image 6 h, then 12 h older
   (feature_engineering.windows), and is "optional": a run still missing it is
-  forecast by a submodel fitted without it, not by imputing the median.
+  forecast by a submodel fitted without it, not by imputing the median;
+- each regressor is capped at its training [0.5%, 99.5%] quantiles (CAP_QUANTILE,
+  chosen on the folds by training.regressor_cap), so an out-of-range input such as
+  the 61 nT Bt of 2026-01-20 isn't extrapolated.
 """
 
 import argparse
@@ -52,6 +55,7 @@ from training.folds import SELECTION as FOLDS
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "linear_model_config.json"
+CAP_QUANTILE = 0.005  # regressor cap, chosen on the folds (training.regressor_cap)
 EXPERIMENTS = HERE.parent / "experiments"
 CACHE_DIR = HERE.parent / "data" / "linear_model_cache"
 MIN_GAIN = 0.005
@@ -83,12 +87,12 @@ def candidate_table(t0s, ch_fallback=windows.CH_FALLBACK_HOURS):
 
 
 def with_fixes(config, on=True):
-    """`config` with the data fixes: despiking, and coronal-hole regressors optional."""
+    """`config` with the data fixes: despiking, coronal-hole regressors optional, the cap."""
     if not on:
-        return replace(config, despike=False, optional=())
+        return replace(config, despike=False, optional=(), cap_quantile=0.0)
     optional = tuple(f for f in config.features
                      if windows.WindowSpec.parse(f).signal == "ch_cm")
-    return replace(config, despike=True, optional=optional)
+    return replace(config, despike=True, optional=optional, cap_quantile=CAP_QUANTILE)
 
 
 class Folds:
