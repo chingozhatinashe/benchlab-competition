@@ -277,8 +277,12 @@ class XGBoostModel:
             if np.isfinite(reg[:, j]).all()}
 
     # ------------------------------------------------------------------ fitting (dev)
-    def training_set(self, values, positions, regressors=None, end=None, rng=None):
-        """(rows, target, weight) for fitting: a random subset of leads per run."""
+    def training_set(self, values, positions, regressors=None, end=None, rng=None,
+                     run_weights=None):
+        """(rows, target, weight) for fitting: a random subset of leads per run.
+
+        `run_weights` (one per run, optional) multiply the rows' weights.
+        """
         cfg = self.config
         values = np.asarray(values, dtype=float)
         positions = np.asarray(positions)
@@ -289,6 +293,8 @@ class XGBoostModel:
         observed = np.isfinite(y)
         scale = q[observed].mean() if observed.any() else 1.0
         q = np.where(observed, np.maximum(q / max(scale, 1e-12), TAIL_FLOOR), 0.0)
+        if run_weights is not None:
+            q = q * np.asarray(run_weights, dtype=float)[:, None]
         rng = np.random.default_rng(cfg.seed) if rng is None else rng
         pick = np.argsort(rng.random((len(positions), HORIZON)), axis=1)[:, : cfg.leads_per_run]
         pick.sort(axis=1)
@@ -312,14 +318,19 @@ class XGBoostModel:
                 "lambda": cfg.reg_lambda, "max_bin": cfg.max_bin, "seed": cfg.seed,
                 "nthread": nthread}
 
-    def fit(self, values, positions, regressors=None, end=None, n_trees=None, nthread=0):
-        """Fit on the runs at `positions`; targets at or after `end` are ignored."""
+    def fit(self, values, positions, regressors=None, end=None, n_trees=None, nthread=0,
+            run_weights=None):
+        """Fit on the runs at `positions`; targets at or after `end` are ignored.
+
+        `run_weights` (one per run, optional) multiply the rows' weights.
+        """
         import xgboost as xgb
 
         hist_end = len(values) if end is None else end
         self.mean = float(np.nanmean(self._clean(np.asarray(values, dtype=float)[:hist_end])))
         self.fit_imputation(regressors, len(positions))
-        x, y, w = self.training_set(values, positions, regressors, end)
+        x, y, w = self.training_set(values, positions, regressors, end,
+                                    run_weights=run_weights)
         data = xgb.QuantileDMatrix(x, label=y, weight=w, max_bin=self.config.max_bin)
         del x
         self.booster = xgb.train(self.params(nthread), data,

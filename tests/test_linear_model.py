@@ -365,6 +365,31 @@ def test_shipped_asset_has_the_fixes():
                                           if f.startswith("ch_cm"))
     assert model.fallback is not None
     assert not set(model.config.optional) & set(model.fallback.config.features)
+    assert model.config.cap_quantile > 0 and model.x_high is not None
+    assert model.fallback.x_high is not None
+
+
+def test_cap_clips_out_of_range_regressors_and_round_trips(tmp_path):
+    speed, positions, x = synthetic(n_feat=2)
+    cfg = Config(features=("a", "b"), lags_days=(27.0,), cap_quantile=0.01)
+    model = LinearModel(cfg).fit(speed, positions, x)
+    assert np.all(model.x_low < model.x_high)
+    wild = x[:5].copy()
+    wild[:, 0] = 50.0  # far above the training range, like the 61 nT Bt run
+    at_cap = wild.copy()
+    at_cap[:, 0] = model.x_high[0]
+    assert np.allclose(model.forecast(speed, positions[:5], wild),
+                       model.forecast(speed, positions[:5], at_cap))
+    model.save(tmp_path / "m.json")
+    again = LinearModel.load(tmp_path / "m.json")
+    assert np.allclose(again.forecast(speed, positions[:5], wild),
+                       model.forecast(speed, positions[:5], wild))
+    uncapped = LinearModel(replace(cfg, cap_quantile=0.0)).fit(speed, positions, x)
+    assert uncapped.x_high is None
+    assert not np.allclose(uncapped.forecast(speed, positions[:5], wild),
+                           model.forecast(speed, positions[:5], wild))
+    with pytest.raises(ValueError):
+        Config(features=("a",), cap_quantile=0.5)
 
 
 def test_speed_terms_only_model_forecasts_with_fixes():
@@ -373,3 +398,34 @@ def test_speed_terms_only_model_forecasts_with_fixes():
     out = model.forecast(speed, positions[:5])
     assert out.shape == (5, HORIZON) and np.isfinite(out).all()
     assert not model.uses_fallback(np.zeros((5, 0))).any()
+
+
+def test_run_weights_of_one_change_nothing_and_zero_drops_runs():
+    speed, positions, x = synthetic(n_feat=2)
+    cfg = Config(features=("a", "b"), lags_days=(27.0,))
+    plain = LinearModel(cfg).fit(speed, positions, x)
+    ones = LinearModel(cfg).fit(speed, positions, x, run_weights=np.ones(len(positions)))
+    assert np.allclose(ones.coef, plain.coef)
+    # zero weight = dropped (ridge 0: the column scaling still sees every run)
+    cfg0 = replace(cfg, ridge=0.0)
+    half = len(positions) // 2
+    w = np.r_[np.zeros(half), np.ones(len(positions) - half)]
+    weighted = LinearModel(cfg0).fit(speed, positions, x, run_weights=w)
+    dropped = LinearModel(cfg0).fit(speed, positions[half:], x[half:])
+    assert np.allclose(weighted.forecast(speed, positions[:20], x[:20]),
+                       dropped.forecast(speed, positions[:20], x[:20]), rtol=1e-6)
+    with pytest.raises(ValueError):
+        LinearModel(cfg).fit(speed, positions, x, run_weights=np.ones(3))
+
+
+def test_recency_weights_halve_per_half_life_and_average_one():
+    import math
+
+    from training.recency_weights import recency_weights
+
+    end = pd.Timestamp("2024-10-20T00:00Z")
+    t0s = pd.DatetimeIndex([end - pd.Timedelta(days=365.25 * a) for a in (4, 2, 0)])
+    w = recency_weights(t0s, end, 2.0)
+    assert w.mean() == pytest.approx(1.0)
+    assert w[1] / w[0] == pytest.approx(2.0) and w[2] / w[1] == pytest.approx(2.0)
+    assert np.all(recency_weights(t0s, end, math.inf) == 1.0)

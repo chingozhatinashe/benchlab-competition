@@ -49,6 +49,8 @@ Scored on the yearly folds and documented, but not built:
 - [Gaussian-process correction](gaussian_process.md): a GP correction to the linear model. It gains 1.6% over the linear model but stays 1.4% behind the hybrid.
 - [HMM regimes](regime_hmm.md): hidden-Markov regime features for the hybrid. They add +0.1% at best.
 - [Regime switching](regime_switching.md): a standalone model with one expert per HMM regime, weighted by the filtered state. It gains 2.1% only for experts without the regressors; with them, every multi-regime version is worse than one regression.
+- [Quantile mapping](quantile_mapping.md): a post-step mapping each lead's forecast onto the observed speed distribution. It is worse at every blend strength (+0.9% at the mildest), because it removes the upward offset that TIMSE weighting makes optimal.
+- [Recency weights](recency_weights.md): sample weights halving every 1–8 years into the past. Worse at every half-life (+0.3% to +5.4%): the models gain more from the older years than they lose to drift.
 
 ## Rules
 
