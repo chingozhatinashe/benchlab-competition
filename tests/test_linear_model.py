@@ -234,19 +234,6 @@ def test_broken_linear_model_falls_back_to_the_baseline(monkeypatch):
     assert out == pipeline.run_forecast(T0, baseline, history)
 
 
-def test_submission_default_stays_the_final_baseline(monkeypatch):
-    from inference import pipeline
-
-    calls = []
-    monkeypatch.setattr(pipeline, "run_forecast", lambda t0: calls.append("baseline") or [])
-    monkeypatch.setattr(pipeline, "run_linear_forecast", lambda t0: calls.append("linear") or [])
-    monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
-    pipeline.run_selected_forecast(T0)
-    monkeypatch.setenv(pipeline.MODEL_ENV, "linear")
-    pipeline.run_selected_forecast(T0)
-    assert calls == ["baseline", "linear"]
-
-
 # ---------------------------------------------------------------------- data fixes
 def test_despike_drops_isolated_spikes_and_keeps_steps():
     from feature_engineering.recurrence import despike

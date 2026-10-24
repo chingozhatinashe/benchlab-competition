@@ -190,17 +190,41 @@ def test_broken_xgboost_falls_back_to_the_linear_model(monkeypatch):
     assert out == [1.0] * HORIZON and calls[0]["history"] is history
 
 
-def test_swp_model_selects_xgboost(monkeypatch):
+def test_submission_default_is_the_hybrid(monkeypatch):
     from inference import pipeline
 
     calls = []
     monkeypatch.setattr(pipeline, "run_forecast", lambda t0: calls.append("baseline") or [])
+    monkeypatch.setattr(pipeline, "run_linear_forecast", lambda t0: calls.append("linear") or [])
     monkeypatch.setattr(pipeline, "run_xgboost_forecast", lambda t0: calls.append("xgb") or [])
+    for choice in (None, "xgboost", "linear", "baseline"):
+        if choice is None:
+            monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
+        else:
+            monkeypatch.setenv(pipeline.MODEL_ENV, choice)
+        pipeline.run_selected_forecast(T0)
+    assert calls == ["xgb", "xgb", "linear", "baseline"]
+
+
+def test_unexpected_failure_in_the_hybrid_path_ends_in_the_baseline(monkeypatch):
+    from inference import pipeline
+
+    def boom(t0):
+        raise RuntimeError("boom")
+
     monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
-    pipeline.run_selected_forecast(T0)
-    monkeypatch.setenv(pipeline.MODEL_ENV, "xgboost")
-    pipeline.run_selected_forecast(T0)
-    assert calls == ["baseline", "xgb"]
+    monkeypatch.setattr(pipeline, "run_xgboost_forecast", boom)
+    monkeypatch.setattr(pipeline, "run_forecast", lambda t0: [2.0] * HORIZON)
+    assert pipeline.run_selected_forecast(T0) == [2.0] * HORIZON
+
+
+def test_submitted_forecast_offline_runs_the_hybrid(monkeypatch, capsys):
+    from inference import pipeline
+
+    monkeypatch.setenv(pipeline.OFFLINE_ENV, "1")
+    monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
+    out = pipeline.run_selected_forecast(T0)
+    assert len(out) == HORIZON and np.isfinite(out).all()
 
 
 def test_regressor_never_missing_in_training_is_imputed_with_its_median():

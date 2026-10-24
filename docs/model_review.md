@@ -104,7 +104,7 @@ they aren't comparable with our eval-year RMSE (about 100 km/s, solar maximum, C
 
 ## Plan (live evaluation starts 2026-11-11)
 
-1. **Decide which model ships.** The submission still runs the final baseline by default; the hybrid beats it by 14% on the per-run mean.
+1. **Decide which model ships.** *Decided 2026-10-24:* the hybrid ships (six-fold score 0.4190 against 0.4843 for the final baseline).
 2. **Quick, low-risk fixes** (branch `quick_fixes`):
    - a. cut the speed inputs at t0 − 10 min, and refit;
    - b. measure the cost of the one-hour alternative convention on the folds, and ask Benchlab which convention they use;

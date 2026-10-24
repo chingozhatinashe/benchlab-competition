@@ -20,8 +20,8 @@ Against the final baseline:
 
 The sections before "Nine years of history" describe the 4-year hybrid.
 
-**How it runs live:** the submission stays the final baseline. The hybrid runs only when
-`SWP_MODEL=xgboost` is set; any failure falls back to the linear model, then the final baseline.
+**How it runs live:** the hybrid is the submitted model since 2026-10-24 (`model.py` without
+`SWP_MODEL`); any failure falls back to the linear model, then the final baseline.
 
 ## Pipelines
 
