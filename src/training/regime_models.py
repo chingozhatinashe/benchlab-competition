@@ -157,9 +157,9 @@ def run_fold(data, start, end, timer):
     fit6 = data.runs6[(data.runs6 >= DATA_START) & (data.runs6 < start)]
     lin = LinearModel(data.linear_cfg).fit(
         data.values, data.series.index.get_indexer(fit6),
-        data.x(fit6, data.linear_cfg.features), end=start_pos)
+        data.x(fit6, data.linear_cfg.input_features), end=start_pos)
     out["global_linear"] = lin.forecast(
-        data.values, fold["pos"], data.x(fold["t0s"], data.linear_cfg.features))
+        data.values, fold["pos"], data.x(fold["t0s"], data.linear_cfg.input_features))
     clock("global linear", t)
     t = time.perf_counter()
     hyb = XGBoostModel(data.hybrid_cfg, lin)
@@ -188,9 +188,9 @@ def run_fold(data, start, end, timer):
         t = time.perf_counter()
         lin_r = LinearModel(data.linear_cfg).fit(
             data.values, data.series.index.get_indexer(sel6),
-            data.x(sel6, data.linear_cfg.features), end=start_pos)
+            data.x(sel6, data.linear_cfg.input_features), end=start_pos)
         regime_linear[r] = lin_r.forecast(
-            data.values, fold["pos"], data.x(fold["t0s"], data.linear_cfg.features))
+            data.values, fold["pos"], data.x(fold["t0s"], data.linear_cfg.input_features))
         clock("regime linear", t)
         t = time.perf_counter()
         hyb_r = XGBoostModel(data.hybrid_cfg, lin_r)

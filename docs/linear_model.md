@@ -238,6 +238,21 @@ The full variant search and forward selection were run again with both fixes:
 - **Where it acts:** Bt in up to 2% of fold runs; the X-ray peak in 7–11% of runs in the 2021 and 2023 folds, whose training years were near solar minimum.
 - **Both assets were retrained** with the cap (`training.linear_model.CAP_QUANTILE`). The eval year was not re-scored.
 
+### 4. Lead-aligned coronal holes (`ch_cm_lead_72h`, 2026-10-24)
+
+- **The change:** the coronal-hole regressor `ch_cm_at_24h` (one image, 24 h before t0, for every lead) is replaced by `ch_cm_lead_72h`. For lead k it takes the strip of the image at lag L_k = 72 − k before t0, rounded up to the 6-hour image grid and at least 0: the image about 72 h before the hour being forecast.
+- **Chosen on the six yearly folds** by `training.lead_aligned_ch` ([lead_aligned_ch.md](lead_aligned_ch.md)): delays of 60–120 h were tried, and 72 h was best.
+- **How the model takes it:** `Config.input_features` expands it into the 13 lagged columns `ch_cm_at_0h` … `ch_cm_at_72h`, and each lead's design uses its own column (one fit, per-column scaling, cap and medians). A missing lagged image is filled from the nearest one of the same run within 24 h (`LinearModel.fill_leads`); if the strip is still missing, the no-coronal-hole submodel forecasts the run, as before.
+
+| Six folds | Before (`ch_cm_at_24h`) | Lead-aligned | Change |
+|---|---|---|---|
+| Linear | 0.4375 | 0.4256 | −2.7% |
+| Hybrid (trees refitted on it) | 0.4253 | 0.4190 | −1.5% |
+
+- **Fit:** 11,300 runs (11,301 before).
+- **Live:** 15 AIA images per run instead of 4; the full live run at 2026-10-24 00Z took 14 s, with 18.6 MB of inputs.
+- **The eval year was not re-scored.**
+
 ## Live
 
 - `SWP_MODEL=linear` makes `model.py` use `inference.run_linear_forecast`.

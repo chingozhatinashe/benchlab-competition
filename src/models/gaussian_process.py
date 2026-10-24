@@ -232,7 +232,7 @@ class GaussianProcessModel:
     @property
     def input_features(self):
         """Regressor columns the model takes: the GP's and the linear model's."""
-        return tuple(dict.fromkeys((*self.config.features, *self.base_model.config.features)))
+        return tuple(dict.fromkeys((*self.config.features, *self.base_model.config.input_features)))
 
     def _columns(self, regressors, n, names):
         if not names:
@@ -241,7 +241,7 @@ class GaussianProcessModel:
         return reg[:, [self.input_features.index(f) for f in names]]
 
     def anchor(self, values, positions, regressors=None):
-        x = self._columns(regressors, len(positions), self.base_model.config.features)
+        x = self._columns(regressors, len(positions), self.base_model.config.input_features)
         return self.base_model.forecast(values, positions, x if x.shape[1] else None)
 
     def raw_inputs(self, values, positions, regressors, anchor):

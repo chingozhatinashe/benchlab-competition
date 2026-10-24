@@ -69,7 +69,7 @@ def score_fold(data, start, end, timer):
     fit6 = data.runs6[(data.runs6 >= DATA_START) & (data.runs6 < start)]
     fit_h = data.hourly[(data.hourly >= DATA_START) & (data.hourly < start)]
     pos6, pos_h = data.series.index.get_indexer(fit6), data.series.index.get_indexer(fit_h)
-    x6 = data.x(fit6, data.linear_cfg.features)
+    x6 = data.x(fit6, data.linear_cfg.input_features)
     span = (start - DATA_START) / YEAR
     out, base_lin = {}, None
     for h in HALF_LIVES:
@@ -80,7 +80,7 @@ def score_fold(data, start, end, timer):
                                                run_weights=w6)
         base_lin = base_lin or lin
         out[f"linear h={label(h)}"] = data.ratio(fold, lin.forecast(
-            data.values, fold["pos"], data.x(fold["t0s"], data.linear_cfg.features)))
+            data.values, fold["pos"], data.x(fold["t0s"], data.linear_cfg.input_features)))
         for name, anchor in (("hybrid", lin), ("hybrid trees only", base_lin)):
             if name == "hybrid trees only" and math.isinf(h):
                 continue

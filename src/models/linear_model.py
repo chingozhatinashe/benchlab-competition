@@ -45,6 +45,14 @@ Config.cap_quantile clips each regressor to its training [q, 1 - q] quantiles, i
 fitting and forecasting, so an extreme value outside the training range (a 61 nT field
 on 2026-01-20) can't be extrapolated linearly into a large forecast error.
 
+Lead-aligned regressors (named "<signal>_lead_<D>h", e.g. ch_cm_lead_72h) take, for lead
+k, the signal at lag L_k = D - k before t0, rounded up to the 6-hour image grid and at
+least 0: the image about D hours before the hour being forecast (training.lead_aligned_ch).
+The model reads them from the lagged columns "<signal>_at_<L>h" (Config.input_features),
+one column per distinct L_k, and puts each lead's own column in its design. A missing
+lagged value is filled from the nearest lag of the same run within LEAD_FILL_HOURS;
+standardising, the cap and the median imputation are per input column.
+
 Config.despike removes isolated one-hour glitches from the speed series
 (feature_engineering.recurrence.despike) before it is used as a fitting target or
 in the recurrence terms. The last observed speed stays raw: its hour can't be
@@ -52,6 +60,7 @@ checked against the hours after it. Scoring always uses the raw series.
 """
 
 import json
+import re
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
@@ -75,6 +84,24 @@ FAMILIES = ("gaussian", "gamma", "inverse_gaussian")
 WEIGHTS = ("run_timse", "uniform")
 SMEAR_QUANTILES = np.linspace(0.025, 0.975, 39)
 ETA_BOUNDS = (np.log(50.0), np.log(5000.0))  # keeps the log-link IRLS away from overflow
+LEAD_GRID = 6  # hours between the lagged columns of a lead-aligned regressor (image grid)
+LEAD_FILL_HOURS = 24  # a missing lagged value is filled from the nearest lag within this
+_LEAD = re.compile(r"^(?P<signal>.+)_lead_(?P<delay>\d+)h$")
+
+
+def lead_feature(name):
+    """(signal, delay h) for a lead-aligned regressor name like "ch_cm_lead_72h", else None."""
+    m = _LEAD.match(name)
+    return (m["signal"], int(m["delay"])) if m else None
+
+
+def lead_lags(delay):
+    """L_k for each lead k: delay - k rounded up to LEAD_GRID, at least 0."""
+    return np.maximum(0, np.ceil((delay - LEADS) / LEAD_GRID).astype(int) * LEAD_GRID)
+
+
+def lag_column(signal, lag):
+    return f"{signal}_at_{int(lag)}h"
 
 
 @dataclass(frozen=True)
@@ -126,6 +153,24 @@ class Config:
     @property
     def n_columns(self):
         return 1 + self.n_speed + len(self.features)
+
+    @property
+    def input_features(self):
+        """The regressor columns the model takes: features, lead-aligned ones expanded."""
+        cols = []
+        for f in self.features:
+            lead = lead_feature(f)
+            cols += ([f] if lead is None else
+                     [lag_column(lead[0], lag) for lag in np.unique(lead_lags(lead[1]))])
+        return tuple(dict.fromkeys(cols))
+
+    def lead_columns(self, feature):
+        """(72,) index into input_features of the column each lead uses for `feature`."""
+        names = self.input_features
+        lead = lead_feature(feature)
+        if lead is None:
+            return np.full(HORIZON, names.index(feature))
+        return np.array([names.index(lag_column(lead[0], lag)) for lag in lead_lags(lead[1])])
 
 
 def boxcox(y, lam):
@@ -204,8 +249,39 @@ class LinearModel:
         x[:, :, 1 : 1 + self.config.n_speed] = speed
         if self.config.features:
             z = (np.asarray(regressors, dtype=float) - self.x_mean) / self.x_std
-            x[:, :, 1 + self.config.n_speed :] = z[:, None, :]
+            for j, f in enumerate(self.config.features):
+                x[:, :, 1 + self.config.n_speed + j] = z[:, self.config.lead_columns(f)]
         return x, last
+
+    def fill_leads(self, regressors):
+        """Missing lagged values of lead-aligned regressors from the nearest lag in the run."""
+        cfg = self.config
+        x = np.array(regressors, dtype=float, copy=True)
+        names = cfg.input_features
+        for f in cfg.features:
+            lead = lead_feature(f)
+            if lead is None:
+                continue
+            lags = np.unique(lead_lags(lead[1]))
+            idx = [names.index(lag_column(lead[0], lag)) for lag in lags]
+            block = x[:, idx]
+            out = block.copy()
+            for i, lag in enumerate(lags):
+                # nearest lag first; on a tie the older image (larger lag)
+                for j in sorted(range(len(lags)), key=lambda j: (abs(lags[j] - lag), -lags[j])):
+                    if j == i or abs(lags[j] - lag) > LEAD_FILL_HOURS:
+                        continue
+                    gap = np.isnan(out[:, i])
+                    if not gap.any():
+                        break
+                    out[gap, i] = block[gap, j]
+            x[:, idx] = out
+        return x
+
+    def _select(self, x, names):
+        """Columns `names` of an input_features matrix."""
+        cols = self.config.input_features
+        return x[:, [cols.index(c) for c in names]]
 
     def _offset(self, last):
         """Per-run offset (log link) or base (Gaussian) for relative models; 0 otherwise."""
@@ -239,21 +315,24 @@ class LinearModel:
                  else np.asarray(run_weights, dtype=float))
         if run_w.shape != (len(positions),):
             raise ValueError(f"run_weights shape {run_w.shape}, expected ({len(positions)},)")
+        n_in = len(cfg.input_features)
         x_raw = np.zeros((len(positions), 0)) if not cfg.features else np.asarray(
             regressors, dtype=float)
-        if x_raw.shape != (len(positions), len(cfg.features)):
+        if x_raw.shape != (len(positions), n_in):
             raise ValueError(f"regressors shape {x_raw.shape}, expected "
-                             f"({len(positions)}, {len(cfg.features)})")
+                             f"({len(positions)}, {n_in})")
+        if cfg.features:
+            x_raw = self.fill_leads(x_raw)
         hist_end = len(values) if end is None else end
         clean = self._clean(values[:hist_end])  # despiked up to `end` only
         self.mean = float(np.nanmean(clean))
         self.medians = (np.nanmedian(x_raw, axis=0) if cfg.features else np.zeros(0))
         self.fallback = None
         if cfg.optional:
-            keep = [i for i, f in enumerate(cfg.features) if f not in cfg.optional]
-            sub_cfg = replace(cfg, features=tuple(cfg.features[i] for i in keep), optional=())
-            self.fallback = LinearModel(sub_cfg).fit(values, positions, x_raw[:, keep], end,
-                                                     run_w)
+            sub_cfg = replace(cfg, features=tuple(f for f in cfg.features
+                                                  if f not in cfg.optional), optional=())
+            self.fallback = LinearModel(sub_cfg).fit(
+                values, positions, self._select(x_raw, sub_cfg.input_features), end, run_w)
         complete = np.isfinite(x_raw).all(axis=1)
         x_raw, positions, run_w = x_raw[complete], positions[complete], run_w[complete]
         self.x_low = self.x_high = None
@@ -315,7 +394,7 @@ class LinearModel:
     # ------------------------------------------------------------------ forecasting
     def impute(self, regressors):
         """Live pipeline: missing regressors -> training medians."""
-        x = np.asarray(regressors, dtype=float).reshape(-1, len(self.config.features))
+        x = np.asarray(regressors, dtype=float).reshape(-1, len(self.config.input_features))
         return np.where(np.isfinite(x), x, self.medians)
 
     def cap(self, x):
@@ -332,13 +411,14 @@ class LinearModel:
         """
         positions = np.asarray(positions)
         cfg = self.config
-        raw = (np.asarray(regressors, dtype=float).reshape(len(positions), len(cfg.features))
+        raw = (self.fill_leads(np.asarray(regressors, dtype=float).reshape(
+            len(positions), len(cfg.input_features)))
                if cfg.features else np.zeros((len(positions), 0)))
         out = self._forecast(values, positions, raw)
         rows = self.uses_fallback(raw)
         if rows.any():
-            keep = [i for i, f in enumerate(cfg.features) if f not in cfg.optional]
-            out[rows] = self.fallback.forecast(values, positions[rows], raw[rows][:, keep])
+            sub = self._select(raw[rows], self.fallback.config.input_features)
+            out[rows] = self.fallback.forecast(values, positions[rows], sub)
         return out
 
     def uses_fallback(self, regressors):
@@ -346,8 +426,10 @@ class LinearModel:
         cfg = self.config
         if getattr(self, "fallback", None) is None:
             return np.zeros(len(np.asarray(regressors)), dtype=bool)
-        raw = np.asarray(regressors, dtype=float).reshape(-1, len(cfg.features))
-        opt = [i for i, f in enumerate(cfg.features) if f in cfg.optional]
+        raw = self.fill_leads(np.asarray(regressors, dtype=float).reshape(
+            -1, len(cfg.input_features)))
+        keep = set(self.fallback.config.input_features)
+        opt = [i for i, c in enumerate(cfg.input_features) if c not in keep]
         return np.isnan(raw[:, opt]).any(axis=1)
 
     def _forecast(self, values, positions, raw):
@@ -369,7 +451,7 @@ class LinearModel:
         """
         values = np.asarray(history, dtype=float)
         row = np.array([[np.nan if features is None else _get(features, n)
-                         for n in self.config.features]])
+                         for n in self.config.input_features]])
         return self.forecast(values, np.array([len(values)]), row)[0]
 
     # ------------------------------------------------------------------ persistence

@@ -93,7 +93,7 @@ def score_fold(data, table, start, end, timer, names):
         return table.loc[t0s, list(cols)].to_numpy(dtype=float)
 
     lin = LinearModel(data.linear_cfg).fit(
-        data.values, data.series.index.get_indexer(fit6), x(fit6, data.linear_cfg.features),
+        data.values, data.series.index.get_indexer(fit6), x(fit6, data.linear_cfg.input_features),
         end=start_pos)
     out = {}
     for name, extra in variants(data.hybrid_cfg.features).items():
@@ -110,7 +110,7 @@ def score_fold(data, table, start, end, timer, names):
 
 
 def load_table(data):
-    names = tuple(dict.fromkeys((*data.hybrid_cfg.features, *data.linear_cfg.features,
+    names = tuple(dict.fromkeys((*data.hybrid_cfg.features, *data.linear_cfg.input_features,
                                  *(n for e in variants(data.hybrid_cfg.features).values()
                                    for n in e))))
     return tx.feature_table(data.hourly, names, TABLE)

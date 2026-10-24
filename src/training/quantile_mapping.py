@@ -104,14 +104,14 @@ def score_fold(data, start, end, timer):
 
     t = time.perf_counter()
     lin = LinearModel(data.linear_cfg).fit(
-        data.values, pos6, data.x(fit6, data.linear_cfg.features), end=start_pos)
+        data.values, pos6, data.x(fit6, data.linear_cfg.input_features), end=start_pos)
     hyb = XGBoostModel(data.hybrid_cfg, lin)
     hyb.fit(data.values, data.series.index.get_indexer(fit_h),
             data.x(fit_h, hyb.input_features), end=start_pos)
     timer["fit"] = timer.get("fit", 0.0) + time.perf_counter() - t
 
     t = time.perf_counter()
-    for name, model, feats in (("linear", lin, data.linear_cfg.features),
+    for name, model, feats in (("linear", lin, data.linear_cfg.input_features),
                                ("hybrid", hyb, hyb.input_features)):
         train_f = model.forecast(data.values, pos6, data.x(fit6, feats))
         qmap = QuantileMap(train_f, y_fit)

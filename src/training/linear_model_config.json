@@ -10,11 +10,11 @@
   "tol": 1e-06,
   "despike": true,
   "optional": [
-    "ch_cm_at_24h"
+    "ch_cm_lead_72h"
   ],
   "features": [
     "bt_mean_1h",
-    "ch_cm_at_24h",
+    "ch_cm_lead_72h",
     "xray_peak_max_72h",
     "density_mean_24h"
   ],
@@ -99,5 +99,6 @@
       }
     ],
     "score": 0.43872
-  }
+  },
+  "lead_aligned": "2026-10-24: ch_cm_at_24h (selected) replaced by ch_cm_lead_72h, the strip of the image ~72 h before each forecast hour; chosen on the yearly folds by training.lead_aligned_ch (docs/lead_aligned_ch.md)"
 }

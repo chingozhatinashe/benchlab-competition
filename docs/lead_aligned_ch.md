@@ -1,4 +1,4 @@
-# Lead-aligned coronal-hole features (study; worth building)
+# Lead-aligned coronal-hole features (built)
 
 **What it is.** The coronal-hole input timed against each forecast hour instead of against t0
 (item 3 of [model_review.md](model_review.md), after Collin et al. 2025).
@@ -6,7 +6,7 @@
 - analysis: `src/experiments/lead_aligned_ch.ipynb`;
 - tests: `tests/test_lead_aligned_ch.py`.
 
-**Result:** the linear model gains 2.7% and the hybrid 1.7% on the folds, each winning 5 of 6. Not yet in the shipped models; building it needs per-lead regressors in `LinearModel` and more images live.
+**Result:** the linear model gains 2.7% and the hybrid 1.7% on the folds, each winning 5 of 6. Built on 2026-10-24: the shipped linear model uses `ch_cm_lead_72h` ([linear_model.md](linear_model.md), data fix 4). After retraining, the six-fold scores are linear 0.4256 and hybrid 0.4190.
 
 ## Method
 

@@ -59,7 +59,7 @@ class Data:
         self.hourly = tx.hourly_runs(self.series)
         self.linear_cfg = tl.with_fixes(tl.load_config())
         self.hybrid_cfg = tx.load_config(tx.config_path("linear"))
-        names = tuple(dict.fromkeys(self.hybrid_cfg.features + self.linear_cfg.features))
+        names = tuple(dict.fromkeys(self.hybrid_cfg.features + self.linear_cfg.input_features))
         self.table = tx.feature_table(self.hourly, names, CACHE_DIR / "table_hourly.pkl")
 
     def x(self, t0s, names):
@@ -97,8 +97,8 @@ def score_fold(data, history, start, end, timer):
     fit6 = data.runs6[(data.runs6 >= history) & (data.runs6 < start)]
     lin = LinearModel(data.linear_cfg).fit(
         data.values, data.series.index.get_indexer(fit6),
-        data.x(fit6, data.linear_cfg.features), end=start_pos)
-    xv = data.x(fold["t0s"], data.linear_cfg.features)
+        data.x(fit6, data.linear_cfg.input_features), end=start_pos)
+    xv = data.x(fold["t0s"], data.linear_cfg.input_features)
     out["linear"] = data.ratio(fold, lin.forecast(data.values, fold["pos"], xv))
     timer["linear"] = timer.get("linear", 0) + time.perf_counter() - t
 
