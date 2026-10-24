@@ -125,8 +125,8 @@ def run_forecast(t0, model=None, history=None):
 
 
 # ---------------------------------------------------------------------------
-# Linear model (models.linear_model), opt-in with SWP_MODEL=linear.
-# The submitted forecast stays the final baseline unless that is set.
+# Linear model (models.linear_model): the hybrid's anchor and its first fallback;
+# SWP_MODEL=linear submits it on its own.
 
 MODEL_ENV = "SWP_MODEL"
 
@@ -286,13 +286,19 @@ def run_xgboost_forecast(t0, model=None, history=None, features=None):
 
 
 def run_selected_forecast(t0):
-    """The forecast model.py submits: the final baseline, or an opted-in model.
+    """The forecast model.py submits: the linear + trees hybrid by default.
 
-    SWP_MODEL=linear runs the linear model; SWP_MODEL=xgboost the linear + trees hybrid.
+    The hybrid falls back to the linear model, then the final baseline. SWP_MODEL=linear
+    runs the linear model, SWP_MODEL=baseline the final baseline. Anything unexpected
+    that escapes a model's own fallbacks ends in the final baseline.
     """
     choice = os.environ.get(MODEL_ENV, "").lower()
-    if choice == "linear":
-        return run_linear_forecast(t0)
-    if choice == "xgboost":
+    if choice == "baseline":
+        return run_forecast(t0)
+    try:
+        if choice == "linear":
+            return run_linear_forecast(t0)
         return run_xgboost_forecast(t0)
-    return run_forecast(t0)
+    except Exception as e:
+        log(f"{choice or 'xgboost'} path failed ({e!r}); falling back to the final baseline")
+        return run_forecast(t0)

@@ -2,6 +2,8 @@
 
 Every model in development is scored the same way: with **TIMSE** (see [timse.md](timse.md)), on a held-out year of the same real-time L1 speed series the live leaderboard uses.
 
+**The submitted model** (since 2026-10-24) is the XGBoost hybrid on the lead-aligned linear model ([xgboost_model.md](xgboost_model.md), [linear_model.md](linear_model.md)). It scores 0.4190 on the six yearly folds (per-run mean TIMSE / persistence), against 0.4256 for the linear model and 0.4843 for the final baseline, which is now the last model fallback. New models are compared against the hybrid.
+
 ## Data
 
 - **Source.** SWPC's real-time ACE SWEPAM 1-minute lists, archived daily on the NASA SOHO mirror: `https://soho.nascom.nasa.gov/sdb/ace/daily/YYYYMMDD_ace_swepam_1m.txt`. These are the values SWPC published in real time, uncorrected, which is what Benchlab's provisional live scoring uses. The briefing says final scoring uses a "definitive target-data process", probably the science-quality data, which can differ a little.

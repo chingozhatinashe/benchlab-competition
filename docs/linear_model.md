@@ -22,8 +22,8 @@ On the eval year it beats the final baseline on:
 
 It is worse on the p90 of per-run TIMSE (+7%).
 
-The submission stays the final baseline; the linear model runs live only when
-`SWP_MODEL=linear` is set. The sections before "Nine years of history" describe the 4-year
+Since 2026-10-24 the submission is the XGBoost hybrid, which uses this model as its anchor and
+first fallback; `SWP_MODEL=linear` submits the linear model alone. The sections before "Nine years of history" describe the 4-year
 fits, and the analysis is `src/experiments/linear_model.ipynb`.
 
 ## Pipelines
@@ -260,7 +260,7 @@ The full variant search and forward selection were run again with both fixes:
   - Missing regressors take their medians. A missing coronal-hole strip (after the 12 h → 18 h → 24 h image fallback) switches to the submodel without it.
   - Any failure falls back to the final baseline, then persistence.
 - **In the image** (4 vCPU / 16 GiB, t0 2026-10-22 06Z): all regressors observed (5 of 5 for the first fit; 4 of 4 for the shipped model, re-checked locally), 21 s, a valid forecast, image unchanged at 90 MiB. The image fallback fetches three AIA images (12, 18, 24 h) instead of one.
-- Without the variable, `model.py` runs the final baseline as before.
+- Without the variable, `model.py` runs the XGBoost hybrid (since 2026-10-24), with this model as its first fallback.
 
 ## Reproduce
 
