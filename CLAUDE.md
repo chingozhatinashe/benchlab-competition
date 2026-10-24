@@ -39,6 +39,9 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.regressor_cap         # chooses the linear model's regressor cap (Config.cap_quantile) on the yearly folds; resumable; see src/experiments/regressor_cap.ipynb
 .venv/Scripts/python -m training.quantile_mapping      # quantile-mapping post-step for the linear model and hybrid on the yearly folds; resumable; not built, see docs/quantile_mapping.md
 .venv/Scripts/python -m training.recency_weights       # recency sample weights for the linear model and hybrid on the yearly folds; resumable; not built, see docs/recency_weights.md
+.venv/Scripts/python -m training.lead_aligned_ch       # lead-aligned coronal-hole features (image D h before each forecast hour) on the yearly folds; resumable; --hybrid "at 72"; see docs/lead_aligned_ch.md
+.venv/Scripts/python -m training.coronal_grid images|folds  # coronal-hole latitude bands, B0 and darkness from the cached AIA images, lead-aligned, on the yearly folds; not built, see docs/coronal_grid.md
+.venv/Scripts/python -m training.hybrid_forward_add    # adds a second window per regressor family to the hybrid on the yearly folds; resumable; none kept, see docs/hybrid_forward_add.md
 .venv/Scripts/python -m training.gaussian_process_folds  # GP correction re-scored on the yearly folds; resumable; not built, see docs/gaussian_process.md
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
