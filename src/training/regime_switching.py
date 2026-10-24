@@ -56,7 +56,7 @@ class Data(ch.Data):
         super().__init__()
         hourly = pf.load_hourly()
         self.insitu = hourly[(hourly.index >= INSITU_START) & (hourly.index < TRAIN_END)]
-        self.input_sets = {"speed": (), "regs": tuple(self.linear_cfg.features)}
+        self.input_sets = {"speed": (), "regs": tuple(self.linear_cfg.input_features)}
 
 
 def context():

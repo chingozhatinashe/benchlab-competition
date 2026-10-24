@@ -173,7 +173,7 @@ class Folds:
             cfg = tl.with_fixes(tl.load_config())
             fit = np.flatnonzero(self.val_t0s < self.index[f["start"]])
             self._linear[i] = LinearModel(cfg).fit(
-                self.values, self.val_pos[fit], self.x(self.val_t0s[fit], cfg.features),
+                self.values, self.val_pos[fit], self.x(self.val_t0s[fit], cfg.input_features),
                 end=f["start"])
         return self._linear[i]
 
@@ -517,14 +517,14 @@ def evaluate(model=None):
     values = series.to_numpy(dtype=float)
     t0s = forecast_times()
     pos = series.index.get_indexer(t0s)
-    names = tuple(dict.fromkeys(model.input_features + linear.config.features))
+    names = tuple(dict.fromkeys(model.input_features + linear.config.input_features))
     table = feature_table(t0s, names)
     actual = targets(values, pos)
     forecasts = {
         "xgboost": model.forecast(values, pos, table[list(model.input_features)].to_numpy()
                                   if model.input_features else None),
         "linear_model": linear.forecast(values, pos,
-                                        table[list(linear.config.features)].to_numpy()),
+                                        table[list(linear.config.input_features)].to_numpy()),
         "final_baseline": FinalBaseline.load().forecast(values, pos),
         "persistence": np.repeat(last_observed(values, pos)[:, None], actual.shape[1], 1),
     }

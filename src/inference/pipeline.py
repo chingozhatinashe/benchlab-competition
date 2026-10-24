@@ -156,7 +156,7 @@ def regressor_features(names, t0, inputs=None):
 
 def linear_features(linear, t0, inputs=None):
     """The selected regressors at t0 as {name: value} (NaN where unknown; imputed later)."""
-    return regressor_features(linear.config.features, t0, inputs)
+    return regressor_features(linear.config.input_features, t0, inputs)
 
 
 def run_linear_forecast(t0, linear=None, baseline=None, history=None, features=None):
@@ -198,14 +198,14 @@ def run_linear_forecast(t0, linear=None, baseline=None, history=None, features=N
                     log(f"regressors failed ({e!r}); all imputed")
                     features = {}
 
-    missing = [n for n in linear.config.features
-               if not np.isfinite(features.get(n, np.nan))]
-    optional = set(getattr(linear.config, "optional", ()))
+    columns = linear.config.input_features
+    missing = [n for n in columns if not np.isfinite(features.get(n, np.nan))]
+    fallback = getattr(linear, "fallback", None)
+    optional = set(columns) - set(fallback.config.input_features if fallback else columns)
     sub = [n for n in missing if n in optional]
     imputed = [n for n in missing if n not in optional]
-    log(f"linear model: {len(linear.config.features) - len(missing)}/"
-        f"{len(linear.config.features)} regressors observed; imputed: {imputed or 'none'}"
-        + (f"; submodel without {sub}" if sub else ""))
+    log(f"linear model: {len(columns) - len(missing)}/{len(columns)} regressors observed; "
+        f"imputed: {imputed or 'none'}" + (f"; missing optional {sub}" if sub else ""))
     try:
         forecast = np.asarray(linear.predict(history, features), dtype=float)
     except Exception as e:

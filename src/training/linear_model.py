@@ -130,9 +130,9 @@ class Folds:
         ratios = []
         for f in self.folds:
             model = LinearModel(config).fit(self.values, self.positions[f["fit"]],
-                                            self.x(f["fit"], config.features), end=f["start"])
+                                            self.x(f["fit"], config.input_features), end=f["start"])
             forecast = model.forecast(self.values, self.positions[f["val"]],
-                                      self.x(f["val"], config.features))
+                                      self.x(f["val"], config.input_features))
             score = run_scores(forecast, f["y"], f["q"])
             ratios.append(np.nanmean(score[f["scored"]]) / f["ref"])
         return float(np.exp(np.mean(np.log(ratios)))), ratios
@@ -350,7 +350,7 @@ def train(config=None, out=ASSET):
     series = load_train()
     t0s = training_runs(series)
     table = candidate_table(t0s)
-    x = table[list(config.features)].to_numpy(dtype=float) if config.features else None
+    x = table[list(config.input_features)].to_numpy(dtype=float) if config.features else None
     model = LinearModel(config).fit(series.to_numpy(dtype=float),
                                     series.index.get_indexer(t0s), x)
     model.fit_info.update({"start": f"{DATA_START:%Y-%m-%dT%H:%MZ}",
@@ -377,7 +377,7 @@ def evaluate(model=None):
     t0s = forecast_times()
     pos = series.index.get_indexer(t0s)
     table = candidate_table(t0s)
-    x = table[list(model.config.features)].to_numpy(dtype=float)
+    x = table[list(model.config.input_features)].to_numpy(dtype=float)
     actual = targets(values, pos)
     forecasts = {
         "linear_model": model.forecast(values, pos, x),
@@ -387,7 +387,7 @@ def evaluate(model=None):
     metrics = ["timse", "run_timse_mean", "run_timse_median", "run_timse_p90", "rmse"]
     overall = pd.DataFrame({m: {k: score(f, actual)[k] for k in metrics}
                             for m, f in forecasts.items()}).T
-    imputed = pd.Series(np.isnan(x).mean(axis=0), index=model.config.features)
+    imputed = pd.Series(np.isnan(x).mean(axis=0), index=model.config.input_features)
     imputed["(runs forecast by the submodel)"] = model.uses_fallback(x).mean()
 
     runs = pd.DataFrame({m: run_timse(f, actual) for m, f in forecasts.items()}, index=t0s)

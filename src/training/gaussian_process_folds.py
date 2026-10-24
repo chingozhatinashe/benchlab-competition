@@ -100,9 +100,9 @@ def score_fold(data, start, end, timer, with_ml2=True):
     t = time.perf_counter()
     lin = LinearModel(data.linear_cfg).fit(
         data.values, data.series.index.get_indexer(fit6),
-        _x(data, fit6, data.linear_cfg.features), end=start_pos)
+        _x(data, fit6, data.linear_cfg.input_features), end=start_pos)
     out["linear"] = data.ratio(fold, lin.forecast(
-        data.values, fold["pos"], _x(data, fold["t0s"], data.linear_cfg.features)))
+        data.values, fold["pos"], _x(data, fold["t0s"], data.linear_cfg.input_features)))
     fit_h = data.hourly[(data.hourly >= DATA_START) & (data.hourly < start)]
     hyb = XGBoostModel(data.hybrid_cfg, lin)
     hyb.fit(data.values, data.series.index.get_indexer(fit_h),
@@ -116,7 +116,7 @@ def score_fold(data, start, end, timer, with_ml2=True):
         np.sort(rng.choice(fit6.to_numpy(), MAX_FIT_RUNS, replace=False)), tz="UTC")
     gp_pos = data.series.index.get_indexer(gp_fit)
     out["gp fit runs"] = int(len(gp_fit))
-    sets = {"A": tuple(data.linear_cfg.features), "H": tuple(data.hybrid_cfg.features)}
+    sets = {"A": tuple(data.linear_cfg.input_features), "H": tuple(data.hybrid_cfg.features)}
     for name, feats in sets.items():
         model = GaussianProcessModel(Config(features=feats, n_components=1, max_components=1),
                                      lin)

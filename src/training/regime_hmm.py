@@ -104,7 +104,7 @@ def score_fold(data, start, end, timer):
         t = time.perf_counter()
         hyb_cfg = replace(data.hybrid_cfg, features=data.hybrid_cfg.features + extra)
         out[f"hybrid + {name}"] = hybrid(hyb_cfg, lin, frame)
-        lin_cfg = replace(data.linear_cfg, features=data.linear_cfg.features + extra)
+        lin_cfg = replace(data.linear_cfg, features=data.linear_cfg.input_features + extra)
         lin_h, out[f"linear + {name}"] = linear(lin_cfg, frame)
         out[f"both + {name}"] = hybrid(hyb_cfg, lin_h, frame)
         clock(f"models {name}", t)

@@ -210,7 +210,7 @@ class XGBoostModel:
     @property
     def input_features(self):
         """Regressor columns the model takes: the trees' and the linear model's."""
-        lin = self.base_model.config.features if self.base_model is not None else ()
+        lin = self.base_model.config.input_features if self.base_model is not None else ()
         return tuple(dict.fromkeys((*self.config.features, *lin)))
 
     def _columns(self, regressors, n, names):
@@ -225,7 +225,7 @@ class XGBoostModel:
         if self.base_model is None:
             last = last_observed(np.asarray(values, dtype=float), positions)
             return np.repeat(last[:, None], HORIZON, axis=1)
-        x = self._columns(regressors, len(positions), self.base_model.config.features)
+        x = self._columns(regressors, len(positions), self.base_model.config.input_features)
         out = np.empty((len(positions), HORIZON))
         chunk = 4000  # bounds the linear model's (runs x 72 x columns) design in memory
         for s in range(0, len(positions), chunk):

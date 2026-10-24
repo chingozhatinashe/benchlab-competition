@@ -195,7 +195,7 @@ def test_shipped_asset_loads_and_names_real_regressors():
     model = LinearModel.load()
     assert model.coef.shape == (HORIZON, model.config.n_columns)
     names = {s.name for s in windows.candidates()}
-    assert set(model.config.features) <= names
+    assert set(model.config.input_features) <= names  # lead-aligned ones expand to real lags
 
 
 def test_linear_live_path_offline_imputes_everything(monkeypatch):
@@ -212,7 +212,7 @@ def test_linear_live_path_uses_given_history_and_features():
     model = LinearModel.load()
     hours = pd.date_range(T0 - pd.Timedelta(days=60), T0, freq="h", inclusive="left")
     history = pd.Series(450.0, index=hours)
-    features = dict(zip(model.config.features, model.medians, strict=True))
+    features = dict(zip(model.config.input_features, model.medians, strict=True))
     out = pipeline.run_linear_forecast(T0, linear=model, history=history, features=features)
     assert np.allclose(out, model.predict(history, features))
 
