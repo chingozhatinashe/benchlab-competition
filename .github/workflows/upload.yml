@@ -1,7 +1,14 @@
-# Uploads the submission to Benchlab, on demand (Actions -> "Upload to Benchlab" -> Run workflow).
+# Uploads to Benchlab, on demand (Actions -> "Upload to Benchlab" -> Run workflow).
 #
-# It uploads the exact submission.zip that CI built and ran in Docker for the same commit of
-# main (the `submission-<sha>` artifact), so it refuses commits whose CI didn't pass.
+#   status       only show the portal status (the default)
+#   conformance  upload the unchanged conformance_pack/ (the conformance test, as
+#                submit_conformance.sh does); refused once the submission is ELIGIBLE, so it
+#                can't replace a qualified model
+#   upload       upload the model: the exact submission.zip that CI built and ran in Docker
+#                for the same commit of main (the `submission-<sha>` artifact). Refused before
+#                PREDEPLOY_START: until pre-deployment opens, the portal treats any upload as a
+#                conformance attempt, and a model zip fails it as "Test kit modified"
+# Both uploads need UPLOAD typed in the confirm box, and run only from main.
 # Needs the repository secret BENCHLAB_PORTAL: the portal link from the Benchlab email.
 #
 # The repository is public, so nothing secret may reach the log: not the portal link (a
@@ -15,16 +22,16 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "upload: send main's tested submission.zip; status: only show the portal status"
+        description: "status: show the portal status; conformance: upload the test kit; upload: upload the model (from 2026-11-01)"
         type: choice
-        options: [status, upload]
+        options: [status, conformance, upload]
         default: status
       confirm:
-        description: 'For "upload", type UPLOAD (replaces the current submission; it must qualify again)'
+        description: 'For "conformance" or "upload", type UPLOAD (replaces what the portal holds)'
         type: string
         default: ""
       wait_minutes:
-        description: "After uploading, minutes to wait for the qualification result"
+        description: "After uploading, minutes to wait for the result"
         type: number
         default: 30
 
@@ -36,6 +43,9 @@ permissions:
   contents: read
   actions: read  # to find and download CI's submission artifact
 
+env:
+  PREDEPLOY_START: "2026-11-01"  # pre-deployment (model uploads) runs 1-10 November 2026 UTC
+
 jobs:
   benchlab:
     name: ${{ inputs.action }}
@@ -45,21 +55,25 @@ jobs:
       PORTAL: ${{ secrets.BENCHLAB_PORTAL }}
       GH_TOKEN: ${{ github.token }}
       SHA: ${{ github.sha }}
+      ACTION: ${{ inputs.action }}
     steps:
       - name: Check the request
         env:
-          ACTION: ${{ inputs.action }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
           case "$PORTAL" in
             http*) ;;
             *) echo "::error::the BENCHLAB_PORTAL secret is missing (Settings -> Secrets and variables -> Actions)"; exit 1 ;;
           esac
-          if [ "$ACTION" = "upload" ]; then
-            [ "$GITHUB_REF" = "refs/heads/main" ] \
-              || { echo "::error::uploads run only from main (this run: $GITHUB_REF)"; exit 1; }
-            [ "$CONFIRM" = "UPLOAD" ] \
-              || { echo "::error::type UPLOAD in the confirm box to upload"; exit 1; }
+          [ "$ACTION" = "status" ] && exit 0
+          [ "$GITHUB_REF" = "refs/heads/main" ] \
+            || { echo "::error::uploads run only from main (this run: $GITHUB_REF)"; exit 1; }
+          [ "$CONFIRM" = "UPLOAD" ] \
+            || { echo "::error::type UPLOAD in the confirm box to upload"; exit 1; }
+          TODAY=$(date -u +%F)
+          if [ "$ACTION" = "upload" ] && [[ "$TODAY" < "$PREDEPLOY_START" ]]; then
+            echo "::error::model uploads open on $PREDEPLOY_START (pre-deployment); today is $TODAY UTC. Before then the portal takes only the conformance kit, and a model zip fails conformance."
+            exit 1
           fi
 
       - name: Portal helpers
@@ -82,10 +96,31 @@ jobs:
           . "$RUNNER_TEMP/portal.sh"
           fetch_portal "$RUNNER_TEMP/before.json"
           echo "Before: $(status "$RUNNER_TEMP/before.json")"
-          echo "### Benchlab status before" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          status "$RUNNER_TEMP/before.json" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Benchlab status before"
+            echo '```'
+            status "$RUNNER_TEMP/before.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ACTION" = "conformance" ] \
+             && [ "$(jq -r '.eligibility // ""' "$RUNNER_TEMP/before.json")" = "ELIGIBLE" ]; then
+            echo "::error::the submission is ELIGIBLE; a conformance upload could replace the qualified model"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        if: inputs.action == 'conformance'
+
+      - name: Zip the unchanged conformance kit
+        if: inputs.action == 'conformance'
+        run: |
+          (cd conformance_pack && bash verify.sh) \
+            || { echo "::error::conformance_pack/ does not match the published kit"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/artifact"
+          # the contents, not the folder (as submit_conformance.sh)
+          (cd conformance_pack && zip -qr "$RUNNER_TEMP/artifact/upload.zip" . -x '*.DS_Store')
+          ZIP="$RUNNER_TEMP/artifact/upload.zip"
+          echo "kit.zip: $(wc -c < "$ZIP") bytes, sha256 $(sha256sum "$ZIP" | cut -d' ' -f1)"
 
       - name: Download the zip CI tested for this commit
         if: inputs.action == 'upload'
@@ -98,7 +133,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/artifact"
           gh run download "$RUN" --repo "$GITHUB_REPOSITORY" -n "submission-$SHA" -D "$RUNNER_TEMP/artifact" \
             || { echo "::error::artifact submission-$SHA not found (expired after 30 days?); re-run CI on main"; exit 1; }
-          ZIP="$RUNNER_TEMP/artifact/submission.zip"
+          mv "$RUNNER_TEMP/artifact/submission.zip" "$RUNNER_TEMP/artifact/upload.zip"
+          ZIP="$RUNNER_TEMP/artifact/upload.zip"
           for f in Dockerfile submission.json README.md model.py run.sh upload.sh; do
             unzip -l "$ZIP" "$f" > /dev/null || { echo "::error::$f missing from the zip root"; exit 1; }
           done
@@ -111,7 +147,7 @@ jobs:
                 "$RUNNER_TEMP/artifact/src/local_tests/out/forecast.json" 2>/dev/null || echo 'not found')"
 
       - name: Upload
-        if: inputs.action == 'upload'
+        if: inputs.action != 'status'
         run: |
           . "$RUNNER_TEMP/portal.sh"
           FORM="$RUNNER_TEMP/form.json"
@@ -127,7 +163,7 @@ jobs:
           [ "${#ARGS[@]}" -gt 0 ] || { echo "::error::the upload form had no fields"; exit 1; }
           # 'file' must be the last form field: S3 ignores anything after it
           CODE=$(curl -sS -o "$RUNNER_TEMP/resp.txt" -w '%{http_code}' "${ARGS[@]}" \
-                   -F "file=@$RUNNER_TEMP/artifact/submission.zip" "$URL") \
+                   -F "file=@$RUNNER_TEMP/artifact/upload.zip" "$URL") \
             || { echo "::error::the upload request failed"; exit 1; }
           rm -f "$FORM"
           if [ "$CODE" != "204" ]; then
@@ -135,18 +171,22 @@ jobs:
             echo "::error::upload rejected, HTTP $CODE: $(grep -oE '<(Code|Message)>[^<]*' "$RUNNER_TEMP/resp.txt" | sed 's/<[A-Za-z]*>//' | paste -sd' ')"
             exit 1
           fi
-          echo "HTTP 204: submission.zip from $SHA reached Benchlab"
-          echo "### Uploaded submission.zip from \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          WHAT=$([ "$ACTION" = "upload" ] && echo "submission.zip" || echo "the conformance kit")
+          echo "HTTP 204: $WHAT from $SHA reached Benchlab"
+          echo "### Uploaded $WHAT from \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Wait for qualification
-        if: inputs.action == 'upload'
+      - name: Wait for the result
+        if: inputs.action != 'status'
         env:
           WAIT: ${{ inputs.wait_minutes }}
         run: |
           . "$RUNNER_TEMP/portal.sh"
           BEFORE=$(status "$RUNNER_TEMP/before.json")
+          # an earlier failure's reason can stay on the portal while the new upload is checked
+          BEFORE_FAIL=$(jq -r '.failure_reason // ""' "$RUNNER_TEMP/before.json")
           LAST=""
           END=$(( $(date +%s) + WAIT * 60 ))
+          summary() { { echo "### $1"; echo '```'; echo "$2"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"; }
           while [ "$(date +%s)" -lt "$END" ]; do
             sleep 60
             fetch_portal "$RUNNER_TEMP/now.json" || continue
@@ -155,17 +195,18 @@ jobs:
             LAST=$NOW
             [ "$NOW" = "$BEFORE" ] && continue  # the portal hasn't picked up this upload yet
             ELIG=$(jq -r '.eligibility // ""' "$RUNNER_TEMP/now.json")
+            CONF=$(jq -r '.conformance // ""' "$RUNNER_TEMP/now.json")
             FAIL=$(jq -r '.failure_reason // ""' "$RUNNER_TEMP/now.json")
-            if [ "$ELIG" = "ELIGIBLE" ]; then
-              echo "### ELIGIBLE" >> "$GITHUB_STEP_SUMMARY"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"; echo "$NOW" >> "$GITHUB_STEP_SUMMARY"; echo '```' >> "$GITHUB_STEP_SUMMARY"
+            if { [ "$ACTION" = "upload" ] && [ "$ELIG" = "ELIGIBLE" ]; } \
+               || { [ "$ACTION" = "conformance" ] && [ "$CONF" = "PASSED" ]; }; then
+              summary "$([ "$ACTION" = "upload" ] && echo ELIGIBLE || echo "conformance PASSED")" "$NOW"
               exit 0
             fi
-            if [ -n "$FAIL" ]; then
-              echo "::error::qualification failed: $FAIL (build logs: the portal link's 'logs')"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"; echo "$NOW" >> "$GITHUB_STEP_SUMMARY"; echo '```' >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$FAIL" ] && [ "$FAIL" != "$BEFORE_FAIL" ]; then
+              echo "::error::$ACTION failed: $FAIL (build logs: the portal link's 'logs')"
+              summary "failed" "$NOW"
               exit 1
             fi
           done
-          echo "::notice::no result after $WAIT min; run this workflow again with action=status"
-          echo "Last: ${LAST:-$BEFORE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::no new result after $WAIT min (or the same failure as before); run this workflow again with action=status"
+          summary "no result after $WAIT min" "${LAST:-$BEFORE}"
