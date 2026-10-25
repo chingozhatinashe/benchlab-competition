@@ -57,6 +57,7 @@ Scored on the yearly folds and documented, but not built:
 - [Hybrid forward-add](hybrid_forward_add.md): a second window of each regressor family added to the hybrid. Best −0.27% (3 of 6 folds); none kept, so the hybrid's pruning didn't drop signal.
 - [Coronagraph features](coronagraph.md): LASCO C2/C3 brightening per position-angle sector, windowed and fed straight into the hybrid and the linear model. Best −0.36% (3 of 6 folds): CME runs gain about 3%, the other runs lose about 1%.
 - [CME detector](cme_detector.md): a two-stage monotone detector (CME in the image, then CME at L1 in the next 0–72 h) whose outputs feed the hybrid. Best −0.21% (3 of 6 folds): the image stage works (AUC about 0.80), but the arrival stage is near chance (AUC 0.49–0.64).
+- [Magnetogram features](magnetogram.md): SDO/HMI quick-look magnetograms on a 10° grid, central-strip field summaries fed straight into the hybrid and the linear model. Best −0.36% (4 of 6 folds): the 8-bit browse images show active regions but not the weak one-sided field of coronal holes.
 
 ## Rules
 
