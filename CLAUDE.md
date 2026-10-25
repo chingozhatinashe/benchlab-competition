@@ -98,7 +98,10 @@ bash package_submission.sh                              # builds submission.zip 
 - **`checks` job:** conformance digest, `ci/check_submission.py`, ruff, pytest.
 - **`container` job:** loads the base image from the Actions cache, refreshed weekly, because public.ecr.aws returns 429s to shared runners. It then runs `test_local.sh` at the latest 6-hourly `t0` with the declared CPU/memory and uploads `submission-<sha>` (containing `submission.zip`) as an artifact.
 - **Uploading:** a manual trigger only. A replacement upload must re-qualify, and an earlier ELIGIBLE version is not kept as a fallback.
-  - `.github/workflows/upload.yml` ("Upload to Benchlab", `workflow_dispatch` from `main`, confirm with `UPLOAD`) uploads the exact `submission.zip` that CI tested for that commit, then waits for the qualification result. `action=status` only reads the portal status.
+  - `.github/workflows/upload.yml` ("Upload to Benchlab", `workflow_dispatch` from `main`, confirm with `UPLOAD`):
+    - `action=upload` sends the exact `submission.zip` that CI tested for that commit and waits for the qualification result. It is refused before pre-deployment opens (`PREDEPLOY_START`, 2026-11-01), because until then the portal treats every upload as a conformance attempt and a model zip fails it as "Test kit modified".
+    - `action=conformance` re-uploads the unchanged `conformance_pack/`. It is refused once the submission is ELIGIBLE.
+    - `action=status` only reads the portal status.
   - It needs the repository secret `BENCHLAB_PORTAL`, the portal link from the Benchlab email.
   - The repo is public, so the workflow never prints the portal link, the presigned upload form or the presigned build-log links.
 - **`STRICT_TEAM_INFO`:** setting it to `"1"` in `ci.yml` makes template team details a CI failure.
