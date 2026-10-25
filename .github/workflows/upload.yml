@@ -1,0 +1,171 @@
+# Uploads the submission to Benchlab, on demand (Actions -> "Upload to Benchlab" -> Run workflow).
+#
+# It uploads the exact submission.zip that CI built and ran in Docker for the same commit of
+# main (the `submission-<sha>` artifact), so it refuses commits whose CI didn't pass.
+# Needs the repository secret BENCHLAB_PORTAL: the portal link from the Benchlab email.
+#
+# The repository is public, so nothing secret may reach the log: not the portal link (a
+# secret, masked by GitHub), not the presigned upload form, not the presigned build-log links.
+# Every portal response stays in a file and only the status fields are printed.
+#
+# A replacement upload must qualify again: an earlier ELIGIBLE version is not kept.
+name: Upload to Benchlab
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "upload: send main's tested submission.zip; status: only show the portal status"
+        type: choice
+        options: [status, upload]
+        default: status
+      confirm:
+        description: 'For "upload", type UPLOAD (replaces the current submission; it must qualify again)'
+        type: string
+        default: ""
+      wait_minutes:
+        description: "After uploading, minutes to wait for the qualification result"
+        type: number
+        default: 30
+
+concurrency:
+  group: benchlab-upload
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read  # to find and download CI's submission artifact
+
+jobs:
+  benchlab:
+    name: ${{ inputs.action }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PORTAL: ${{ secrets.BENCHLAB_PORTAL }}
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.sha }}
+    steps:
+      - name: Check the request
+        env:
+          ACTION: ${{ inputs.action }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          case "$PORTAL" in
+            http*) ;;
+            *) echo "::error::the BENCHLAB_PORTAL secret is missing (Settings -> Secrets and variables -> Actions)"; exit 1 ;;
+          esac
+          if [ "$ACTION" = "upload" ]; then
+            [ "$GITHUB_REF" = "refs/heads/main" ] \
+              || { echo "::error::uploads run only from main (this run: $GITHUB_REF)"; exit 1; }
+            [ "$CONFIRM" = "UPLOAD" ] \
+              || { echo "::error::type UPLOAD in the confirm box to upload"; exit 1; }
+          fi
+
+      - name: Portal helpers
+        run: |
+          cat > "$RUNNER_TEMP/portal.sh" <<'EOF'
+          # fetch_portal FILE: the portal's JSON into FILE, never to the log
+          fetch_portal() {
+            curl -fsS --retry 3 --retry-delay 5 "$PORTAL" > "$1" \
+              || { echo "::error::could not read the portal (403: the BENCHLAB_PORTAL link is wrong or cut off)"; return 1; }
+            jq -e . "$1" > /dev/null || { echo "::error::the portal did not return JSON"; return 1; }
+          }
+          # status FILE: the status fields only (the build-log links are presigned: not printed)
+          status() {
+            jq -c '{submission_id, eligibility, conformance, conformance_at, failure_reason}' "$1"
+          }
+          EOF
+
+      - name: Current status
+        run: |
+          . "$RUNNER_TEMP/portal.sh"
+          fetch_portal "$RUNNER_TEMP/before.json"
+          echo "Before: $(status "$RUNNER_TEMP/before.json")"
+          echo "### Benchlab status before" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          status "$RUNNER_TEMP/before.json" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download the zip CI tested for this commit
+        if: inputs.action == 'upload'
+        run: |
+          RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main \
+                  --event push --commit "$SHA" --status success --limit 1 \
+                  --json databaseId -q '.[0].databaseId')
+          [ -n "$RUN" ] || { echo "::error::no successful CI run on main for $SHA; wait for CI or re-run it"; exit 1; }
+          echo "CI run $RUN passed for $SHA"
+          mkdir -p "$RUNNER_TEMP/artifact"
+          gh run download "$RUN" --repo "$GITHUB_REPOSITORY" -n "submission-$SHA" -D "$RUNNER_TEMP/artifact" \
+            || { echo "::error::artifact submission-$SHA not found (expired after 30 days?); re-run CI on main"; exit 1; }
+          ZIP="$RUNNER_TEMP/artifact/submission.zip"
+          for f in Dockerfile submission.json README.md model.py run.sh upload.sh; do
+            unzip -l "$ZIP" "$f" > /dev/null || { echo "::error::$f missing from the zip root"; exit 1; }
+          done
+          unzip -Z1 "$ZIP" > "$RUNNER_TEMP/files.txt"
+          if grep -qE '^(data|experiments|training|local_tests)/' "$RUNNER_TEMP/files.txt"; then
+            echo "::error::dev-only folder in the zip"; exit 1
+          fi
+          echo "submission.zip: $(wc -c < "$ZIP") bytes, sha256 $(sha256sum "$ZIP" | cut -d' ' -f1)"
+          echo "Forecast from CI's Docker run: $(jq -c '{t0, n: (.forecast_speed_kms | length)}' \
+                "$RUNNER_TEMP/artifact/src/local_tests/out/forecast.json" 2>/dev/null || echo 'not found')"
+
+      - name: Upload
+        if: inputs.action == 'upload'
+        run: |
+          . "$RUNNER_TEMP/portal.sh"
+          FORM="$RUNNER_TEMP/form.json"
+          fetch_portal "$FORM"
+          URL=$(jq -r '.upload.url // empty' "$FORM")
+          [ -n "$URL" ] || { echo "::error::the portal returned no upload form"; exit 1; }
+          echo "::add-mask::$URL"
+          ARGS=()
+          while IFS=$'\t' read -r k v; do
+            echo "::add-mask::$v"
+            ARGS+=(--form-string "$k=$v")
+          done < <(jq -r '.upload.fields | to_entries[] | [.key, .value] | @tsv' "$FORM")
+          [ "${#ARGS[@]}" -gt 0 ] || { echo "::error::the upload form had no fields"; exit 1; }
+          # 'file' must be the last form field: S3 ignores anything after it
+          CODE=$(curl -sS -o "$RUNNER_TEMP/resp.txt" -w '%{http_code}' "${ARGS[@]}" \
+                   -F "file=@$RUNNER_TEMP/artifact/submission.zip" "$URL") \
+            || { echo "::error::the upload request failed"; exit 1; }
+          rm -f "$FORM"
+          if [ "$CODE" != "204" ]; then
+            # S3 errors are XML; print only the error code and message
+            echo "::error::upload rejected, HTTP $CODE: $(grep -oE '<(Code|Message)>[^<]*' "$RUNNER_TEMP/resp.txt" | sed 's/<[A-Za-z]*>//' | paste -sd' ')"
+            exit 1
+          fi
+          echo "HTTP 204: submission.zip from $SHA reached Benchlab"
+          echo "### Uploaded submission.zip from \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for qualification
+        if: inputs.action == 'upload'
+        env:
+          WAIT: ${{ inputs.wait_minutes }}
+        run: |
+          . "$RUNNER_TEMP/portal.sh"
+          BEFORE=$(status "$RUNNER_TEMP/before.json")
+          LAST=""
+          END=$(( $(date +%s) + WAIT * 60 ))
+          while [ "$(date +%s)" -lt "$END" ]; do
+            sleep 60
+            fetch_portal "$RUNNER_TEMP/now.json" || continue
+            NOW=$(status "$RUNNER_TEMP/now.json")
+            [ "$NOW" != "$LAST" ] && echo "$(date -u +%H:%M:%S) $NOW"
+            LAST=$NOW
+            [ "$NOW" = "$BEFORE" ] && continue  # the portal hasn't picked up this upload yet
+            ELIG=$(jq -r '.eligibility // ""' "$RUNNER_TEMP/now.json")
+            FAIL=$(jq -r '.failure_reason // ""' "$RUNNER_TEMP/now.json")
+            if [ "$ELIG" = "ELIGIBLE" ]; then
+              echo "### ELIGIBLE" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"; echo "$NOW" >> "$GITHUB_STEP_SUMMARY"; echo '```' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ -n "$FAIL" ]; then
+              echo "::error::qualification failed: $FAIL (build logs: the portal link's 'logs')"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"; echo "$NOW" >> "$GITHUB_STEP_SUMMARY"; echo '```' >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
+          echo "::notice::no result after $WAIT min; run this workflow again with action=status"
+          echo "Last: ${LAST:-$BEFORE}" >> "$GITHUB_STEP_SUMMARY"
