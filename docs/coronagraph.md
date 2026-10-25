@@ -52,4 +52,4 @@
 
 ## Decision
 
-Not built. The connector, the history, the feature code and the study stay as the inputs for path (ii): a CME detector trained on the CDAW labels, with physical constraints (rotation-invariant sector patterns, monotone in brightening, a bounded 1–4 day arrival), whose output is a feature for the hybrid. That detector targets exactly the quiet-run loss found here. The coronagraph features are not part of the forecast: `lasco_hours` is 0 for the shipped regressors, so live runs don't fetch LASCO.
+Not built. The connector, the history, the feature code and the study stay as the inputs for path (ii): a CME detector trained on the CDAW labels, with physical constraints (rotation-invariant sector patterns, monotone in brightening, a bounded 1–4 day arrival), whose output is a feature for the hybrid. That detector targets exactly the quiet-run loss found here. *Done:* not built either ([cme_detector.md](cme_detector.md)). The coronagraph features are not part of the forecast: `lasco_hours` is 0 for the shipped regressors, so live runs don't fetch LASCO.

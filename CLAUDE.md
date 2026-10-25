@@ -44,6 +44,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.hybrid_forward_add    # adds a second window per regressor family to the hybrid on the yearly folds; resumable; none kept, see docs/hybrid_forward_add.md
 .venv/Scripts/python -m training.pull_lasco_images      # LASCO C2/C3 browse-image history (2016-10 -> now) reduced to sector cells -> src/data/features/lasco_cells.csv; resumable, ~6 h
 .venv/Scripts/python -m training.coronagraph_features  # LASCO brightening features in the hybrid and linear model on the yearly folds; resumable; not built, see docs/coronagraph.md
+.venv/Scripts/python -m training.cme_detector          # two-stage CME detector (models.cme_detector) on the LASCO history, outputs added to the hybrid on the yearly folds; resumable; not built, see docs/cme_detector.md
 .venv/Scripts/python -m training.gaussian_process_folds  # GP correction re-scored on the yearly folds; resumable; not built, see docs/gaussian_process.md
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
 .venv/Scripts/python -m training.final_baseline train    # fits the chosen config, writes src/assets/final_baseline.json
