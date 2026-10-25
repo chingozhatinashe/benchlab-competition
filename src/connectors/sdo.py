@@ -1,4 +1,4 @@
-"""SDO/AIA 193 Å full-disk browse images (JPEG), for coronal-hole maps.
+"""SDO full-disk browse images (JPEG): AIA 193 Å for coronal-hole maps, HMI magnetograms ("HMIB").
 
 Images are posted about 15 minutes after they are taken, roughly every 10 minutes,
 in one directory per UTC day:
@@ -22,7 +22,7 @@ BASE_URL = "https://sdo.gsfc.nasa.gov/assets/img/browse"
 SIZE = 512
 CHANNEL = "0193"
 MAX_AGE = pd.Timedelta(hours=24)
-NAME = re.compile(r"(\d{8}_\d{6})_(\d+)_(\d{4})\.jpg")
+NAME = re.compile(r"(\d{8}_\d{6})_(\d+)_([0-9A-Z]+)\.jpg")  # channel "0193", "HMIB", ...
 
 
 def day_listing_url(day, size=SIZE, channel=CHANNEL):
@@ -51,7 +51,7 @@ def candidates(times, cutoff, max_age, n):
 
 
 class SDOConnector:
-    """AIA 193 browse images by cut-off time. Never raises: failures give None."""
+    """SDO browse images (one channel) by cut-off time. Never raises: failures give None."""
 
     def __init__(self, size=SIZE, channel=CHANNEL, timeout=20, retries=2, workers=6,
                  budget=120.0):
@@ -111,7 +111,7 @@ class SDOConnector:
                         result[c] = (t, jpeg)
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
-        log(f"SDO AIA {self.channel}: {sum(v[0] is not None for v in result.values())}"
+        log(f"SDO {self.channel}: {sum(v[0] is not None for v in result.values())}"
             f"/{len(cutoffs)} images")
         return result
 

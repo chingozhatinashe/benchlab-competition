@@ -15,6 +15,8 @@ availability rules as feature_engineering.build:
     F10.7     days before the UTC day of t0
     LASCO     coronagraph signals of images taken by t0 - coronagraph.LATENCY
               (coronagraph_candidates; not in `candidates`, the linear selection pool)
+    HMI       magnetogram signals (magnetogram.SIGNALS) by the AIA rule: the image for
+              cut-off t0 - CH_LATENCY - lag, with the same fallbacks (not in `candidates`)
 
 A window statistic needs at least half its hours (or days), otherwise it is NaN.
 """
@@ -25,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from feature_engineering import build, coronagraph, solar_activity
+from feature_engineering import build, coronagraph, magnetogram, solar_activity
 
 HOUR = pd.Timedelta(hours=1)
 INSITU_SIGNALS = ("speed", "density", "pressure", "log_temperature", "log_t_ratio", "bt",
@@ -38,6 +40,7 @@ LAG_HOURS = {"lag27": 648, "lag13": 324}
 CH_FALLBACK_HOURS = (6, 12)  # older images to try when the one at the lag is missing
 CH_SIGNALS = ("ch_cm", "ch_east", "ch_disk")  # coronal-hole strips (coronal_holes.NAMES)
 CH_GRID = pd.Timedelta(hours=6)  # spacing of the pulled AIA cut-offs
+MG_SIGNALS = magnetogram.SIGNALS  # HMI magnetogram signals, read like the AIA strips
 LASCO_SIGNALS = coronagraph.SIGNALS  # c2share, c2max, ..., c3mean
 LASCO_HOURS = (6, 24, 72)
 
@@ -224,6 +227,10 @@ def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
             cols[spec.name] = _f107(inputs.f107, spec, t0s)
         elif spec.signal in LASCO_SIGNALS:
             cols[spec.name] = _coronagraph(getattr(inputs, "coronagraph", None), spec, t0s)
+        elif spec.signal in MG_SIGNALS:
+            mg = getattr(inputs, "magnetogram", None)
+            cols[spec.name] = (np.full(len(t0s), np.nan) if mg is None or mg.empty
+                               else _ch_at(mg[spec.signal], t0s, spec.hours, ch_fallback))
         else:
             raise ValueError(f"unknown signal {spec.signal!r}")
     table = pd.DataFrame(cols, index=t0s)
