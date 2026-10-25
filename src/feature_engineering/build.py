@@ -35,6 +35,7 @@ class Inputs:
     coronal_holes: pd.DataFrame | None = None  # coronal_holes.NAMES, indexed by cut-off
     flares: pd.DataFrame | None = None  # peak_time | peak_flux | flare_class
     f107: pd.Series | None = None  # daily, indexed by UTC day
+    coronagraph: pd.DataFrame | None = None  # coronagraph.SIGNALS, indexed by image time
 
 
 def ch_cutoffs(t0):

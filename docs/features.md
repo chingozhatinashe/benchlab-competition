@@ -43,6 +43,7 @@ Every live source is declared in `src/submission.json`. Probed on 2026-10-21.
 - **WSA-Enlil** (`json/enlil_time_series.json`): available live, but there's no archive, so it can't be trained on.
 - **NASA DONKI CME catalogue:** unreachable (kauai.ccmc times out, api.nasa.gov returns 503).
 - **SOHO/LASCO CDAW catalogue:** published months late. It is kept as an analysis label only (`training.pull_lasco_cme`).
+- **SOHO/LASCO C2/C3 images** (`connectors.lasco`, `feature_engineering.coronagraph`): the same browse JPEGs live and in history, posted about 15 min after capture. Studied as direct regressors and not built ([coronagraph.md](coronagraph.md)); live runs don't fetch them while no shipped regressor uses them.
 - **HEK SPoCA coronal holes:** archived 13 h to 13 days after the observation, and old archive dates don't record when a detection was first published. AIA images are fresher and the same in history and live.
 - **Sunspot number:** SWPC publishes the SESC count, while OMNI history uses SILSO, a different scale.
 

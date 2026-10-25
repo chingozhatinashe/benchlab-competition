@@ -17,9 +17,10 @@ import pandas as pd
 
 from connectors.ace_archive import ACEDailyArchive
 from connectors.base import bytes_downloaded, to_utc
+from connectors.lasco import LASCOConnector
 from connectors.sdo import SDOConnector
 from connectors.swpc import SWPCF107Connector, SWPCFlareConnector, SWPCRealtime
-from feature_engineering import build, coronal_holes, insitu
+from feature_engineering import build, coronagraph, coronal_holes, insitu
 
 BUDGET_SECONDS = 300.0
 
@@ -41,6 +42,7 @@ def default_sources(budget=BUDGET_SECONDS):
         "swepam_rt": SWPCRealtime("swepam"),
         "mag_rt": SWPCRealtime("mag"),
         "sdo": SDOConnector(budget=min(120.0, archive_budget)),
+        "lasco": LASCOConnector(budget=min(120.0, archive_budget)),
         "flares": SWPCFlareConnector(),
         "f107": SWPCF107Connector(),
     }
@@ -50,11 +52,13 @@ def _before(df, cutoff):
     return None if df is None else df[df.index < cutoff]
 
 
-def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None):
+def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None, lasco_hours=0):
     """(build.Inputs, report) for a forecast at t0, using data available by t0.
 
     `ch_lag_hours` lists the AIA image lags (hours before t0 - CH_LATENCY) to fetch;
-    by default the daily lags of the fixed regressors (build.ch_cutoffs).
+    by default the daily lags of the fixed regressors (build.ch_cutoffs). `lasco_hours`
+    > 0 also fetches the LASCO images taken in the last that many hours (by
+    t0 - coronagraph.LATENCY); 0 skips LASCO.
     """
     t0 = to_utc(t0)
     if ch_lag_hours is None:
@@ -75,6 +79,10 @@ def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None):
         "flares": lambda: sources["flares"].flares(),
         "f107": lambda: sources["f107"].daily(),
     }
+    if lasco_hours:
+        lasco_end = t0 - coronagraph.LATENCY
+        jobs["lasco"] = lambda: sources["lasco"].cells(
+            lasco_end - pd.Timedelta(hours=lasco_hours), lasco_end)
     pool = ThreadPoolExecutor(max_workers=len(jobs))
     futures = {pool.submit(fn): name for name, fn in jobs.items()}
     done, pending = wait(futures, timeout=budget)
@@ -103,6 +111,7 @@ def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None):
         coronal_holes=build.coronal_hole_frame(got["sdo"]) if "sdo" in got else None,
         flares=got.get("flares"),
         f107=got.get("f107"),
+        coronagraph=coronagraph.signal_frame(got["lasco"]) if "lasco" in got else None,
     )
     report["rows"] = {
         "plasma_minutes": 0 if plasma is None else int(plasma["speed"].notna().sum()),
@@ -114,6 +123,9 @@ def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None):
         else int(inputs.coronal_holes["ch_cm"].notna().sum()),
         "flares": None if inputs.flares is None else len(inputs.flares),
         "f107_days": None if inputs.f107 is None else len(inputs.f107),
+        "lasco_images": None if inputs.coronagraph is None
+        else {i: int(inputs.coronagraph[f"{i}max"].notna().sum())
+              for i in coronagraph.INSTRUMENTS},
     }
     report["seconds"] = round(time.monotonic() - started, 1)
     report["megabytes"] = round((bytes_downloaded() - bytes_before) / 1e6, 1)

@@ -13,6 +13,8 @@ availability rules as feature_engineering.build:
               latest image at or before it, at most CH_GRID older.
     flares    peaks by t0 - FLARE_LATENCY
     F10.7     days before the UTC day of t0
+    LASCO     coronagraph signals of images taken by t0 - coronagraph.LATENCY
+              (coronagraph_candidates; not in `candidates`, the linear selection pool)
 
 A window statistic needs at least half its hours (or days), otherwise it is NaN.
 """
@@ -23,7 +25,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from feature_engineering import build, solar_activity
+from feature_engineering import build, coronagraph, solar_activity
 
 HOUR = pd.Timedelta(hours=1)
 INSITU_SIGNALS = ("speed", "density", "pressure", "log_temperature", "log_t_ratio", "bt",
@@ -36,6 +38,8 @@ LAG_HOURS = {"lag27": 648, "lag13": 324}
 CH_FALLBACK_HOURS = (6, 12)  # older images to try when the one at the lag is missing
 CH_SIGNALS = ("ch_cm", "ch_east", "ch_disk")  # coronal-hole strips (coronal_holes.NAMES)
 CH_GRID = pd.Timedelta(hours=6)  # spacing of the pulled AIA cut-offs
+LASCO_SIGNALS = coronagraph.SIGNALS  # c2share, c2max, ..., c3mean
+LASCO_HOURS = (6, 24, 72)
 
 
 @dataclass(frozen=True)
@@ -72,6 +76,19 @@ def candidates():
     specs += [WindowSpec("m_flares", "count", h) for h in FLARE_HOURS]
     specs += [WindowSpec("f107", "mean", 24 * d) for d in F107_DAYS]
     return specs
+
+
+def coronagraph_candidates():
+    """The windowed coronagraph signals: the largest value in the last 6, 24 and 72 h."""
+    return [WindowSpec(s, "max", h) for s in LASCO_SIGNALS for h in LASCO_HOURS]
+
+
+def lasco_hours(specs):
+    """Hours of LASCO images before t0 the specs need (background included), or 0."""
+    hours = [s.hours for s in specs if s.signal in LASCO_SIGNALS]
+    if not hours:
+        return 0
+    return max(hours) + math.ceil(coronagraph.BACKGROUND / HOUR) + 1
 
 
 def ch_lags(specs, fallback=CH_FALLBACK_HOURS):
@@ -118,6 +135,28 @@ def _flares(flares, spec, t0s):
             out[i] = np.log10(max(window.max(initial=0.0), solar_activity.FLUX_FLOOR))
         else:
             out[i] = float((window >= solar_activity.M_CLASS).sum())
+    return out
+
+
+def _coronagraph(frame, spec, t0s):
+    """The largest value of a coronagraph signal over images taken in
+    (t0 - hours, t0 - LATENCY]; NaN with fewer than half the expected images."""
+    out = np.full(len(t0s), np.nan)
+    if frame is None or spec.signal not in frame:
+        return out
+    col = frame[spec.signal].dropna()
+    if col.empty:
+        return out
+    col = col[~col.index.duplicated(keep="last")].sort_index()
+    if spec.stat != "max":
+        raise ValueError(f"unknown coronagraph statistic {spec.stat!r}")
+    need = max(1, math.ceil(spec.hours / coronagraph.CADENCE_HOURS[spec.signal[:2]] / 2))
+    values = col.to_numpy(dtype=float)
+    hi = col.index.searchsorted(t0s - coronagraph.LATENCY, side="right")
+    lo = col.index.searchsorted(t0s - spec.hours * HOUR, side="right")
+    for i in range(len(t0s)):
+        if hi[i] - lo[i] >= need:
+            out[i] = values[lo[i] : hi[i]].max()
     return out
 
 
@@ -183,6 +222,8 @@ def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
             cols[spec.name] = _flares(inputs.flares, spec, t0s)
         elif spec.signal == "f107":
             cols[spec.name] = _f107(inputs.f107, spec, t0s)
+        elif spec.signal in LASCO_SIGNALS:
+            cols[spec.name] = _coronagraph(getattr(inputs, "coronagraph", None), spec, t0s)
         else:
             raise ValueError(f"unknown signal {spec.signal!r}")
     table = pd.DataFrame(cols, index=t0s)

@@ -55,6 +55,8 @@ Scored on the yearly folds and documented, but not built:
 - [Recency weights](recency_weights.md): sample weights halving every 1–8 years into the past. Worse at every half-life (+0.3% to +5.4%): the models gain more from the older years than they lose to drift.
 - [Coronal-hole latitude grid](coronal_grid.md): latitude bands, B0 and darkness of the central-meridian strip. The best addition gains 0.3%; the low-latitude band helps at solar maximum but loses up to 21% at minimum.
 - [Hybrid forward-add](hybrid_forward_add.md): a second window of each regressor family added to the hybrid. Best −0.27% (3 of 6 folds); none kept, so the hybrid's pruning didn't drop signal.
+- [Coronagraph features](coronagraph.md): LASCO C2/C3 brightening per position-angle sector, windowed and fed straight into the hybrid and the linear model. Best −0.36% (3 of 6 folds): CME runs gain about 3%, the other runs lose about 1%.
+- [CME detector](cme_detector.md): a two-stage monotone detector (CME in the image, then CME at L1 in the next 0–72 h) whose outputs feed the hybrid. Best −0.21% (3 of 6 folds): the image stage works (AUC about 0.80), but the arrival stage is near chance (AUC 0.49–0.64).
 
 ## Rules
 

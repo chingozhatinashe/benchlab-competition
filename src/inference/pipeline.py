@@ -149,7 +149,8 @@ def regressor_features(names, t0, inputs=None):
 
     specs = [windows.WindowSpec.parse(n) for n in names]
     if inputs is None:
-        inputs, _ = fetch_inputs(t0, ch_lag_hours=windows.ch_lags(specs))
+        inputs, _ = fetch_inputs(t0, ch_lag_hours=windows.ch_lags(specs),
+                                 lasco_hours=windows.lasco_hours(specs))
     row = windows.window_table(inputs, [t0], specs).iloc[0]
     return {k: float(v) for k, v in row.items()}
 

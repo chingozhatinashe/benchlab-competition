@@ -118,3 +118,6 @@ they aren't comparable with our eval-year RMSE (about 100 km/s, solar maximum, C
    - B0 and a latitude grid. *Done 2026-10-24:* not built; best +0.3%, and the low-latitude band reverses between solar maximum and minimum ([coronal_grid.md](coronal_grid.md));
    - the hybrid forward-add test. *Done 2026-10-24:* none kept (best −0.27%, 3 of 6 folds); every family is already in ([hybrid_forward_add.md](hybrid_forward_add.md)).
 4. **Larger builds, if time allows:** the PFSS magnetic-field features, or a coronagraph CME feature.
+   - *Coronagraph path (i) done 2026-10-25:* not built; LASCO brightening summaries fed straight into the models gain 0.36% at best (3 of 6 folds). CME runs gain about 3% while the rest lose about 1%, which is the case for the path (ii) CME detector ([coronagraph.md](coronagraph.md));
+   - *Coronagraph path (ii) done 2026-10-25:* not built; a two-stage monotone CME detector gains 0.21% at best (3 of 6 folds). It finds CMEs in the images (AUC about 0.80) but can't tell which reach Earth (AUC 0.49–0.64), so the coronagraph route closes without the drag-based model ([cme_detector.md](cme_detector.md));
+   - *magnetograms:* blocked; GONG and JSOC don't answer from the dev machine.
