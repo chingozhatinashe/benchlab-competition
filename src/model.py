@@ -12,8 +12,8 @@ from inference import FORECAST_HOURS, run_selected_forecast
 
 
 def predict(t0):
-    # the XGBoost hybrid (falls back to the linear model, then the final baseline);
-    # SWP_MODEL=linear or SWP_MODEL=baseline selects one of those instead
+    # the linear model (falls back to the final baseline, then persistence);
+    # SWP_MODEL=hybrid or SWP_MODEL=baseline selects one of those instead
     return run_selected_forecast(t0)
 
 

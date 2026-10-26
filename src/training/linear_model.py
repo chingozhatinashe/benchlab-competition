@@ -340,7 +340,8 @@ def report_time(timer, elapsed, peak, runs, steps):
 def load_config(path=CONFIG_PATH):
     d = json.loads(Path(path).read_text(encoding="utf-8"))
     return Config(features=tuple(d["features"]), family=d["family"], boxcox=float(d["boxcox"]),
-                  relative=bool(d["relative"]), weights=d["weights"], ridge=float(d["ridge"]),
+                  relative=bool(d["relative"]), weights=d["weights"],
+                  blend=float(d.get("blend", 0.5)), ridge=float(d["ridge"]),
                   lags_days=tuple(float(x) for x in d["lags_days"].split("/")),
                   half_width=int(d["half_width"]))
 

@@ -1,20 +1,20 @@
-# Solar wind speed forecast — linear + gradient-boosted hybrid (team TINASHE)
+# Solar wind speed forecast — linear model with lead-aligned coronal holes (team TINASHE)
 
 A 72-hour hourly forecast of the solar wind speed at L1 (ACE SWEPAM), from the speed
-history and 40 regressors: solar-wind plasma and field at L1, energetic particles,
-coronal holes in SDO/AIA images, flares and F10.7.
+history and four regressors: the interplanetary field, coronal holes in SDO/AIA images,
+X-ray flares and density at L1.
 
 ## The submitted model
 
-The forecast is a linear model with gradient-boosted trees on top
-(`models/xgboost_model.py`, base `models/linear_model.py`). Both were fitted on
-2016-10 → 2025-10, and all choices were made on six yearly walk-forward folds. On those
-folds its per-run mean TIMSE is 0.42 of persistence's, against 0.48 for the speed-only
-reference baseline. Choices and scores are in `docs/` in the repository
-(`xgboost_model.md`, `linear_model.md`, `lead_aligned_ch.md`, `evaluation.md`).
+The forecast is a per-lead linear model (`models/linear_model.py`,
+`assets/linear_model.json`), fitted on 2016-10 → 2025-10. Every choice was made on six
+yearly walk-forward folds with the organisers' official metric (per lead, the geometric
+mean of RMSE and a percentile TIMSE, averaged over the 72 leads).
+- **Folds:** its score is 0.79 of persistence's, against 0.87 for the speed-only reference baseline below.
+- **Held-out year** (2025-10 → 2026-10, used once for reporting): 0.79 of persistence's.
+- **Details:** choices and scores are in `docs/` in the repository (`official_score.md`, `official_retune.md`, `linear_model.md`, `lead_aligned_ch.md`).
 
-**1. Linear anchor** (`models/linear_model.py`, `assets/linear_model.json`). For each lead
-k = 1…72 h, a ridge regression of v(t0+k) − last on:
+**The regression.** For each lead k = 1…72 h, a ridge regression of v(t0+k) − last on:
 - the last observed hourly speed;
 - the mean speed ±3 h around t0 + k − 27 d and t0 + k − 13.5 d (recurrence);
 - four regressors:
@@ -23,24 +23,17 @@ k = 1…72 h, a ridge regression of v(t0+k) − last on:
   - the 72 h peak X-ray flare flux;
   - the 24 h mean density.
 
-Rows are weighted by each run's TIMSE weights, so the loss is the competition metric.
-Each regressor is clipped to its training [0.5%, 99.5%] range.
-
-**2. Trees** (`assets/xgboost_model.json`). 100 trees of depth 4 (every leaf supported by
-at least 43 training days) correct the linear forecast. Their inputs are the lead, the
-speed terms, the linear forecast and 30 regressors: solar-wind plasma and field means,
-extremes and slopes, ACE EPAM protons, 27-day recurrence of density, pressure and
-polarity, coronal-hole strips at several lags, flares and F10.7. They are evaluated in
-numpy, so the image has no xgboost.
+**Training loss.** The loss weights match the official metric. Per lead, they are 75% plain squared error and 25% the official percentile-TIMSE weights over all training runs at that lead. The 25% share was chosen on the folds: more tail weight biases the forecast upward and costs more RMSE than it saves in the tail. Each regressor is clipped to its training [0.5%, 99.5%] range.
 
 **Robustness.** A run never fails for lack of data.
-- **Missing values:** a missing regressor follows each tree's learned default branch, or takes its training median in the linear anchor. A missing coronal-hole image falls back to one 6 h, then 12 h older, then to the nearest of the other images within 24 h. If the strip is still missing, a linear submodel fitted without it is used.
-- **Failures:** if the trees fail, the linear model forecasts; if it fails, the reference baseline below does; then persistence; then the training mean.
-- **Other modes:** `SWP_MODEL=linear` or `SWP_MODEL=baseline` submits one of the fallbacks directly.
+- **Missing regressors:** a missing regressor takes its training median.
+- **Missing coronal-hole image:** it falls back to one 6 h, then 12 h older, then to the nearest of the other images within 24 h. If the strip is still missing, a submodel fitted without it is used.
+- **Failures:** if the linear model fails, the reference baseline below forecasts; then persistence; then the training mean.
+- **Other modes:** `SWP_MODEL=baseline` submits the reference baseline directly. `SWP_MODEL=hybrid` runs an earlier linear + gradient-boosted-trees hybrid (`models/xgboost_model.py`, `assets/xgboost_model.json`, evaluated in numpy). It is not used by default: on the official metric it is no better.
 
 **Runtime.** numpy, pandas and Pillow only.
-- **Inputs:** all sources are fetched in parallel within a 300 s budget: about 3 months of ACE speed, 30 days of ACE plasma, field and EPAM, about 15 AIA images, flares and F10.7, roughly 20 MB.
-- **Timing:** a run at 2026-10-24 00Z took 14 s, with all 40 regressors observed.
+- **Inputs:** all sources are fetched in parallel within a 300 s budget: about 3 months of ACE speed, 30 days of ACE plasma and field, about 15 AIA images, and flares, roughly 17 MB.
+- **Timing:** a run at 2026-10-26 06Z took 21 s, with every regressor observed.
 
 ## Reference baseline (fallback)
 
@@ -50,7 +43,8 @@ numpy, so the image has no xgboost.
     F_k = w_k·last + (1 − w_k)·R_k
 
 - **Terms:** `last` is the last observed hourly speed and μ the training mean. `r_j(k)` is the mean speed within ±3 h of `t0 + k − lag_j` (27 d and 13.5 d).
-- **Coefficients:** frozen coefficients from the training years are blended with coefficients refitted at every run on the last 60 days. The loss is the per-run TIMSE.
+- **Coefficients:** frozen coefficients from the training years are blended with coefficients refitted at every run on the last 60 days.
+- **Loss:** squared error weighted by each run's TIMSE weights raised to the power 0.5, chosen on the folds with the official metric.
 - **Persistence blend:** w_k is fitted out of sample.
 
 Details are in `docs/final_baseline.md`.
@@ -104,9 +98,9 @@ submission/
 ├── model.py             # CLI and output format; calls inference.run_selected_forecast
 ├── connectors/          # data clients (ACE archive, SWPC, SDO/AIA, CDAWeb)
 ├── feature_engineering/ # hourly speeds, recurrence features, regressors, imputation
-├── models/              # the hybrid (xgboost_model.py), its linear anchor, the baseline
+├── models/              # the linear model (submitted), the baseline, the hybrid (optional)
 ├── inference/           # fetch -> features -> model, with fallbacks
-├── assets/              # fitted weights (hybrid, linear model, baseline), regressor medians
+├── assets/              # fitted weights (linear model, baseline, hybrid), regressor medians
 └── local_tests/         # run test_local.sh from here before you submit
     ├── test_local.sh
     └── mock_platform.py

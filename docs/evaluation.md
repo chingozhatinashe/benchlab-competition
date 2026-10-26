@@ -1,5 +1,7 @@
 # Local evaluation: data, split and rules
 
+> **Official metric (2026-10-25).** The organisers released the competition metric: per-lead RMSE and percentile TIMSE combined, against SWPC's hourly ACE file. It is implemented in `training.competition_score`, with the shipped models re-scored in [official_score.md](official_score.md). On it, the hybrid (S 94.0 km/s) no longer beats the linear model (93.7), and all models carried a +55 km/s bias. Re-tuning the loss for the official metric ([official_retune.md](official_retune.md)) brought the linear model to 88.5 km/s (0.79 of persistence), and **since 2026-10-26 the re-tuned linear model is the submitted model**. The TIMSE scores below are the old metric, kept for comparison.
+
 Every model in development is scored the same way: with **TIMSE** (see [timse.md](timse.md)), on a held-out year of the same real-time L1 speed series the live leaderboard uses.
 
 **The submitted model** (since 2026-10-24) is the XGBoost hybrid on the lead-aligned linear model ([xgboost_model.md](xgboost_model.md), [linear_model.md](linear_model.md)). It scores 0.4190 on the six yearly folds (per-run mean TIMSE / persistence), against 0.4256 for the linear model and 0.4843 for the final baseline, which is now the last model fallback. New models are compared against the hybrid.

@@ -123,6 +123,54 @@ class TailWeights:
         return np.where(observed, np.maximum(g, TAIL_FLOOR) ** power, 0.0)
 
 
+LEAD_INTERVALS = 100  # percentile intervals of the official TIMSE (organisers' spec, 6.1)
+
+
+def lead_timse_weights(y):
+    """Per-hour weights that turn squared errors into each lead's official percentile TIMSE.
+
+    The organisers' metric (training.competition_score) scores each lead over all runs:
+    TIMSE = sum_k (q_{k+1} - q_k) * MSE{v >= q_k} / (v_max - v_min), with q_k the 101
+    linear-interpolation quantiles of that lead's observations. That equals
+    sum_i w_i (v_i - f_i)^2 with w_i = sum over q_k <= v_i of (q_{k+1} - q_k) / (N_k * span),
+    so these weights depend only on the observations, like run_timse_weights, but pool the
+    runs at each lead instead of scoring each run on its own. `y` is (runs x leads);
+    missing hours get 0, and a lead with fewer than two distinct speeds gets 0.
+    """
+    y = np.asarray(y, dtype=float)
+    w = np.zeros_like(y)
+    for j in range(y.shape[1]):
+        ok = np.flatnonzero(np.isfinite(y[:, j]))
+        if len(ok) < 2:
+            continue
+        order = ok[np.argsort(y[ok, j], kind="stable")]
+        v = y[order, j]
+        span = v[-1] - v[0]
+        if span <= 0:
+            continue
+        k = np.arange(LEAD_INTERVALS + 1)
+        lo, rem = np.divmod(k * (len(v) - 1), LEAD_INTERVALS)  # exact positions
+        q = v[lo] + (rem / LEAD_INTERVALS) * (v[np.minimum(lo + 1, len(v) - 1)] - v[lo])
+        first = np.searchsorted(v, q[:-1], side="left")
+        step = np.zeros(len(v) + 1)
+        np.add.at(step, first, np.diff(q) / ((len(v) - first) * span))
+        w[order, j] = np.cumsum(step)[:-1]
+    return w
+
+
+def official_weights(y, blend):
+    """Loss weights for the official per-lead score: (1 - blend) + blend * t on observed
+    hours, t = lead_timse_weights scaled to mean 1 per lead. The official S_tau is
+    sqrt(RMSE_tau * sqrt(TIMSE_tau)), so its loss mixes plain squared error (blend 0) and
+    the percentile TIMSE (blend 1); the mix is a setting chosen on the folds."""
+    y = np.asarray(y, dtype=float)
+    observed = np.isfinite(y)
+    t = lead_timse_weights(y)
+    scale = np.where(observed, t, 0.0).sum(axis=0) / np.maximum(observed.sum(axis=0), 1)
+    t = t / np.where(scale > 0, scale, 1.0)
+    return np.where(observed, (1.0 - blend) + blend * t, 0.0)
+
+
 def run_timse_weights(y):
     """Per-hour weights that turn squared errors into each run's own TIMSE.
 

@@ -1,5 +1,7 @@
 # Reference baseline (`models.final_baseline`)
 
+> **2026-10-26:** `tail_power` is 0.5 (was 1), chosen on the yearly folds with the official metric ([official_retune.md](official_retune.md)). It is the submitted linear model's fallback.
+
 The model that ships in `src/` and the reference every later model is compared
 against. It uses the hourly real-time ACE speed only.
 

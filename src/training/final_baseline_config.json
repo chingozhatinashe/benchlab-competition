@@ -6,7 +6,7 @@
   "half_width": 3,
   "window_days": 60.0,
   "rolling_weight": 0.25,
-  "tail_power": 1.0,
+  "tail_power": 0.5,
   "loss": "run_timse",
   "blend_persistence": true,
   "stack_days": 365.0,
@@ -30,6 +30,23 @@
       "run_timse_median_vs_persistence": 1.1895,
       "run_timse_p90_vs_persistence": 0.3401,
       "rmse_vs_persistence": 1.0427
+    },
+    "official_retune": {
+      "date": "2026-10-26",
+      "objective": "official S_final (training.competition_score) on the yearly folds",
+      "changed": {
+        "tail_power": [
+          1.0,
+          0.5
+        ]
+      },
+      "score": {
+        "s_final_mean_km_s": 96.21,
+        "vs_previous": -0.0366,
+        "folds_won": 6,
+        "vs_persistence": 0.8662
+      },
+      "study": "training.official_retune, docs/official_retune.md"
     }
   }
 }
