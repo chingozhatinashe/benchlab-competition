@@ -110,7 +110,7 @@ bash package_submission.sh                              # builds submission.zip 
   - It needs the repository secret `BENCHLAB_PORTAL`, the portal link from the Benchlab email.
   - The repo is public, so the workflow never prints the portal link, the presigned upload form or the presigned build-log links.
 - **Staging** (`docs/staging.md`, `.github/workflows/staging.yml`): every commit tagged `upload_candidate/<name>` (tagged by hand) is built and run every 6 h like Benchlab's live run. That means the submitted model and the `baseline` fallback, in fresh containers with the declared CPU/memory, a 900 s limit, a mock upload, and a DNS check against `declared_domains`. A daily job scores the candidates with the official metric (failed runs count as persistence) and flags missed cycles.
-  - **Output:** records, events, truth and the report (README) live on the orphan branch `staging-records`. Alerts open `staging-alert` issues.
+  - **Output:** records, events, truth and the report (README) live on the orphan branch `staging-records`. Alerts are error annotations plus a job-summary section, and they fail the run so GitHub emails you (issues are off on this repo).
   - **Scope:** staging only scores and records. It never picks or uploads; that stays with the user and the upload workflow.
   - **Shared step:** `.github/actions/base-image` (the base-image cache) is shared by `ci.yml` and `staging.yml`.
 - **`STRICT_TEAM_INFO`:** setting it to `"1"` in `ci.yml` makes template team details a CI failure.
