@@ -47,12 +47,13 @@ from feature_engineering.recurrence import (
     targets,
     window_means,
 )
-from models.final_baseline import TAIL_FLOOR, VALID_RANGE, run_timse_weights
+from models.final_baseline import TAIL_FLOOR, VALID_RANGE, official_weights, run_timse_weights
 from models.linear_model import LinearModel, _despiked
 
 ASSET = Path(__file__).resolve().parents[1] / "assets" / "xgboost_model.json"
 FORMAT_VERSION = 1
 BASES = ("persistence", "linear")
+WEIGHTS = ("run_timse", "official")
 
 
 @dataclass(frozen=True)
@@ -72,10 +73,14 @@ class Config:
     leads_per_run: int = 12  # training rows per run: a random subset of the 72 leads
     seed: int = 0
     base: str = "persistence"  # what the trees correct: persistence or the linear model
+    weights: str = "run_timse"  # row weights: each run's TIMSE, or the official per-lead score
+    blend: float = 0.5  # weights="official": share of the percentile-TIMSE weights (rest uniform)
 
     def __post_init__(self):
         if self.base not in BASES:
             raise ValueError(f"base must be one of {BASES}")
+        if self.weights not in WEIGHTS:
+            raise ValueError(f"weights must be one of {WEIGHTS}")
         for lag in self.lag_hours:
             if lag - HORIZON - self.half_width < 1 + (SPIKE_SIDE if self.despike else 0):
                 raise ValueError(f"lag {lag} h is too short: its window would reach t0")
@@ -289,10 +294,13 @@ class XGBoostModel:
         hist_end = len(values) if end is None else end
         clean = self._clean(values[:hist_end])
         y = targets(clean, positions, end)
-        q = run_timse_weights(y)
         observed = np.isfinite(y)
-        scale = q[observed].mean() if observed.any() else 1.0
-        q = np.where(observed, np.maximum(q / max(scale, 1e-12), TAIL_FLOOR), 0.0)
+        if cfg.weights == "official":
+            q = official_weights(y, cfg.blend)
+        else:
+            q = run_timse_weights(y)
+            scale = q[observed].mean() if observed.any() else 1.0
+            q = np.where(observed, np.maximum(q / max(scale, 1e-12), TAIL_FLOOR), 0.0)
         if run_weights is not None:
             q = q * np.asarray(run_weights, dtype=float)[:, None]
         rng = np.random.default_rng(cfg.seed) if rng is None else rng

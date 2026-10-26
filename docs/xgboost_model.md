@@ -1,5 +1,7 @@
 # XGBoost model (linear + trees hybrid)
 
+> **Not the default since 2026-10-26.** On the official metric it ties with the linear model, both before and after re-tuning ([official_score.md](official_score.md), [official_retune.md](official_retune.md)). It stays available as `SWP_MODEL=hybrid`.
+
 **What it is.** Gradient-boosted trees that correct the linear model's forecast
 (`docs/linear_model.md`):
 - runtime model: `src/models/xgboost_model.py`;

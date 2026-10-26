@@ -1,5 +1,7 @@
 # TIMSE: Threshold-Integrated Mean Squared Error
 
+> **Superseded (2026-10-25).** The organisers' released spec defines the ranking metric differently: per lead, 100 percentile thresholds, normalised by the speed range, combined with RMSE, and averaged over the leads. See [official_score.md](official_score.md) and `training.competition_score`. This page describes the briefing's version, which the models were tuned on.
+
 TIMSE is the official ranking metric for the Benchlab Solar Wind Prediction Tournament. Lower is better.
 The implementation is `timse()` in `src/training/metrics.py`.
 

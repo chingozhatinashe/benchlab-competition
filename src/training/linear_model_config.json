@@ -2,7 +2,8 @@
   "family": "gaussian",
   "boxcox": 1.0,
   "relative": true,
-  "weights": "run_timse",
+  "weights": "official",
+  "blend": 0.25,
   "ridge": 0.1,
   "lags_days": "27/13.5",
   "half_width": 3,
@@ -100,5 +101,26 @@
     ],
     "score": 0.43872
   },
-  "lead_aligned": "2026-10-24: ch_cm_at_24h (selected) replaced by ch_cm_lead_72h, the strip of the image ~72 h before each forecast hour; chosen on the yearly folds by training.lead_aligned_ch (docs/lead_aligned_ch.md)"
+  "lead_aligned": "2026-10-24: ch_cm_at_24h (selected) replaced by ch_cm_lead_72h, the strip of the image ~72 h before each forecast hour; chosen on the yearly folds by training.lead_aligned_ch (docs/lead_aligned_ch.md)",
+  "retune": {
+    "date": "2026-10-26",
+    "objective": "official S_final (training.competition_score) on the yearly folds",
+    "changed": {
+      "weights": [
+        "run_timse",
+        "official"
+      ],
+      "blend": [
+        null,
+        0.25
+      ]
+    },
+    "score": {
+      "s_final_mean_km_s": 88.49,
+      "vs_previous": -0.0587,
+      "folds_won": 6,
+      "vs_persistence": 0.7926
+    },
+    "study": "training.official_retune, docs/official_retune.md"
+  }
 }

@@ -190,39 +190,52 @@ def test_broken_xgboost_falls_back_to_the_linear_model(monkeypatch):
     assert out == [1.0] * HORIZON and calls[0]["history"] is history
 
 
-def test_submission_default_is_the_hybrid(monkeypatch):
+def test_submission_default_is_the_linear_model(monkeypatch):
     from inference import pipeline
 
     calls = []
     monkeypatch.setattr(pipeline, "run_forecast", lambda t0: calls.append("baseline") or [])
     monkeypatch.setattr(pipeline, "run_linear_forecast", lambda t0: calls.append("linear") or [])
     monkeypatch.setattr(pipeline, "run_xgboost_forecast", lambda t0: calls.append("xgb") or [])
-    for choice in (None, "xgboost", "linear", "baseline"):
+    for choice in (None, "linear", "hybrid", "xgboost", "baseline", "unknown"):
         if choice is None:
             monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
         else:
             monkeypatch.setenv(pipeline.MODEL_ENV, choice)
         pipeline.run_selected_forecast(T0)
-    assert calls == ["xgb", "xgb", "linear", "baseline"]
+    assert calls == ["linear", "linear", "xgb", "xgb", "baseline", "linear"]
 
 
-def test_unexpected_failure_in_the_hybrid_path_ends_in_the_baseline(monkeypatch):
+def test_unexpected_failure_in_a_model_path_ends_in_the_baseline(monkeypatch):
     from inference import pipeline
 
     def boom(t0):
         raise RuntimeError("boom")
 
-    monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
     monkeypatch.setattr(pipeline, "run_xgboost_forecast", boom)
+    monkeypatch.setattr(pipeline, "run_linear_forecast", boom)
     monkeypatch.setattr(pipeline, "run_forecast", lambda t0: [2.0] * HORIZON)
+    monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
+    assert pipeline.run_selected_forecast(T0) == [2.0] * HORIZON
+    monkeypatch.setenv(pipeline.MODEL_ENV, "hybrid")
     assert pipeline.run_selected_forecast(T0) == [2.0] * HORIZON
 
 
-def test_submitted_forecast_offline_runs_the_hybrid(monkeypatch, capsys):
+def test_submitted_forecast_offline_runs_the_linear_model(monkeypatch, capsys):
     from inference import pipeline
 
     monkeypatch.setenv(pipeline.OFFLINE_ENV, "1")
     monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
+    out = pipeline.run_selected_forecast(T0)
+    assert len(out) == HORIZON and np.isfinite(out).all()
+    assert "linear model done" in capsys.readouterr().err
+
+
+def test_hybrid_still_runs_offline_when_selected(monkeypatch, capsys):
+    from inference import pipeline
+
+    monkeypatch.setenv(pipeline.OFFLINE_ENV, "1")
+    monkeypatch.setenv(pipeline.MODEL_ENV, "hybrid")
     out = pipeline.run_selected_forecast(T0)
     assert len(out) == HORIZON and np.isfinite(out).all()
 

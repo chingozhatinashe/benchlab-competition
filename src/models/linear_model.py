@@ -75,13 +75,19 @@ from feature_engineering.recurrence import (
     targets,
     window_means,
 )
-from models.final_baseline import TAIL_FLOOR, VALID_RANGE, run_timse_weights, solve
+from models.final_baseline import (
+    TAIL_FLOOR,
+    VALID_RANGE,
+    official_weights,
+    run_timse_weights,
+    solve,
+)
 
 ASSET = Path(__file__).resolve().parents[1] / "assets" / "linear_model.json"
 FORMAT_VERSION = 2
 READABLE_FORMATS = (1, 2)  # 1: no submodel, no despike
 FAMILIES = ("gaussian", "gamma", "inverse_gaussian")
-WEIGHTS = ("run_timse", "uniform")
+WEIGHTS = ("run_timse", "uniform", "official")
 SMEAR_QUANTILES = np.linspace(0.025, 0.975, 39)
 ETA_BOUNDS = (np.log(50.0), np.log(5000.0))  # keeps the log-link IRLS away from overflow
 LEAD_GRID = 6  # hours between the lagged columns of a lead-aligned regressor (image grid)
@@ -111,6 +117,7 @@ class Config:
     boxcox: float = 1.0  # Box-Cox lambda of the Gaussian target; 1 = untransformed
     relative: bool = False  # relative to persistence (target difference or log offset)
     weights: str = "run_timse"
+    blend: float = 0.5  # weights="official": share of the percentile-TIMSE weights (rest uniform)
     ridge: float = 1.0
     lags_days: tuple = (27.0, 13.5)
     half_width: int = 3
@@ -296,6 +303,8 @@ class LinearModel:
         observed = np.isfinite(y)
         if self.config.weights == "uniform":
             return observed.astype(float)
+        if self.config.weights == "official":
+            return official_weights(y, self.config.blend)
         w = run_timse_weights(y)
         scale = w[observed].mean() if observed.any() else 1.0
         return np.where(observed, np.maximum(w / max(scale, 1e-12), TAIL_FLOOR), 0.0)
