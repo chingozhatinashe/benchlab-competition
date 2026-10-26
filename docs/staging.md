@@ -85,7 +85,7 @@ The repository is public, so the branch is too. Records hold forecasts, logs and
 
 ## Events and alerts
 
-Every event goes to `events/`. Alerts also open an issue labelled `staging-alert`, titled `Staging: <candidate>` or `Staging: schedule`. If that issue is already open, the alert is added as a comment. GitHub emails you each time. Close an issue by hand once it's dealt with.
+Every event goes to `events/`. Issues are off on this repository, so alerts are reported in the workflow run instead: one error annotation per alert (titled `Staging: <candidate>` or `Staging: schedule`) and a "Staging alerts" section in the job summary. The run then fails, after the records are pushed, and GitHub emails you the failure. A failed Staging run therefore means "look at the alerts", not lost data.
 
 | Severity | Events |
 |---|---|
@@ -107,5 +107,5 @@ The report lists the last 7 days of alerts and counts the info events.
 ## Code
 
 - **Workflow and shared step:** `.github/workflows/staging.yml`, `.github/actions/base-image/action.yml`.
-- **Scripts:** `ci/staging/run_candidate.sh`, `record_run.py`, `events.py`, `evaluate.py`, `records.sh`, `post_alerts.sh`.
+- **Scripts:** `ci/staging/run_candidate.sh`, `record_run.py`, `events.py`, `evaluate.py`, `records.sh`, `report_alerts.sh`.
 - **Tests:** `tests/test_staging.py` covers log parsing, DNS and declared domains, record validity, event rules, and a whole cycle-to-report run on synthetic truth.

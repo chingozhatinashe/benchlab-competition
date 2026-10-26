@@ -11,7 +11,7 @@
 #   evaluate  (03:40 UTC) scores every candidate with the official metric against the
 #             official truth, writes the report (the records branch's README), and flags
 #             missed cycles.
-# Problems open (or comment on) a GitHub issue labelled staging-alert, one per candidate.
+# Alerts are reported in the run (error annotations + job summary) and fail it, so GitHub emails the owner.
 # Staging only scores and records: choosing a candidate and uploading stay with the user
 # and the "Upload to Benchlab" workflow on main.
 name: Staging
@@ -30,7 +30,6 @@ on:
 
 permissions:
   contents: write  # the staging-records branch
-  issues: write    # alerts
   actions: read
 
 env:
@@ -146,7 +145,7 @@ jobs:
           bash ci/staging/records.sh push records "cycle $T0"
 
       - name: Alerts
-        run: bash ci/staging/post_alerts.sh alerts.json "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: bash ci/staging/report_alerts.sh alerts.json
 
   evaluate:
     name: evaluate
@@ -175,4 +174,4 @@ jobs:
           cat records/README.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Alerts
-        run: bash ci/staging/post_alerts.sh alerts.json "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: bash ci/staging/report_alerts.sh alerts.json

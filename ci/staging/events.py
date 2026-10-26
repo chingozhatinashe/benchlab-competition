@@ -6,8 +6,8 @@
 `cycle` files the new run records under the records branch
 (runs/YYYY-MM/<t0>/<candidate>__<variant>.json), appends every event to
 events/YYYY-MM.csv (time, t0, candidate, sha, variant, kind, severity, detail) and writes
-the alerts (severity "alert") grouped by candidate to --alerts, for the workflow to post as
-GitHub issues. Staging only records: it never ranks candidates or uploads anything.
+the alerts (severity "alert") grouped by candidate to --alerts, for the workflow to report in
+the run (report_alerts.sh). Staging only records: it never ranks candidates or uploads anything.
 
 Event kinds (rules in `run_events`):
     alert   build failed, failed (exit code), timeout, invalid output, over budget
