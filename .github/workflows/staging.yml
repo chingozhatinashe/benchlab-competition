@@ -1,0 +1,178 @@
+# Staging: every upload candidate runs like Benchlab's live evaluation, and is scored daily.
+#
+# Candidates are commits tagged by hand:  git tag -a upload_candidate/<name> <sha> -m "<why>"
+#                                         git push origin upload_candidate/<name>
+# Delete the tag to stop its runs (its records stay). See docs/staging.md.
+#
+#   cycle     (00:07, 06:07, 12:07, 18:07 UTC) each candidate's image is built from its own
+#             commit and run in fresh containers at the current t0, as Benchlab runs it:
+#             the submitted model ("default") and the fallback (SWP_MODEL=baseline).
+#             Records, events and alerts go to the orphan branch `staging-records`.
+#   evaluate  (03:40 UTC) scores every candidate with the official metric against the
+#             official truth, writes the report (the records branch's README), and flags
+#             missed cycles.
+# Problems open (or comment on) a GitHub issue labelled staging-alert, one per candidate.
+# Staging only scores and records: choosing a candidate and uploading stay with the user
+# and the "Upload to Benchlab" workflow on main.
+name: Staging
+
+on:
+  schedule:
+    - cron: "7 0,6,12,18 * * *"   # cycle, a few minutes after t0 as on Benchlab
+    - cron: "40 3 * * *"           # daily evaluation
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "cycle: run every candidate at the current t0; evaluate: the daily report"
+        type: choice
+        options: [cycle, evaluate]
+        default: cycle
+
+permissions:
+  contents: write  # the staging-records branch
+  issues: write    # alerts
+  actions: read
+
+env:
+  MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.job || (github.event.schedule == '40 3 * * *' && 'evaluate' || 'cycle') }}
+  VARIANTS: "default baseline"  # default = the candidate's submitted model; then its fallback
+
+jobs:
+  candidates:
+    name: candidates
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      t0: ${{ steps.list.outputs.t0 }}
+      matrix: ${{ steps.list.outputs.matrix }}
+      count: ${{ steps.list.outputs.count }}
+      mode: ${{ steps.list.outputs.mode }}
+    steps:
+      - name: The current t0 and the tagged candidates
+        id: list
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          T0=$(date -u -d "$(date -u +%Y-%m-%d) $(( $(date -u +%-H) / 6 * 6 )):00" +%Y%m%dT%H0000Z)
+          echo "t0=$T0" >> "$GITHUB_OUTPUT"
+          # annotated tags list the tag object and, peeled (^{}), the commit: keep the commit
+          MATRIX=$(git ls-remote --tags "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+                     'refs/tags/upload_candidate/*' \
+                   | awk '{ref=$2; sub("refs/tags/upload_candidate/", "", ref);
+                           if (ref ~ /\^\{\}$/) {sub(/\^\{\}$/, "", ref); peeled[ref]=$1} else plain[ref]=$1}
+                          END {for (r in plain) print r, (r in peeled ? peeled[r] : plain[r])}' \
+                   | grep -E '^[A-Za-z0-9._-]+ [0-9a-f]{40}$' | sort \
+                   | jq -R -s -c 'split("\n") | map(select(length > 0) | split(" ") | {name: .[0], sha: .[1]})')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo "$MATRIX" | jq length)" >> "$GITHUB_OUTPUT"
+          echo "mode $MODE, t0 $T0, candidates: $MATRIX"
+          echo "### Staging $MODE, t0 \`$T0\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Candidates: \`$MATRIX\`" >> "$GITHUB_STEP_SUMMARY"
+
+  run:
+    name: run ${{ matrix.candidate.name }}
+    needs: candidates
+    if: needs.candidates.outputs.mode == 'cycle' && needs.candidates.outputs.count != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: ${{ fromJSON(needs.candidates.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7  # main: the staging scripts and the mock upload endpoint
+
+      - name: Check out the candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.candidate.sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Base image
+        uses: ./.github/actions/base-image
+        with:
+          dockerfile: candidate/src/Dockerfile
+
+      - name: Run like Benchlab
+        env:
+          T0: ${{ needs.candidates.outputs.t0 }}
+          NAME: ${{ matrix.candidate.name }}
+          SHA: ${{ matrix.candidate.sha }}
+        run: |
+          # shellcheck disable=SC2086
+          bash ci/staging/run_candidate.sh candidate "$T0" "$NAME" "$SHA" runs $VARIANTS
+          ls -la runs
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: staging-${{ matrix.candidate.name }}
+          path: runs/*.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  record:
+    name: record
+    needs: [candidates, run]
+    if: always() && needs.candidates.outputs.mode == 'cycle' && needs.candidates.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: staging-records
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      T0: ${{ needs.candidates.outputs.t0 }}
+      CANDIDATES: ${{ needs.candidates.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        continue-on-error: true  # every run job may have failed before recording
+        with:
+          pattern: staging-*
+          path: runs
+          merge-multiple: true
+
+      - name: File the records and events
+        run: |
+          mkdir -p runs
+          bash ci/staging/records.sh checkout records
+          python3 ci/staging/events.py cycle --records records --runs runs --t0 "$T0" \
+            --candidates "$CANDIDATES" --alerts alerts.json
+          bash ci/staging/records.sh push records "cycle $T0"
+
+      - name: Alerts
+        run: bash ci/staging/post_alerts.sh alerts.json "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  evaluate:
+    name: evaluate
+    needs: candidates
+    if: needs.candidates.outputs.mode == 'evaluate'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: staging-records
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - name: Score and report
+        run: |
+          pip install -q numpy pandas
+          bash ci/staging/records.sh checkout records
+          python ci/staging/evaluate.py --records records --alerts alerts.json > /dev/null
+          bash ci/staging/records.sh push records "evaluate $(date -u +%Y-%m-%d)"
+          cat records/README.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Alerts
+        run: bash ci/staging/post_alerts.sh alerts.json "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
