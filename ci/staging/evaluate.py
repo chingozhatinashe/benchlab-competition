@@ -37,8 +37,8 @@ import events as ev  # noqa: E402
 CYCLE = pd.Timedelta(hours=6)
 WINDOW = pd.Timedelta(hours=cs.HORIZON)
 TRUTH_LAG = pd.Timedelta(hours=2)  # the hourly file is issued ~10 min after each hour
-STALE = pd.Timedelta(hours=12)  # no cycle for this long: the schedule has stopped
-GRACE = pd.Timedelta(hours=3)  # a cycle this recent may still be running (cron delays)
+STALE = pd.Timedelta(hours=18)  # no cycle for this long: the schedule has stopped
+GRACE = pd.Timedelta(hours=8)  # a cycle this recent may still start (cron runs ~6 h late)
 RECENT = pd.Timedelta(days=7)
 FMT = "%Y%m%dT%H%M%SZ"
 

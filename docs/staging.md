@@ -89,15 +89,17 @@ Every event goes to `events/`. Issues are off on this repository, so alerts are 
 
 | Severity | Events |
 |---|---|
-| alert | build failed, failed (exit code), timeout, invalid output, over budget (run + estimated pull > 900 s), slow (> 600 s), image too large (> 15 GiB), fell back, few regressors (< 75% observed), undeclared host, no record, missed cycle, schedule stale (no cycle for 12 h) |
+| alert | build failed, failed (exit code), timeout, invalid output, over budget (run + estimated pull > 900 s), slow (> 600 s), image too large (> 15 GiB), fell back, few regressors (< 75% observed), undeclared host, no record, missed cycle, schedule stale (no cycle for 18 h) |
 | info | run ok, missing regressors, source not ok, dns not captured, candidate added / moved / removed, cycle |
 
 The report lists the last 7 days of alerts and counts the info events.
 
 ## Limits
 
-- **GitHub's cron** starts runs 5–30 min late and occasionally drops one. The start delay is recorded, and missed cycles are flagged.
-  - This matters little: every input is filtered by availability at t0, and Benchlab also starts "a few minutes" after t0.
+- **GitHub's cron** starts runs late, in October 2026 typically ~5 h and up to ~6 h, and sometimes drops one. The start delay is recorded.
+  - Each 6-hourly slot has its own cron line, and a cycle takes its t0 from the slot that fired, not from the clock. A late run therefore still runs its own t0, rather than repeating the previous one and leaving its own t0 missed.
+  - A cycle counts as missed only 8 h after its t0, and the schedule as stale after 18 h without a cycle.
+  - Inputs are filtered by availability at t0, so forecasts stay valid. But a run hours after t0 finds upstream data that was late at t0 already in place, so staging understates the data-latency risk of Benchlab's live run, which starts "a few minutes" after t0.
   - GitHub disables scheduled workflows after 60 days without repository activity; re-enable them in the Actions tab.
 - **The runner isn't Fargate.** CPU speed, network path and pull time differ, so runtimes are indicative. The pull is estimated as size / 100 MB/s, as `test_local.sh` does.
 - **Unreleased spec details:** the persistence convention (labelled ≤ t0 − 1 h; see [official_score.md](official_score.md)) and the quantile interpolation are fixed constants in `training.competition_score`.
