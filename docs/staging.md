@@ -24,10 +24,17 @@ git push origin :refs/tags/upload_candidate/linear-v2   # stop running it (its r
 
 | Job | When (UTC) | What |
 |---|---|---|
-| `cycle` | 00:07, 06:07, 12:07, 18:07 | Each candidate's image is built from its own commit and run at the current t0 in fresh containers. |
+| `cycle` | t0 + 5 min from the on-time trigger; GitHub's cron at 00:07, 06:07, 12:07, 18:07 as the backup | Each candidate's image is built from its own commit and run at the t0 in fresh containers. A t0 already recorded is skipped. |
 | `evaluate` | 03:40 | Scores, health, missed cycles and the report. |
 
-Both can be started by hand: Actions → Staging → Run workflow, `job = cycle | evaluate`, on main.
+Both can be started by hand: Actions → Staging → Run workflow, `job = cycle | evaluate`, on main. A cycle takes an optional `t0` (a 6-hourly mark in the last 24 h; empty = the current one).
+
+**The on-time trigger.** GitHub's cron starts runs hours late (see Limits), so a scheduled task on the developer's Windows laptop dispatches each cycle instead.
+- `ci/staging/trigger_cycle.ps1` runs every 10 min. Once t0 + 5 min has passed, it runs `gh workflow run staging.yml -f job=cycle -f t0=<t0>`, once per t0. After a sleep it catches up on wake.
+- **Install / remove:** `powershell -ExecutionPolicy Bypass -File ci\staging\install_trigger.ps1 [-Uninstall]`.
+  - The task copies the script to `%LOCALAPPDATA%enchlab-staging`, where its state (`last_t0.txt`) and log (`trigger.log`, dispatches and failures only) are kept.
+  - It runs `gh` with your login, which needs the `workflow` scope, and only while you are logged on.
+- **When the laptop is off or asleep at a slot,** GitHub's cron runs that cycle later, as before. Whichever fires second finds the cycle recorded and skips it. If both start before either has recorded, the cycle runs twice, and the later record replaces the earlier one.
 
 **A cycle, per candidate** (`ci/staging/run_candidate.sh`):
 1. **Build:** `docker build` of the candidate's `src/`, with the base image from the Actions cache (`.github/actions/base-image`, shared with CI). Build time and image size are recorded.
@@ -96,10 +103,10 @@ The report lists the last 7 days of alerts and counts the info events.
 
 ## Limits
 
-- **GitHub's cron** starts runs late, in October 2026 typically ~5 h and up to ~6 h, and sometimes drops one. The start delay is recorded.
+- **GitHub's cron** starts runs late, in October 2026 typically ~5 h and up to ~6 h, and sometimes drops one. The start delay is recorded. It's the backup for the on-time trigger, which needs the laptop on.
   - Each 6-hourly slot has its own cron line, and a cycle takes its t0 from the slot that fired, not from the clock. A late run therefore still runs its own t0, rather than repeating the previous one and leaving its own t0 missed.
   - A cycle counts as missed only 8 h after its t0, and the schedule as stale after 18 h without a cycle.
-  - Inputs are filtered by availability at t0, so forecasts stay valid. But a run hours after t0 finds upstream data that was late at t0 already in place, so staging understates the data-latency risk of Benchlab's live run, which starts "a few minutes" after t0.
+  - Inputs are filtered by availability at t0, so forecasts stay valid. But a run hours after t0 (a backup run) finds upstream data that was late at t0 already in place, so it understates the data-latency risk of Benchlab's live run. Compare start delays in the records.
   - GitHub disables scheduled workflows after 60 days without repository activity; re-enable them in the Actions tab.
 - **The runner isn't Fargate.** CPU speed, network path and pull time differ, so runtimes are indicative. The pull is estimated as size / 100 MB/s, as `test_local.sh` does.
 - **Unreleased spec details:** the persistence convention (labelled ≤ t0 − 1 h; see [official_score.md](official_score.md)) and the quantile interpolation are fixed constants in `training.competition_score`.
