@@ -30,7 +30,7 @@ git push origin :refs/tags/upload_candidate/linear-v2   # stop running it (its r
 Both can be started by hand: Actions → Staging → Run workflow, `job = cycle | evaluate`, on main. A cycle takes an optional `t0` (a 6-hourly mark in the last 24 h; empty = the current one).
 
 **The on-time trigger.** GitHub's cron starts runs hours late (see Limits), so a scheduled task on the developer's Windows laptop dispatches each cycle instead.
-- `ci/staging/trigger_cycle.ps1` runs every 10 min. Once t0 + 5 min has passed, it runs `gh workflow run staging.yml -f job=cycle -f t0=<t0>`, once per t0. After a sleep it catches up on wake.
+- `ci/staging/trigger_cycle.ps1` runs every 10 min, at :05, :15, …. Once t0 + 5 min has passed, it runs `gh workflow run staging.yml -f job=cycle -f t0=<t0>`, once per t0. After a sleep it catches up on wake.
 - **Install / remove:** `powershell -ExecutionPolicy Bypass -File ci\staging\install_trigger.ps1 [-Uninstall]`.
   - The task copies the script to `%LOCALAPPDATA%enchlab-staging`, where its state (`last_t0.txt`) and log (`trigger.log`, dispatches and failures only) are kept.
   - It runs `gh` with your login, which needs the `workflow` scope, and only while you are logged on.

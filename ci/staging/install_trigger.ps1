@@ -28,7 +28,10 @@ $script = Join-Path $dir "trigger_cycle.ps1"
 $action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument (
     "--headless powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass " +
     "-File `"$script`" -Gh `"$gh`"")
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 10)
+# fires at :05, :15, ... so a cycle starts at t0 + 5 min (local midnight + 5 min is :05 UTC
+# for a whole-hour UTC offset)
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(5) `
+    -RepetitionInterval (New-TimeSpan -Minutes 10)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
