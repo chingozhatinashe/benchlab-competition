@@ -92,4 +92,4 @@ The old weights (`run_timse_weights`) score each run on its own thresholds. With
   - the final baseline uses `tail_power=0.5` (`src/training/final_baseline_config.json`, `src/assets/final_baseline.json`).
 - **Fallback chain:** linear model → final baseline → persistence → training mean.
 - **The hybrid** is kept, with its old weights and its own embedded linear anchor, behind `SWP_MODEL=hybrid`. Re-tuned, it ties with the linear model, so a candidate for later is a hybrid at blend 0.1 on the new linear anchor, compared in the staging environment.
-- **Not changed:** the features and every other hyper-parameter were selected on the old metric. Re-running feature selection with the official score is possible future work.
+- **Not changed:** the features and every other hyper-parameter were selected on the old metric. *Re-selected on the official metric 2026-10-29:* the same variant and regressor families come out, and the only difference (a 1 h density window, −0.31%, 4 of 6 folds) is below the bar, so nothing changed ([official_reselection.md](official_reselection.md)).
