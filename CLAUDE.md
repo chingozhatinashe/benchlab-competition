@@ -37,7 +37,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.regime_hmm           # HMM regime features (models.regime_hmm) added to the shipped models on the yearly folds; resumable; no gain, see src/experiments/regime_hmm.ipynb
 .venv/Scripts/python -m training.regime_switching      # standalone HMM-gated experts (models.regime_switching) on the yearly folds; resumable; not built, see docs/regime_switching.md
 .venv/Scripts/python -m training.regressor_cap         # chooses the linear model's regressor cap (Config.cap_quantile) on the yearly folds; resumable; see src/experiments/regressor_cap.ipynb
-.venv/Scripts/python -m training.quantile_mapping      # quantile-mapping post-step for the linear model and hybrid on the yearly folds; resumable; not built, see docs/quantile_mapping.md
+.venv/Scripts/python -m training.quantile_mapping      # quantile-mapping post-step for the submitted linear model, official metric (--metric run_timse: the old study with the hybrid) on the yearly folds; resumable; not built, see docs/quantile_mapping.md
 .venv/Scripts/python -m training.recency_weights       # recency sample weights for the linear model and hybrid on the yearly folds; resumable; not built, see docs/recency_weights.md
 .venv/Scripts/python -m training.lead_aligned_ch       # lead-aligned coronal-hole features (image D h before each forecast hour) on the yearly folds; resumable; --hybrid "at 72"; see docs/lead_aligned_ch.md
 .venv/Scripts/python -m training.coronal_grid images|folds  # coronal-hole latitude bands, B0 and darkness from the cached AIA images, lead-aligned, on the yearly folds; not built, see docs/coronal_grid.md
