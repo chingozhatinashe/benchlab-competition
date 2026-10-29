@@ -57,7 +57,7 @@ FLARE_MERGE = pd.Timedelta(minutes=5)
 STEP = pd.Timedelta(hours=6)
 HISTORY_START = DATA_START - build.HISTORY - pd.Timedelta(days=7)  # room for the lags
 AIA_START = DATA_START - pd.Timedelta(days=7)
-F107_START = HISTORY_START - pd.Timedelta(days=30)
+F107_START = HISTORY_START - pd.Timedelta(days=120)  # room for the 81-day trend
 CHUNK = pd.Timedelta(days=30)
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
