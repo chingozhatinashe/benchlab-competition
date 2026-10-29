@@ -73,6 +73,8 @@ There are also a few timing details to fix or confirm.
    - GOES ≥ 10 MeV protons, a marker of an Earth-connected CME shock, with a live feed and an archive. We have only ACE EPAM at lower energies;
    - the solar-cycle trend (the slope of the 81-day F10.7 mean), not only its level. Collin et al. find the input–speed relationships change with cycle phase.
 
+   *Done 2026-10-29,* with Bt and temperature one rotation earlier: none kept. Protons gain 0.30% at best (2 of 6 folds), the cycle features and the lags nothing ([new_features.md](new_features.md)).
+
 ## 4. Image embeddings
 
 **Worth a time-boxed test, but after better engineered coronal-hole features.**

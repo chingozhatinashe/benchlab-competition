@@ -12,9 +12,12 @@ availability rules as feature_engineering.build:
               6-hourly images of the pulled history (hourly training t0s) takes the
               latest image at or before it, at most CH_GRID older.
     flares    peaks by t0 - FLARE_LATENCY
-    F10.7     days before the UTC day of t0
+    F10.7     days before the UTC day of t0 (`trend`: the D-day mean minus the D-day mean
+              F107_TREND_DAYS earlier, per day; needs D + 27 days of history)
     LASCO     coronagraph signals of images taken by t0 - coronagraph.LATENCY
               (coronagraph_candidates; not in `candidates`, the linear selection pool)
+    protons   GOES >=10 MeV hourly means of hours that ended by t0 - PROTON_LATENCY
+              (proton_candidates; not in `candidates`)
     HMI       magnetogram signals (magnetogram.SIGNALS) by the AIA rule: the image for
               cut-off t0 - CH_LATENCY - lag, with the same fallbacks (not in `candidates`)
 
@@ -36,19 +39,23 @@ MEAN_HOURS = (1, 3, 6, 12, 24, 48)
 CH_LAG_HOURS = tuple(range(0, 121, 6))
 FLARE_HOURS = (24, 48, 72, 120)
 F107_DAYS = (1, 7, 27)
-LAG_HOURS = {"lag27": 648, "lag13": 324}
+LAG_HOURS = {"lag27": 648, "lag13": 324, "lag26": 624, "lag28": 672}
+F107_TREND_DAYS = 27
 CH_FALLBACK_HOURS = (6, 12)  # older images to try when the one at the lag is missing
 CH_SIGNALS = ("ch_cm", "ch_east", "ch_disk")  # coronal-hole strips (coronal_holes.NAMES)
 CH_GRID = pd.Timedelta(hours=6)  # spacing of the pulled AIA cut-offs
 MG_SIGNALS = magnetogram.SIGNALS  # HMI magnetogram signals, read like the AIA strips
 LASCO_SIGNALS = coronagraph.SIGNALS  # c2share, c2max, ..., c3mean
 LASCO_HOURS = (6, 24, 72)
+PROTON_SIGNALS = ("log_p10",)  # log10 of the >=10 MeV flux, floored at PROTON_FLOOR pfu
+PROTON_FLOOR = 1.0  # pfu: quiet-time levels differ by satellite and file version
+PROTON_LATENCY = pd.Timedelta(minutes=10)
 
 
 @dataclass(frozen=True)
 class WindowSpec:
     signal: str
-    stat: str  # mean | max | min | slope | lag27 | lag13 | at | count
+    stat: str  # mean | max | min | slope | lag26 | lag27 | lag28 | lag13 | at | count | trend
     hours: int
 
     @property
@@ -79,6 +86,28 @@ def candidates():
     specs += [WindowSpec("m_flares", "count", h) for h in FLARE_HOURS]
     specs += [WindowSpec("f107", "mean", 24 * d) for d in F107_DAYS]
     return specs
+
+
+def recurrence_candidates():
+    """Bt and temperature one rotation earlier (26, 27 and 28 days), over the 72 h that
+    precede the forecast window by that lag. Not in `candidates` (studied in
+    training.new_features)."""
+    return [WindowSpec(s, lag, 72) for s in ("bt", "log_temperature")
+            for lag in ("lag26", "lag27", "lag28")]
+
+
+def cycle_candidates():
+    """Solar-cycle level and trend: the 81-day F10.7 mean and its change over 27 days.
+    Not in `candidates` (studied in training.new_features)."""
+    return [WindowSpec("f107", "mean", 24 * 81), WindowSpec("f107", "trend", 24 * 81),
+            WindowSpec("f107", "trend", 24 * 27)]
+
+
+def proton_candidates():
+    """GOES >=10 MeV protons: the 6-hour mean and the 24- and 72-hour maxima of the log flux.
+    Not in `candidates` (studied in training.new_features)."""
+    return [WindowSpec("log_p10", "mean", 6), WindowSpec("log_p10", "max", 24),
+            WindowSpec("log_p10", "max", 72)]
 
 
 def coronagraph_candidates():
@@ -171,6 +200,11 @@ def _f107(daily, spec, t0s):
     daily.index = pd.DatetimeIndex(daily.index).floor("D")
     daily = daily.groupby(level=0).mean()
     days = spec.hours // 24
+    if spec.stat == "trend":
+        mean = _f107(daily, WindowSpec("f107", "mean", spec.hours), t0s)
+        before = _f107(daily, WindowSpec("f107", "mean", spec.hours),
+                       t0s - pd.Timedelta(days=F107_TREND_DAYS))
+        return (mean - before) / F107_TREND_DAYS
     for i, t0 in enumerate(t0s):
         today = (t0 - solar_activity.FLARE_LATENCY).floor("D")
         past = daily[daily.index < today]
@@ -181,6 +215,22 @@ def _f107(daily, spec, t0s):
             window = past[past.index >= today - pd.Timedelta(days=days)]
             out[i] = float(window.mean()) if len(window) >= math.ceil(days / 2) else np.nan
     return out
+
+
+def _protons(flux, spec, t0s):
+    """A window statistic of the log flux over hours that ended by t0 - PROTON_LATENCY."""
+    out = np.full(len(t0s), np.nan)
+    if flux is None or len(flux) == 0:
+        return out
+    flux = flux[~flux.index.duplicated(keep="last")].sort_index()
+    hourly = flux.resample("1h").mean()
+    log_flux = np.log10(hourly.clip(lower=PROTON_FLOOR))
+    roll = log_flux.rolling(spec.hours, min_periods=math.ceil(spec.hours / 2))
+    if spec.stat not in ("mean", "max"):
+        raise ValueError(f"unknown proton statistic {spec.stat!r}")
+    # the hour labelled h ends at h + 1 h: the last usable label is floor(t0 - latency) - 1 h
+    last = pd.DatetimeIndex(t0s - PROTON_LATENCY).floor("h") - HOUR
+    return _at(getattr(roll, spec.stat)(), last)
 
 
 def _asof(series, labels, within=CH_GRID):
@@ -227,6 +277,8 @@ def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
             cols[spec.name] = _f107(inputs.f107, spec, t0s)
         elif spec.signal in LASCO_SIGNALS:
             cols[spec.name] = _coronagraph(getattr(inputs, "coronagraph", None), spec, t0s)
+        elif spec.signal in PROTON_SIGNALS:
+            cols[spec.name] = _protons(getattr(inputs, "protons", None), spec, t0s)
         elif spec.signal in MG_SIGNALS:
             mg = getattr(inputs, "magnetogram", None)
             cols[spec.name] = (np.full(len(t0s), np.nan) if mg is None or mg.empty
