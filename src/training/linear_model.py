@@ -5,22 +5,29 @@
     python -m training.linear_model train                           # fit the chosen config
     python -m training.linear_model evaluate                        # eval year, once, at the end
 
-Selection never touches the eval year. It uses the baseline's two walk-forward folds
-(training.folds.SELECTION): fit on the runs before the fold (targets cut at the
-fold start), forecast every run in the fold through the live pipeline (missing
-regressors imputed with the fit's medians). The objective is per-run mean TIMSE
-relative to persistence, as a geometric mean over the folds.
+Selection never touches the eval year. It uses the walk-forward folds
+(training.folds.SELECTION, the six yearly folds): fit on the runs before the fold
+(targets cut at the fold start), forecast every run in the fold through the live
+pipeline (missing regressors imputed with the fit's medians). The objective
+(--objective) is, as a geometric mean over the folds:
+- official (default): the official S_final (training.competition_score) against the
+  official truth (training.pull_ace_1h), relative to persistence's;
+- run_timse: per-run mean TIMSE relative to persistence, against the training speeds
+  (the metric the shipped features were selected on, before 2026-10-26).
 
 Stage 1 picks the model variant (family, Box-Cox lambda, relative to persistence,
-loss weights, ridge) with a fixed shortlist of regressors from the screening.
-Stage 2 runs forward selection over every windowed candidate
-(feature_engineering.windows), one window per (signal, statistic), for that
-variant, and stops when a step gains less than MIN_GAIN. The ridge is then
-re-tuned on the selected set.
+ridge, and with run_timse the loss weights) with a fixed shortlist of regressors from
+the screening. With official, the loss weights are weights="official" at blend 0.25
+(training.official_retune). Stage 2 runs forward selection over every windowed
+candidate (feature_engineering.windows), one window per (signal, statistic), plus the
+lead-aligned coronal-hole strip (LEAD_CANDIDATES, in the coronal-hole family), for
+that variant, and stops when a step gains less than MIN_GAIN. The ridge (and with
+official the blend) is then re-tuned on the selected set.
 
 --sample N draws N runs at random (fixed seed) from the training runs and uses only
 those; results go to *_pilot files, with the time each part took and an estimate
-for the full run.
+for the full run. With official, every output is named *_official*, so neither the
+run_timse selection nor the shipped config (linear_model_config.json) is overwritten.
 
 Data fixes (with_fixes), applied to every config that is scored or trained:
 - despike: isolated one-hour glitches in the training speeds (e.g. 1,087 km/s at
@@ -48,7 +55,8 @@ import pandas as pd
 from feature_engineering import build, windows
 from feature_engineering.recurrence import last_observed, targets
 from models.final_baseline import CYCLE_HOURS, run_timse_weights
-from models.linear_model import ASSET, Config, LinearModel
+from models.linear_model import ASSET, Config, LinearModel, lead_feature
+from training import competition_score as cs
 from training.datasets import DATA_START, TRAIN_END, load_train
 from training.evaluate import MIN_RUN_POINTS
 from training.folds import SELECTION as FOLDS
@@ -67,8 +75,13 @@ VARIANTS = (
      for lam in (1.0, 0.5, 0.0, -0.5) for rel in (False, True)]
     + [dict(family=f, relative=rel) for f in ("gamma", "inverse_gaussian") for rel in (False, True)]
 )
-WEIGHTS = ("run_timse", "uniform")
+OBJECTIVES = ("official", "run_timse")
+# stage 1 loss weights per objective, as (weights, blend); blend only matters for "official"
+WEIGHTS = {"run_timse": (("run_timse", 0.5), ("uniform", 0.5)),
+           "official": (("official", 0.25),)}
 RIDGES = (0.0, 0.1, 1.0, 10.0)
+BLENDS = (0.1, 0.25, 0.5)  # official: re-tuned with the ridge on the selected set
+LEAD_CANDIDATES = ("ch_cm_lead_72h",)  # lead-aligned strip (training.lead_aligned_ch)
 
 
 def log(msg):
@@ -95,11 +108,28 @@ def with_fixes(config, on=True):
     return replace(config, despike=True, optional=optional, cap_quantile=CAP_QUANTILE)
 
 
-class Folds:
-    """Everything selection needs: speed, run positions, candidates, fold splits, references."""
+def family_of(name):
+    """Selection keeps one candidate per family; a lead-aligned strip is a coronal-hole one."""
+    lead = lead_feature(name)
+    return f"{lead[0]}_at" if lead else windows.WindowSpec.parse(name).family
 
-    def __init__(self, series, table, positions, fixes=True):
+
+def candidate_pool():
+    """(name, family, window hours) of every stage-2 candidate."""
+    return ([(s.name, s.family, s.hours) for s in windows.candidates()]
+            + [(n, family_of(n), lead_feature(n)[1]) for n in LEAD_CANDIDATES])
+
+
+class Folds:
+    """Everything selection needs: speed, run positions, candidates, fold splits, references.
+
+    With `truth` (the official hourly file, training.pull_ace_1h) the objective is the
+    official S_final; without it, the per-run TIMSE against `series`."""
+
+    def __init__(self, series, table, positions, fixes=True, truth=None):
         self.fixes = fixes
+        self.official = truth is not None
+        self.weights = WEIGHTS["official" if self.official else "run_timse"]
         self.values = series.to_numpy(dtype=float)
         self.index = series.index
         self.table = table
@@ -110,14 +140,20 @@ class Folds:
             t = self.index[self.positions]
             fit = np.flatnonzero(t < start)
             val = np.flatnonzero((t >= start) & (t < end))
-            y = targets(self.values, self.positions[val])
-            q = run_timse_weights(y)
-            last = last_observed(self.values, self.positions[val])
-            # the same runs for every model: enough targets and a persistence forecast
-            scored = (np.isfinite(y).sum(axis=1) >= MIN_RUN_POINTS) & np.isfinite(last)
-            persistence = run_scores(np.repeat(last[:, None], y.shape[1], 1), y, q)
-            self.folds.append({"start": start_pos, "fit": fit, "val": val, "y": y, "q": q,
-                               "scored": scored, "ref": np.nanmean(persistence[scored])})
+            fold = {"start": start_pos, "fit": fit, "val": val}
+            if self.official:
+                obs, pers = cs.verifying(truth, t[val]), cs.persistence(truth, t[val])
+                ref = cs.score(np.repeat(pers[:, None], cs.HORIZON, 1), obs, pers)["s_final"]
+                fold.update(obs=obs, pers=pers, ref=ref)
+            else:
+                y = targets(self.values, self.positions[val])
+                q = run_timse_weights(y)
+                last = last_observed(self.values, self.positions[val])
+                # the same runs for every model: enough targets and a persistence forecast
+                scored = (np.isfinite(y).sum(axis=1) >= MIN_RUN_POINTS) & np.isfinite(last)
+                persistence = run_scores(np.repeat(last[:, None], y.shape[1], 1), y, q)
+                fold.update(y=y, q=q, scored=scored, ref=np.nanmean(persistence[scored]))
+            self.folds.append(fold)
 
     def x(self, rows, features):
         if not features:
@@ -125,7 +161,8 @@ class Folds:
         return self.table[list(features)].to_numpy(dtype=float)[rows]
 
     def objective(self, config):
-        """Geometric mean over folds of per-run mean TIMSE / persistence's (lower is better)."""
+        """Geometric mean over folds of the score / persistence's (lower is better):
+        official S_final, or per-run mean TIMSE."""
         config = with_fixes(config, self.fixes)
         ratios = []
         for f in self.folds:
@@ -133,8 +170,11 @@ class Folds:
                                             self.x(f["fit"], config.input_features), end=f["start"])
             forecast = model.forecast(self.values, self.positions[f["val"]],
                                       self.x(f["val"], config.input_features))
-            score = run_scores(forecast, f["y"], f["q"])
-            ratios.append(np.nanmean(score[f["scored"]]) / f["ref"])
+            if self.official:
+                ratios.append(cs.score(forecast, f["obs"], f["pers"])["s_final"] / f["ref"])
+            else:
+                score = run_scores(forecast, f["y"], f["q"])
+                ratios.append(np.nanmean(score[f["scored"]]) / f["ref"])
         return float(np.exp(np.mean(np.log(ratios)))), ratios
 
 
@@ -162,15 +202,15 @@ def stage1(folds, timer, cache=None, max_seconds=None, started=None):
     Returns None if `max_seconds` runs out before every variant is scored.
     """
     rows = []
-    for i, (variant, weights, ridge) in enumerate(
-            itertools.product(VARIANTS, WEIGHTS, RIDGES)):
+    for i, (variant, (weights, blend), ridge) in enumerate(
+            itertools.product(VARIANTS, folds.weights, RIDGES)):
         path = cache / f"stage1_{i:03d}.json" if cache else None
         if path is not None and path.exists():
             rows.append(json.loads(path.read_text(encoding="utf-8")))
             continue
         if max_seconds and time.perf_counter() - started > max_seconds:
             return None
-        cfg = Config(features=SHORTLIST, weights=weights, ridge=ridge, **variant)
+        cfg = Config(features=SHORTLIST, weights=weights, blend=blend, ridge=ridge, **variant)
         t = time.perf_counter()
         obj, ratios = folds.objective(cfg)
         timer.add(f"stage 1 fit+score ({cfg.family})", time.perf_counter() - t)
@@ -185,13 +225,13 @@ def stage1(folds, timer, cache=None, max_seconds=None, started=None):
 
 def stage2(folds, base, timer, cache=None, max_seconds=None, started=None):
     """Forward selection for the variant `base`. Returns (path, every scored candidate)."""
-    pool = windows.candidates()
+    pool = candidate_pool()
     chosen, path, scored = [], [], []
     current, _ = folds.objective(replace(base, features=()))
     path.append({"step": 0, "added": "(speed terms only)", "objective": current, "gain": np.nan})
     for step in range(1, MAX_FEATURES + 1):
-        families = {windows.WindowSpec.parse(n).family for n in chosen}
-        options = [s for s in pool if s.name not in chosen and s.family not in families]
+        families = {family_of(n) for n in chosen}
+        options = [c for c in pool if c[0] not in chosen and c[1] not in families]
         cached = cache / f"step{step:02d}.csv" if cache else None
         if cached is not None and cached.exists():
             step_rows = pd.read_csv(cached).to_dict("records")
@@ -200,10 +240,10 @@ def stage2(folds, base, timer, cache=None, max_seconds=None, started=None):
                 return path, scored, False
             step_rows = []
             t = time.perf_counter()
-            for spec in options:
-                obj, _ = folds.objective(replace(base, features=(*chosen, spec.name)))
-                step_rows.append({"step": step, "candidate": spec.name, "family": spec.family,
-                                  "window_h": spec.hours, "objective": obj})
+            for name, family, hours in options:
+                obj, _ = folds.objective(replace(base, features=(*chosen, name)))
+                step_rows.append({"step": step, "candidate": name, "family": family,
+                                  "window_h": hours, "objective": obj})
             timer.add("stage 2 step", time.perf_counter() - t, count=1)
             timer.add("stage 2 candidate", time.perf_counter() - t, count=len(options))
             if cached is not None:
@@ -240,12 +280,14 @@ class Timer:
         return self.total[key] / max(self.count[key], 1)
 
 
-def select(sample=None, seed=0, max_seconds=None, fresh=False):
+def select(sample=None, seed=0, max_seconds=None, fresh=False, objective="official"):
     started = time.perf_counter()
     tracemalloc.start()
     timer = Timer()
+    official = objective == "official"
     tag = f"pilot{sample}_seed{seed}" if sample else "full"
-    cache = CACHE_DIR / tag
+    prefix = "official_" if official else ""  # run_timse keeps the original names
+    cache = CACHE_DIR / f"{prefix}{tag}"
     if fresh and cache.exists():
         for f in cache.glob("*.csv"):
             f.unlink()
@@ -256,8 +298,13 @@ def select(sample=None, seed=0, max_seconds=None, fresh=False):
     t = time.perf_counter()
     table = candidate_table(t0s)
     timer.add("candidate table", time.perf_counter() - t)
-    folds = Folds(series, table, series.index.get_indexer(t0s))
-    log(f"{len(t0s)} runs ({tag}); folds: " + ", ".join(
+    truth = None
+    if official:
+        from training import pull_ace_1h
+
+        truth = pull_ace_1h.load()
+    folds = Folds(series, table, series.index.get_indexer(t0s), truth=truth)
+    log(f"{len(t0s)} runs ({prefix}{tag}, objective {objective}); folds: " + ", ".join(
         f"fit {len(f['fit'])} / validate {len(f['val'])}" for f in folds.folds))
 
     s1_path = cache / "stage1.csv"
@@ -272,9 +319,9 @@ def select(sample=None, seed=0, max_seconds=None, fresh=False):
     best = s1.iloc[0]
     base = Config(family=best["family"], boxcox=float(best["boxcox"]),
                   relative=bool(best["relative"]), weights=best["weights"],
-                  ridge=float(best["ridge"]))
+                  blend=float(best.get("blend", 0.5)), ridge=float(best["ridge"]))
     log("stage 1 (shortlist), best 8 of " + f"{len(s1)}:\n" + s1.head(8)[
-        ["family", "boxcox", "relative", "weights", "ridge", "objective",
+        ["family", "boxcox", "relative", "weights", "blend", "ridge", "objective",
          *(f"fold{i + 1}" for i in range(len(FOLDS)))]
     ].to_string(index=False, float_format="{:.4f}".format))
 
@@ -284,23 +331,29 @@ def select(sample=None, seed=0, max_seconds=None, fresh=False):
         return None
     features = tuple(p["added"] for p in path[1:])
     ridge_rows = []
-    for ridge in RIDGES:
-        obj, ratios = folds.objective(replace(base, features=features, ridge=ridge))
-        ridge_rows.append({"ridge": ridge, "objective": obj})
+    t = time.perf_counter()
+    for ridge, blend in itertools.product(RIDGES, BLENDS if official else (base.blend,)):
+        obj, ratios = folds.objective(replace(base, features=features, ridge=ridge, blend=blend))
+        ridge_rows.append({"ridge": ridge, **({"blend": blend} if official else {}),
+                           "objective": obj})
+    timer.add("final ridge/blend sweep", time.perf_counter() - t, count=len(ridge_rows))
     best_ridge = min(ridge_rows, key=lambda r: r["objective"])
-    config = with_fixes(replace(base, features=features, ridge=best_ridge["ridge"]))
+    config = with_fixes(replace(base, features=features, ridge=best_ridge["ridge"],
+                                blend=best_ridge.get("blend", base.blend)))
     peak = tracemalloc.get_traced_memory()[1] / 1e6
     tracemalloc.stop()
     elapsed = time.perf_counter() - started
 
-    suffix = f"_{tag}" if sample else ""
+    suffix = (f"_{prefix.rstrip('_')}" if official else "") + (f"_{tag}" if sample else "")
     EXPERIMENTS.mkdir(parents=True, exist_ok=True)
     s1.to_csv(EXPERIMENTS / f"linear_model_variants{suffix}.csv", index=False, float_format="%.6g")
     pd.DataFrame(scored).to_csv(EXPERIMENTS / f"linear_model_selection{suffix}.csv", index=False,
                                 float_format="%.6g")
     out = {**_describe(config), "features": list(config.features), "selection": {
         "runs": len(t0s), "sample_seed": seed if sample else None,
-        "objective": "geometric mean over folds of per-run mean TIMSE / persistence",
+        "objective": ("geometric mean over folds of official S_final / persistence's "
+                      "(training.competition_score, official truth)") if official else
+                     "geometric mean over folds of per-run mean TIMSE / persistence",
         "folds": [[f"{a:%Y-%m-%d}", f"{b:%Y-%m-%d}"] for a, b in FOLDS],
         "path": [{k: (round(v, 5) if isinstance(v, float) else v) for k, v in p.items()}
                  for p in path],
@@ -311,11 +364,11 @@ def select(sample=None, seed=0, max_seconds=None, fresh=False):
     log("\nselection path:\n" + pd.DataFrame(path).to_string(index=False,
                                                               float_format="{:.4f}".format))
     log(f"chosen: {config}\nwritten to {cfg_path}")
-    report_time(timer, elapsed, peak, len(t0s), len(path) - 1)
+    report_time(timer, elapsed, peak, len(t0s), len(path) - 1, len(folds.weights))
     return config
 
 
-def report_time(timer, elapsed, peak, runs, steps):
+def report_time(timer, elapsed, peak, runs, steps, n_weights=1):
     full_runs = len(training_runs(load_train()))
     scale = full_runs / runs
     log(f"\nTiming ({runs} runs): {elapsed:.0f} s in all, peak traced memory {peak:.0f} MB")
@@ -323,13 +376,14 @@ def report_time(timer, elapsed, peak, runs, steps):
         log(f"  {key}: {timer.total[key]:.1f} s total, {timer.mean(key):.3f} s each "
             f"(x{timer.count[key]})")
     if runs < full_runs:
-        n_s1 = len(VARIANTS) * len(WEIGHTS) * len(RIDGES)
+        n_s1 = len(VARIANTS) * n_weights * len(RIDGES)
         s1 = sum(v for k, v in timer.total.items() if k.startswith("stage 1")) * scale
+        sweep = timer.total.get("final ridge/blend sweep", 0.0) * scale
         cand = timer.mean("stage 2 candidate") * scale if "stage 2 candidate" in timer.total else 0
-        n_cand = len(windows.candidates())
+        n_cand = len(candidate_pool())
         for full_steps in (steps, 10, 15):
             evals = sum(n_cand - i for i in range(full_steps + 1))
-            est = timer.total["candidate table"] * scale + s1 + cand * evals
+            est = timer.total["candidate table"] * scale + s1 + sweep + cand * evals
             log(f"  estimate for {full_runs} runs with {full_steps} selection steps: "
                 f"~{est / 60:.0f} min (stage 1: {n_s1} variants ~{s1 / 60:.0f} min; "
                 f"stage 2: {evals} fits ~{cand * evals / 60:.0f} min), "
@@ -427,9 +481,11 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-seconds", type=float, default=None)
     parser.add_argument("--fresh", action="store_true", help="clear this run's cache first")
+    parser.add_argument("--objective", choices=OBJECTIVES, default="official",
+                        help="select: the official S_final (default) or the old per-run TIMSE")
     args = parser.parse_args(argv)
     if args.command == "select":
-        select(args.sample, args.seed, args.max_seconds, args.fresh)
+        select(args.sample, args.seed, args.max_seconds, args.fresh, args.objective)
     elif args.command == "train":
         train()
     else:
