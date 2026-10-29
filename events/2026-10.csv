@@ -43,3 +43,6 @@ time,t0,candidate,sha,variant,kind,severity,detail
 2026-10-29T12:06:29Z,20261029T120000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,baseline,run ok,info,"baseline, 6.8 s, None/None regressors"
 2026-10-29T12:06:29Z,20261029T120000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,default,run ok,info,"linear, 6.8 s, 16/16 regressors"
 2026-10-29T12:06:29Z,20261029T120000Z,,,,cycle,info,"1 candidates, 2 runs recorded"
+2026-10-29T18:06:29Z,20261029T180000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,baseline,run ok,info,"baseline, 11.2 s, None/None regressors"
+2026-10-29T18:06:29Z,20261029T180000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,default,run ok,info,"linear, 8.7 s, 16/16 regressors"
+2026-10-29T18:06:29Z,20261029T180000Z,,,,cycle,info,"1 candidates, 2 runs recorded"
