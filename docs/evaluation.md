@@ -51,7 +51,7 @@ Model choices are made on walk-forward folds inside the training years. Each fol
 Scored on the yearly folds and documented, but not built:
 - [Official-metric re-selection](official_reselection.md): the linear model's whole selection re-run on the official metric. It picks the shipped model again, apart from a density window worth −0.31% (4 of 6 folds); the shipped config stays.
 - [Regime models](regime_models.md): one model per regime, routed by a classifier. The oracle would gain 22.6%, but the best realistic method gains only 1.0%.
-- [Gaussian-process correction](gaussian_process.md): a GP correction to the linear model. It gains 1.6% over the linear model but stays 1.4% behind the hybrid.
+- [Gaussian-process correction](gaussian_process.md): a GP correction to the linear model. It gains 1.6% over the linear model but stays 1.4% behind the hybrid. Re-scored on the official metric on the re-tuned linear model (2026-10-29): best −0.38% (3 of 6 folds); the re-tune absorbed its gain.
 - [HMM regimes](regime_hmm.md): hidden-Markov regime features for the hybrid. They add +0.1% at best.
 - [Regime switching](regime_switching.md): a standalone model with one expert per HMM regime, weighted by the filtered state. It gains 2.1% only for experts without the regressors; with them, every multi-regime version is worse than one regression.
 - [Quantile mapping](quantile_mapping.md): a post-step mapping each lead's forecast onto the observed speed distribution. It is worse at every blend strength (+0.9% at the mildest), because it removes the upward offset that TIMSE weighting makes optimal. Re-scored on the official metric (2026-10-29) it ties at the mildest strength (+0.02%, 2 of 6 folds) and is worse beyond: it narrows the bias but raises the tail term.
