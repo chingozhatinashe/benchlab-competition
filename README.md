@@ -1,35 +1,41 @@
-# Staging report 2026-10-28
+# Staging report 2026-10-29
 
-Generated 2026-10-28 09:59 UTC. Every `upload_candidate/*` tag runs every 6 h as Benchlab runs it (`.github/workflows/staging.yml`); scores use the official metric (`training.competition_score`; S in km/s, lower is better). This report only shows scores and health: what ships is chosen by hand and uploaded by the "Upload to Benchlab" workflow on main.
+Generated 2026-10-29 10:22 UTC. Every `upload_candidate/*` tag runs every 6 h as Benchlab runs it (`.github/workflows/staging.yml`); scores use the official metric (`training.competition_score`; S in km/s, lower is better). This report only shows scores and health: what ships is chosen by hand and uploaded by the "Upload to Benchlab" workflow on main.
 
-Official truth up to 2026-10-28 06:00 UTC
+Official truth up to 2026-10-29 08:00 UTC
 
 ## Scores (runs whose 72 h have passed)
 
-No completed runs yet.
+| candidate | variant | runs | failed (→ persistence) | S_final | / persistence | RMSE | TRMSE | bias | S_49:72 | persistence S | recurrence S |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| linear-v2 | baseline | 1 | 0 | — | — | 23.1 | — | -11.4 | — | — | — |
+| linear-v2 | default | 1 | 0 | — | — | 44.8 | — | -44.5 | — | — | — |
 
 ## Scores on the t0s every current candidate ran
 
-—
+| candidate | variant | runs | failed (→ persistence) | S_final | / persistence | RMSE | TRMSE | bias | S_49:72 | persistence S | recurrence S |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| linear-v2 | baseline | 1 | 0 | — | — | 23.1 | — | -11.4 | — | — | — |
+| linear-v2 | default | 1 | 0 | — | — | 44.8 | — | -44.5 | — | — | — |
 
 ## Health, last 7 days
 
 | candidate | variant | runs | failed | fell back | runtime p50 (s) | runtime max (s) | start delay p50 (min) | regressors observed | sources not ok | undeclared hosts |
 |---|---|---|---|---|---|---|---|---|---|---|
-| linear-v2 | baseline | 6 | 0 | 0 | 4.75 | 8.3 | 311.55 | — | — | — |
-| linear-v2 | default | 6 | 0 | 0 | 5.35 | 8.4 | 311.55 | 100.0% | — | — |
+| linear-v2 | baseline | 11 | 0 | 0 | 4.9 | 11.2 | 247.6 | — | — | — |
+| linear-v2 | default | 11 | 0 | 0 | 5.4 | 8.7 | 247.6 | 100.0% | — | — |
 
 ## Health, all time
 
 | candidate | variant | runs | failed | fell back | runtime p50 (s) | runtime max (s) | start delay p50 (min) | regressors observed | sources not ok | undeclared hosts |
 |---|---|---|---|---|---|---|---|---|---|---|
-| linear-v2 | baseline | 6 | 0 | 0 | 4.75 | 8.3 | 311.55 | — | — | — |
-| linear-v2 | default | 6 | 0 | 0 | 5.35 | 8.4 | 311.55 | 100.0% | — | — |
+| linear-v2 | baseline | 11 | 0 | 0 | 4.9 | 11.2 | 247.6 | — | — | — |
+| linear-v2 | default | 11 | 0 | 0 | 5.4 | 8.7 | 247.6 | 100.0% | — | — |
 
 ## Schedule
 
-Last cycle: 2026-10-28 00:00 UTC
-Missed cycles: 3 (10-26 12Z, 10-27 06Z, 10-28 06Z)
+Last cycle: 2026-10-29 06:00 UTC
+Missed cycles: 2 (10-26 12Z, 10-27 06Z)
 
 ## Alerts, last 7 days
 
