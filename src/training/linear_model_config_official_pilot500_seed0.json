@@ -1,0 +1,149 @@
+{
+  "family": "gaussian",
+  "boxcox": 1.0,
+  "relative": true,
+  "weights": "official",
+  "blend": 0.5,
+  "ridge": 0.1,
+  "lags_days": "27/13.5",
+  "half_width": 3,
+  "max_iter": 30,
+  "tol": 1e-06,
+  "despike": true,
+  "optional": [
+    "ch_cm_at_30h"
+  ],
+  "cap_quantile": 0.005,
+  "features": [
+    "ch_cm_at_30h",
+    "bt_mean_1h",
+    "density_mean_48h",
+    "pressure_mean_24h"
+  ],
+  "selection": {
+    "runs": 500,
+    "sample_seed": 0,
+    "objective": "geometric mean over folds of official S_final / persistence's (training.competition_score, official truth)",
+    "folds": [
+      [
+        "2019-10-20",
+        "2020-10-20"
+      ],
+      [
+        "2020-10-20",
+        "2021-10-20"
+      ],
+      [
+        "2021-10-20",
+        "2022-10-20"
+      ],
+      [
+        "2022-10-20",
+        "2023-10-20"
+      ],
+      [
+        "2023-10-20",
+        "2024-10-20"
+      ],
+      [
+        "2024-10-20",
+        "2025-10-20"
+      ]
+    ],
+    "path": [
+      {
+        "step": 0,
+        "added": "(speed terms only)",
+        "objective": 0.87519,
+        "gain": NaN
+      },
+      {
+        "step": 1,
+        "added": "ch_cm_at_30h",
+        "objective": 0.82691,
+        "gain": 0.05517
+      },
+      {
+        "step": 2,
+        "added": "bt_mean_1h",
+        "objective": 0.81779,
+        "gain": 0.01103
+      },
+      {
+        "step": 3,
+        "added": "density_mean_48h",
+        "objective": 0.81231,
+        "gain": 0.0067
+      },
+      {
+        "step": 4,
+        "added": "pressure_mean_24h",
+        "objective": 0.80758,
+        "gain": 0.00583
+      }
+    ],
+    "ridge": [
+      {
+        "ridge": 0.0,
+        "blend": 0.1,
+        "objective": 0.824621201186548
+      },
+      {
+        "ridge": 0.0,
+        "blend": 0.25,
+        "objective": 0.8169429659380142
+      },
+      {
+        "ridge": 0.0,
+        "blend": 0.5,
+        "objective": 0.8159484374190556
+      },
+      {
+        "ridge": 0.1,
+        "blend": 0.1,
+        "objective": 0.818390549399085
+      },
+      {
+        "ridge": 0.1,
+        "blend": 0.25,
+        "objective": 0.8075799836244325
+      },
+      {
+        "ridge": 0.1,
+        "blend": 0.5,
+        "objective": 0.8029239695128871
+      },
+      {
+        "ridge": 1.0,
+        "blend": 0.1,
+        "objective": 0.8567976844837493
+      },
+      {
+        "ridge": 1.0,
+        "blend": 0.25,
+        "objective": 0.8435145107515577
+      },
+      {
+        "ridge": 1.0,
+        "blend": 0.5,
+        "objective": 0.8433499004646092
+      },
+      {
+        "ridge": 10.0,
+        "blend": 0.1,
+        "objective": 0.954810184825776
+      },
+      {
+        "ridge": 10.0,
+        "blend": 0.25,
+        "objective": 0.9496004149316492
+      },
+      {
+        "ridge": 10.0,
+        "blend": 0.5,
+        "objective": 0.9666653989847299
+      }
+    ],
+    "score": 0.80292
+  }
+}

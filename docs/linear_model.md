@@ -1,6 +1,6 @@
 # Linear model (GLM on speed history and regressors)
 
-> **Submitted model since 2026-10-26**, with loss weights re-tuned for the official metric (`weights="official"`, `blend=0.25`; [official_retune.md](official_retune.md)). The selection below was made on the old per-run TIMSE.
+> **Submitted model since 2026-10-26**, with loss weights re-tuned for the official metric (`weights="official"`, `blend=0.25`; [official_retune.md](official_retune.md)). The selection below was made on the old per-run TIMSE; re-run on the official metric (2026-10-29) it picks the same variant and regressor families, so the config is unchanged ([official_reselection.md](official_reselection.md)).
 
 The first model to use the regressors from `docs/features.md`. It's a per-lead
 generalised linear model (`src/models/linear_model.py`), selected and trained by
