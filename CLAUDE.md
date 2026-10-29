@@ -47,7 +47,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.cme_detector          # two-stage CME detector (models.cme_detector) on the LASCO history, outputs added to the hybrid on the yearly folds; resumable; not built, see docs/cme_detector.md
 .venv/Scripts/python -m training.pull_hmi_images      # SDO/HMI quick-look magnetogram history (2016-10 -> now) reduced to a 10-deg lat/lon grid -> src/data/features/hmi_grid/; resumable, ~1.3 h
 .venv/Scripts/python -m training.magnetogram_features # HMI magnetogram features in the hybrid and linear model on the yearly folds; resumable; not built, see docs/magnetogram.md
-.venv/Scripts/python -m training.gaussian_process_folds  # GP correction re-scored on the yearly folds; resumable; not built, see docs/gaussian_process.md
+.venv/Scripts/python -m training.gaussian_process_folds  # offset-GP correction of the submitted linear model, official metric (--metric run_timse: the old study with ml2 and the hybrid), on the yearly folds; resumable; not built, see docs/gaussian_process.md
 .venv/Scripts/python -m training.pull_ace_1h            # official ground truth: SWPC hourly ACE files (2016-10 -> now) -> src/data/ace_1h/speed_hourly.csv (~40 s)
 .venv/Scripts/python -m training.official_rescore       # shipped models + spec baselines scored with the official metric on the yearly folds; resumable; see docs/official_score.md
 .venv/Scripts/python -m training.official_retune        # loss weights re-tuned for the official metric (linear, hybrid, final baseline) on the yearly folds; resumable; --eval-year scores the assets once; see docs/official_retune.md

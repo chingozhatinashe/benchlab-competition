@@ -79,3 +79,26 @@ XGB_NTHREAD=2 python -m training.gaussian_process_folds --pilot --folds 2024   #
 XGB_NTHREAD=2 python -m training.gaussian_process_folds --max-seconds 240      # all folds, resumable
 python -m training.gaussian_process_folds --summary
 ```
+
+## Re-run on the official metric (2026-10-29)
+
+The offset GP was the only re-run candidate with an earlier gain (−1.6% over the old linear model). It was re-scored with the official metric on the re-tuned linear model (`python -m training.gaussian_process_folds`, `--metric official`, now the default; analysis `src/experiments/gaussian_process_official.ipynb`).
+- **Anchor:** the submitted linear model (official loss weights, blend 0.25), refitted per fold. Its weights also weight each run's offset.
+- **Versions:** the offset GP only, on the same grid (sets A and H × lengthscale 1, 3, 10, 30 × noise/signal 1, 10, 100) and the same 4,000 fit runs per fold. ml2 is left out: it overfits and takes about 7 minutes per fold. The hybrid is no longer a reference.
+- **Score:** the official S_final against the official truth, on the six yearly folds. Decision rule, set before running: more than 1% better than the linear model, winning at least 4 of 6 folds.
+
+| | S_final (km/s) | vs linear | Folds won | Mean correction (km/s) |
+|---|---|---|---|---|
+| offset, set H, lengthscale 3, noise/signal 100 | **88.27** | −0.34% | 3 | −1.3 |
+| offset, set A, lengthscale 10, noise/signal 100 | 88.31 | −0.37% | 3 | −0.8 |
+| offset, set A, lengthscale 30, noise/signal 100 | 88.33 | −0.24% | 5 | +0.0 |
+| offset, set A, lengthscale 3, noise/signal 100 | 88.35 | −0.38% | 3 | −2.0 |
+| **linear (submitted, refitted per fold)** | 88.49 | | | |
+| the other 20 settings | 88.35–91.13 | −0.33% to +3.04% | 0–5 | |
+
+(The ranking by mean S_final and by the geometric-mean ratio differ slightly, because the folds' scores differ in size.)
+
+**Result: still not built.** No setting comes near the bar: the best is −0.38%, with 3 of 6 folds.
+- **The best setting changes from fold to fold.** On their own fold, the winners gain −3.5% (2019-10), −2.2% (2020-10) and −1.8% (2023-10), but each is a different setting. Picking each fold's best in hindsight, which can't be done live, still gains only −1.4%.
+- **The corrections are tiny:** the best settings shift the forecast by −2 to +1 km/s on average, against the anchor's +22 km/s mean bias.
+- **The re-tune absorbed the GP's old gain.** On the old metric the GP mostly corrected the old linear model's run-level offset. The official-weights linear model is already less biased, and nothing systematic is left for a smooth correction to learn.
