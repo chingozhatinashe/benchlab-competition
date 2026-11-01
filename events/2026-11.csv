@@ -1,0 +1,4 @@
+time,t0,candidate,sha,variant,kind,severity,detail
+2026-11-01T00:06:44Z,20261101T000000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,baseline,run ok,info,"baseline, 3.9 s, None/None regressors"
+2026-11-01T00:06:44Z,20261101T000000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,default,run ok,info,"linear, 6.4 s, 16/16 regressors"
+2026-11-01T00:06:44Z,20261101T000000Z,,,,cycle,info,"1 candidates, 2 runs recorded"
