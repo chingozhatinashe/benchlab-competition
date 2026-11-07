@@ -51,6 +51,8 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.pull_protons          # GOES >=10 MeV proton history (OMNI to 2020-03, NCEI SGPS from 2020-11) -> src/data/features/protons_hourly.csv; resumable, ~25 min; --check compares with SWPC's live feed
 .venv/Scripts/python -m training.new_features          # new regressors (Bt/temperature 26-28 d earlier, F10.7 81-day level/trend, protons) added to the submitted linear model, official metric, on the yearly folds; --sample 500 for the pilot; resumable; none kept, see docs/new_features.md
 .venv/Scripts/python -m training.pull_ace_1h            # official ground truth: SWPC hourly ACE files (2016-10 -> now) -> src/data/ace_1h/speed_hourly.csv (~40 s)
+.venv/Scripts/python -m training.pull_gong inventory     # GONG synoptic-map listings (2016-10 -> now) -> src/data/gong/inventory/; --report: posting delays and coverage
+.venv/Scripts/python -m training.pull_gong rings --pilot 2017-07  # PFSS rings (feature_engineering.pfss, sunkit-magex) per 12 h -> src/data/features/pfss/; resumable, ~8 h with 2 workers (~650 MB each)
 .venv/Scripts/python -m training.official_rescore       # shipped models + spec baselines scored with the official metric on the yearly folds; resumable; see docs/official_score.md
 .venv/Scripts/python -m training.official_retune        # loss weights re-tuned for the official metric (linear, hybrid, final baseline) on the yearly folds; resumable; --eval-year scores the assets once; see docs/official_retune.md
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
