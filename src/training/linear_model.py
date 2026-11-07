@@ -99,6 +99,24 @@ def candidate_table(t0s, ch_fallback=windows.CH_FALLBACK_HOURS):
     return windows.window_table(inputs, t0s, windows.candidates(), ch_fallback=ch_fallback)
 
 
+def with_pfss(table, t0s, names):
+    """`table` with the PFSS columns among `names` (training.pull_gong rings), gaps filled.
+
+    A run without a usable GONG map gets the training median, as in the study that chose
+    the feature (training.pfss_features); the fitted model's medians, which impute live
+    gaps, are then the same values.
+    """
+    cols = [n for n in names if windows.WindowSpec.parse(n).signal in windows.PFSS_SIGNALS]
+    if not cols:
+        return table
+    from training import pull_gong
+
+    inputs = build.Inputs(pfss=pull_gong.load_ring_table())
+    new = windows.window_table(inputs, t0s, [windows.WindowSpec.parse(n) for n in cols])
+    new = new.fillna(new.median())
+    return table.drop(columns=cols, errors="ignore").join(new)
+
+
 def with_fixes(config, on=True):
     """`config` with the data fixes: despiking, coronal-hole regressors optional, the cap."""
     if not on:
@@ -404,7 +422,7 @@ def train(config=None, out=ASSET):
     config = with_fixes(config or load_config())
     series = load_train()
     t0s = training_runs(series)
-    table = candidate_table(t0s)
+    table = with_pfss(candidate_table(t0s), t0s, config.input_features)
     x = table[list(config.input_features)].to_numpy(dtype=float) if config.features else None
     model = LinearModel(config).fit(series.to_numpy(dtype=float),
                                     series.index.get_indexer(t0s), x)

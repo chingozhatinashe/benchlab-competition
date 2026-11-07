@@ -255,6 +255,13 @@ The full variant search and forward selection were run again with both fixes:
 - **Live:** 15 AIA images per run instead of 4; the full live run at 2026-10-24 00Z took 14 s, with 18.6 MB of inputs.
 - **The eval year was not re-scored.**
 
+### 5. PFSS current-sheet distance (`pfss_d_hcs_lead_72h`, 2026-11-07)
+
+- **The change:** a fifth regressor, the angular distance to the heliospheric current sheet on the PFSS source surface (GONG map, sunkit-magex), at the Carrington longitude that faced Earth about 72 h before each forecast hour. Like the coronal-hole strip, it expands into 13 lag columns (0–72 h).
+- **Chosen on the six yearly folds** by `training.pfss_features` ([pfss.md](pfss.md)): −1.66%, 5 of 6 folds, 0.7794 of persistence (0.7926 before).
+- **Missing values:** a run without a usable map takes the training median, in training (`training.linear_model.with_pfss`) and live. So the fit keeps the same 11,300 runs.
+- **The eval year was not re-scored.**
+
 ## Live
 
 - `SWP_MODEL=linear` makes `model.py` use `inference.run_linear_forecast`.

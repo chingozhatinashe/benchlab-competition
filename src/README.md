@@ -1,8 +1,9 @@
-# Solar wind speed forecast — linear model with lead-aligned coronal holes (team TINASHE)
+# Solar wind speed forecast — linear model with coronal holes and the PFSS current sheet (team TINASHE)
 
 A 72-hour hourly forecast of the solar wind speed at L1 (ACE SWEPAM), from the speed
-history and four regressors: the interplanetary field, coronal holes in SDO/AIA images,
-X-ray flares and density at L1.
+history and five regressors: the interplanetary field, coronal holes in SDO/AIA images,
+X-ray flares, density at L1 and the distance to the heliospheric current sheet from a PFSS
+model of GONG magnetograms.
 
 ## The submitted model
 
@@ -10,30 +11,31 @@ The forecast is a per-lead linear model (`models/linear_model.py`,
 `assets/linear_model.json`), fitted on 2016-10 → 2025-10. Every choice was made on six
 yearly walk-forward folds with the organisers' official metric (per lead, the geometric
 mean of RMSE and a percentile TIMSE, averaged over the 72 leads).
-- **Folds:** its score is 0.79 of persistence's, against 0.87 for the speed-only reference baseline below.
-- **Held-out year** (2025-10 → 2026-10, used once for reporting): 0.79 of persistence's.
-- **Details:** choices and scores are in `docs/` in the repository (`official_score.md`, `official_retune.md`, `linear_model.md`, `lead_aligned_ch.md`).
+- **Folds:** its score is 0.78 of persistence's (0.79 before the PFSS term was added on 2026-11-07), against 0.87 for the speed-only reference baseline below.
+- **Held-out year** (2025-10 → 2026-10, used once for reporting, before the PFSS term): 0.79 of persistence's.
+- **Details:** choices and scores are in `docs/` in the repository (`official_score.md`, `official_retune.md`, `linear_model.md`, `lead_aligned_ch.md`, `pfss.md`).
 
 **The regression.** For each lead k = 1…72 h, a ridge regression of v(t0+k) − last on:
 - the last observed hourly speed;
 - the mean speed ±3 h around t0 + k − 27 d and t0 + k − 13.5 d (recurrence);
-- four regressors:
+- five regressors:
   - last-hour Bt;
   - the coronal-hole area of the central-meridian strip in the SDO/AIA 193 Å image about 72 h before each forecast hour (lead k uses the image 72 − k h before t0; 13 images, 0–72 h);
   - the 72 h peak X-ray flare flux;
-  - the 24 h mean density.
+  - the 24 h mean density;
+  - the angular distance to the heliospheric current sheet at the Carrington longitude that faced Earth about 72 h before each forecast hour (13 lags, 0–72 h). It comes from a potential-field source-surface (PFSS) solution of the newest GONG synoptic magnetogram, computed at each run with sunkit-magex (GPL-3, the successor of pfsspy).
 
 **Training loss.** The loss weights match the official metric. Per lead, they are 75% plain squared error and 25% the official percentile-TIMSE weights over all training runs at that lead. The 25% share was chosen on the folds: more tail weight biases the forecast upward and costs more RMSE than it saves in the tail. Each regressor is clipped to its training [0.5%, 99.5%] range.
 
 **Robustness.** A run never fails for lack of data.
-- **Missing regressors:** a missing regressor takes its training median.
+- **Missing regressors:** a missing regressor takes its training median. This includes the current-sheet distance when no GONG map is usable or the PFSS solve fails.
 - **Missing coronal-hole image:** it falls back to one 6 h, then 12 h older, then to the nearest of the other images within 24 h. If the strip is still missing, a submodel fitted without it is used.
 - **Failures:** if the linear model fails, the reference baseline below forecasts; then persistence; then the training mean.
 - **Other modes:** `SWP_MODEL=baseline` submits the reference baseline directly. `SWP_MODEL=hybrid` runs an earlier linear + gradient-boosted-trees hybrid (`models/xgboost_model.py`, `assets/xgboost_model.json`, evaluated in numpy). It is not used by default: on the official metric it is no better.
 
-**Runtime.** numpy, pandas and Pillow only.
-- **Inputs:** all sources are fetched in parallel within a 300 s budget: about 3 months of ACE speed, 30 days of ACE plasma and field, about 15 AIA images, and flares, roughly 17 MB.
-- **Timing:** a run at 2026-10-26 06Z took 21 s, with every regressor observed.
+**Runtime.** numpy, pandas and Pillow, plus sunkit-magex, sunpy, astropy, scipy, scikit-image and streamtracer for the PFSS solve.
+- **Inputs:** all sources are fetched in parallel within a 300 s budget: about 3 months of ACE speed, 30 days of ACE plasma and field, about 15 AIA images, flares and one GONG synoptic map (about 240 KB), roughly 20 MB. The PFSS solve takes about 10 s.
+- **Timing:** a run at 2026-11-07 12Z took 21 s, with every regressor observed.
 
 ## Reference baseline (fallback)
 
@@ -56,11 +58,13 @@ Details are in `docs/final_baseline.md`.
 | ACE SWEPAM/MAG/EPAM daily lists | `soho.nascom.nasa.gov` | speed history; plasma, field, particles |
 | SWPC real-time feeds, flares, F10.7 | `services.swpc.noaa.gov` | latest minutes; flares; F10.7 |
 | SDO/AIA 193 browse images | `sdo.gsfc.nasa.gov` | coronal holes (decoded with Pillow) |
+| GONG synoptic maps (SWPC copy first) | `services.swpc.noaa.gov`, then `gong2.nso.edu`, `gong.nso.edu`, `nispdata.nso.edu` | PFSS current-sheet distance |
 | CDAWeb OMNI | `cdaweb.gsfc.nasa.gov` | declared for history connectors; not contacted by a run |
 
 - **Only data published by `t0` is used:**
   - in-situ minutes before t0 − 10 min (speed minutes before t0);
   - AIA images taken before t0 − 1 h;
+  - the newest GONG map uploaded by t0 − 10 min and observed within 72 h;
   - flares that peaked by t0 − 10 min;
   - F10.7 up to the previous day.
 - **Speed:** averaged to hourly values exactly as in training, with no imputation.

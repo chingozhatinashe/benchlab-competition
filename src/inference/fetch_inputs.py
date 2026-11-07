@@ -25,9 +25,10 @@ from connectors.swpc import SWPCF107Connector, SWPCFlareConnector, SWPCRealtime
 from feature_engineering import build, coronagraph, coronal_holes, insitu
 
 BUDGET_SECONDS = 300.0
-# Fetch and solve the GONG/PFSS input on every run, used or not, so staging can check its
-# health before any model uses it (the "pfss" source in the run report).
-PFSS_SHADOW = True
+# True: fetch and solve the GONG/PFSS input on every run, used or not (staging's shadow
+# check before a model used it). Since 2026-11-07 the linear model uses it (pfss_d_hcs), so
+# it is fetched whenever the selected regressors need it.
+PFSS_SHADOW = False
 
 
 def log(msg):
