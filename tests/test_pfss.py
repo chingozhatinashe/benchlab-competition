@@ -154,3 +154,13 @@ def test_no_rings_give_nan():
     specs = windows.pfss_candidates()[:3]
     out = windows.window_table(build.Inputs(), [pd.Timestamp("2024-03-01T12:00Z")], specs)
     assert out.isna().all().all()
+
+
+def test_ring_signals_take_negative_lead_lags():
+    from models import linear_model as lm
+
+    assert lm.lead_lags(24, "ch_cm").min() == 0  # images: never after t0
+    lags = lm.lead_lags(24, "pfss_d_hcs")
+    assert lags[0] == 24 and lags[-1] == -48  # lead 72 reads the longitude facing Earth at t0+48
+    cfg = lm.Config(features=("pfss_d_hcs_lead_24h",))
+    assert "pfss_d_hcs_at_-48h" in cfg.input_features

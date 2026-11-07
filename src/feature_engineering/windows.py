@@ -58,7 +58,7 @@ PROTON_LATENCY = pd.Timedelta(minutes=10)
 PFSS_RING = tuple(f"pfss_{v}" for v in pfss.RING_VARS)  # pfss_log_fs, pfss_theta_b, ...
 PFSS_SCALARS = tuple(f"pfss_{v}" for v in pfss.SCALARS)
 PFSS_SIGNALS = PFSS_RING + PFSS_SCALARS
-PFSS_LAG_HOURS = tuple(range(0, 121, 6))
+PFSS_LAG_HOURS = tuple(range(-72, 121, 6))  # negative: longitudes facing Earth after t0
 
 
 @dataclass(frozen=True)
