@@ -194,7 +194,7 @@ def test_window_means_coverage_and_no_future():
 def test_shipped_asset_loads_and_names_real_regressors():
     model = LinearModel.load()
     assert model.coef.shape == (HORIZON, model.config.n_columns)
-    names = {s.name for s in windows.candidates()}
+    names = {s.name for s in (*windows.candidates(), *windows.pfss_candidates())}
     assert set(model.config.input_features) <= names  # lead-aligned ones expand to real lags
 
 

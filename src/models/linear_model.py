@@ -48,6 +48,8 @@ on 2026-01-20) can't be extrapolated linearly into a large forecast error.
 Lead-aligned regressors (named "<signal>_lead_<D>h", e.g. ch_cm_lead_72h) take, for lead
 k, the signal at lag L_k = D - k before t0, rounded up to the 6-hour image grid and at
 least 0: the image about D hours before the hour being forecast (training.lead_aligned_ch).
+PFSS ring signals ("pfss_*", "wsa_*") keep negative lags: the map at t0 also covers the
+longitudes that will face Earth after t0 (columns like "pfss_d_hcs_at_-24h").
 The model reads them from the lagged columns "<signal>_at_<L>h" (Config.input_features),
 one column per distinct L_k, and puts each lead's own column in its design. A missing
 lagged value is filled from the nearest lag of the same run within LEAD_FILL_HOURS;
@@ -93,6 +95,7 @@ ETA_BOUNDS = (np.log(50.0), np.log(5000.0))  # keeps the log-link IRLS away from
 LEAD_GRID = 6  # hours between the lagged columns of a lead-aligned regressor (image grid)
 LEAD_FILL_HOURS = 24  # a missing lagged value is filled from the nearest lag within this
 _LEAD = re.compile(r"^(?P<signal>.+)_lead_(?P<delay>\d+)h$")
+SIGNED_LEAD_PREFIXES = ("pfss_", "wsa_")
 
 
 def lead_feature(name):
@@ -101,9 +104,19 @@ def lead_feature(name):
     return (m["signal"], int(m["delay"])) if m else None
 
 
-def lead_lags(delay):
-    """L_k for each lead k: delay - k rounded up to LEAD_GRID, at least 0."""
-    return np.maximum(0, np.ceil((delay - LEADS) / LEAD_GRID).astype(int) * LEAD_GRID)
+def signed_lead(signal):
+    """Ring signals (one PFSS map covers every longitude) may take negative lags."""
+    return signal.startswith(SIGNED_LEAD_PREFIXES)
+
+
+def lead_lags(delay, signal=""):
+    """L_k for each lead k: delay - k rounded up to LEAD_GRID, at least 0 (images).
+
+    Ring signals (signed_lead) keep negative lags: the longitude that will face Earth
+    -L_k hours after t0, read from the map available at t0.
+    """
+    lags = np.ceil((delay - LEADS) / LEAD_GRID).astype(int) * LEAD_GRID
+    return lags if signed_lead(signal) else np.maximum(0, lags)
 
 
 def lag_column(signal, lag):
@@ -168,7 +181,7 @@ class Config:
         for f in self.features:
             lead = lead_feature(f)
             cols += ([f] if lead is None else
-                     [lag_column(lead[0], lag) for lag in np.unique(lead_lags(lead[1]))])
+                     [lag_column(lead[0], lag) for lag in np.unique(lead_lags(lead[1], lead[0]))])
         return tuple(dict.fromkeys(cols))
 
     def lead_columns(self, feature):
@@ -177,7 +190,8 @@ class Config:
         lead = lead_feature(feature)
         if lead is None:
             return np.full(HORIZON, names.index(feature))
-        return np.array([names.index(lag_column(lead[0], lag)) for lag in lead_lags(lead[1])])
+        return np.array([names.index(lag_column(lead[0], lag))
+                         for lag in lead_lags(lead[1], lead[0])])
 
 
 def boxcox(y, lam):
@@ -269,7 +283,7 @@ class LinearModel:
             lead = lead_feature(f)
             if lead is None:
                 continue
-            lags = np.unique(lead_lags(lead[1]))
+            lags = np.unique(lead_lags(lead[1], lead[0]))
             idx = [names.index(lag_column(lead[0], lag)) for lag in lags]
             block = x[:, idx]
             out = block.copy()

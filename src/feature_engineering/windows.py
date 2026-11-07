@@ -20,6 +20,11 @@ availability rules as feature_engineering.build:
               (proton_candidates; not in `candidates`)
     HMI       magnetogram signals (magnetogram.SIGNALS) by the AIA rule: the image for
               cut-off t0 - CH_LATENCY - lag, with the same fallbacks (not in `candidates`)
+    PFSS      the ring of the newest GONG map usable at t0 (connectors.gong; the row for the
+              latest t0 at or before it, at most CH_GRID older), read at the Carrington
+              longitude that faced Earth `lag` hours before t0 ("pfss_<var>_at_<L>h", var in
+              pfss.RING_VARS); the map's scalars as "pfss_<scalar>_at_0h" (pfss_candidates;
+              not in `candidates`)
 
 A window statistic needs at least half its hours (or days), otherwise it is NaN.
 """
@@ -30,7 +35,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from feature_engineering import build, coronagraph, magnetogram, solar_activity
+from feature_engineering import build, coronagraph, magnetogram, pfss, solar_activity
 
 HOUR = pd.Timedelta(hours=1)
 INSITU_SIGNALS = ("speed", "density", "pressure", "log_temperature", "log_t_ratio", "bt",
@@ -50,6 +55,10 @@ LASCO_HOURS = (6, 24, 72)
 PROTON_SIGNALS = ("log_p10",)  # log10 of the >=10 MeV flux, floored at PROTON_FLOOR pfu
 PROTON_FLOOR = 1.0  # pfu: quiet-time levels differ by satellite and file version
 PROTON_LATENCY = pd.Timedelta(minutes=10)
+PFSS_RING = tuple(f"pfss_{v}" for v in pfss.RING_VARS)  # pfss_log_fs, pfss_theta_b, ...
+PFSS_SCALARS = tuple(f"pfss_{v}" for v in pfss.SCALARS)
+PFSS_SIGNALS = PFSS_RING + PFSS_SCALARS
+PFSS_LAG_HOURS = tuple(range(-72, 121, 6))  # negative: longitudes facing Earth after t0
 
 
 @dataclass(frozen=True)
@@ -113,6 +122,16 @@ def proton_candidates():
 def coronagraph_candidates():
     """The windowed coronagraph signals: the largest value in the last 6, 24 and 72 h."""
     return [WindowSpec(s, "max", h) for s in LASCO_SIGNALS for h in LASCO_HOURS]
+
+
+def pfss_candidates():
+    """Ring signals at every lag of the 6-hour grid, and the map scalars (lag 0)."""
+    specs = [WindowSpec(s, "at", h) for s in PFSS_RING for h in PFSS_LAG_HOURS]
+    return specs + [WindowSpec(s, "at", 0) for s in PFSS_SCALARS]
+
+
+def uses_pfss(specs):
+    return any(s.signal in PFSS_SIGNALS for s in specs)
 
 
 def lasco_hours(specs):
@@ -257,6 +276,36 @@ def _ch_at(series, t0s, hours, fallback):
     return out
 
 
+def _pfss(rings, spec, t0s):
+    """A PFSS ring signal at the longitude facing Earth `hours` before t0, or a map scalar."""
+    out = np.full(len(t0s), np.nan)
+    if rings is None or len(rings) == 0 or len(t0s) == 0:
+        return out
+    i = rings.t0.searchsorted(t0s, side="right") - 1
+    ok = i >= 0
+    ok[ok] = (t0s[ok] - rings.t0[i[ok]]) < CH_GRID
+    if not ok.any():
+        return out
+    name = spec.signal.removeprefix("pfss_")
+    if spec.signal in PFSS_SCALARS:
+        if spec.hours != 0:
+            raise ValueError(f"{spec.name}: PFSS scalars have lag 0 only")
+        out[ok] = rings.scalars[i[ok], pfss.SCALARS.index(name)]
+        return out
+    lon = pfss.earth_longitude(t0s[ok] - spec.hours * HOUR)
+    # linear interpolation between the 1-deg ring columns, cyclic
+    lo = np.floor(lon).astype(int) % pfss.N_LON
+    hi = (lo + 1) % pfss.N_LON
+    w = lon - np.floor(lon)
+    ring = rings.ring[i[ok], pfss.RING_VARS.index(name)]
+    a, b = ring[np.arange(len(lo)), lo], ring[np.arange(len(lo)), hi]
+    if name == "foot_pol":  # a sign: take the nearer column
+        out[ok] = np.where(w < 0.5, a, b)
+    else:
+        out[ok] = np.where(np.isnan(a), b, np.where(np.isnan(b), a, (1 - w) * a + w * b))
+    return out
+
+
 def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
     """One column per spec (NaN where unknown), one row per t0."""
     t0s = pd.DatetimeIndex(t0s)
@@ -283,6 +332,8 @@ def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
             mg = getattr(inputs, "magnetogram", None)
             cols[spec.name] = (np.full(len(t0s), np.nan) if mg is None or mg.empty
                                else _ch_at(mg[spec.signal], t0s, spec.hours, ch_fallback))
+        elif spec.signal in PFSS_SIGNALS:
+            cols[spec.name] = _pfss(getattr(inputs, "pfss", None), spec, t0s)
         else:
             raise ValueError(f"unknown signal {spec.signal!r}")
     table = pd.DataFrame(cols, index=t0s)

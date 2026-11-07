@@ -17,7 +17,8 @@
     "bt_mean_1h",
     "ch_cm_lead_72h",
     "xray_peak_max_72h",
-    "density_mean_24h"
+    "density_mean_24h",
+    "pfss_d_hcs_lead_72h"
   ],
   "selection": {
     "runs": 13148,
@@ -122,5 +123,6 @@
       "vs_persistence": 0.7926
     },
     "study": "training.official_retune, docs/official_retune.md"
-  }
+  },
+  "pfss": "2026-11-07: pfss_d_hcs_lead_72h added, the PFSS current-sheet distance at the Carrington longitude facing Earth ~72 h before each forecast hour (GONG map, sunkit-magex); -1.66% S_final vs the config without it, 5 of 6 folds, 0.7794 of persistence; training.pfss_features, docs/pfss.md"
 }

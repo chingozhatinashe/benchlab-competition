@@ -8,3 +8,13 @@
 numpy>=1.26
 pandas>=2.2
 Pillow>=10.0
+
+# PFSS model of the GONG synoptic maps (feature_engineering.pfss): sunkit-magex (GPL-3, the
+# successor of pfsspy) on sunpy maps; the last releases that support Python 3.10.
+sunkit-magex==1.1.0
+sunpy[map]==6.0.6
+astropy==6.1.7
+streamtracer==2.5.0
+scikit-image==0.25.2
+scipy==1.15.3
+aioftp==0.25.1  # pulled in by sunpy via parfive; 0.26+ fails to import on some 3.10 releases

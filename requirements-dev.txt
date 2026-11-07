@@ -15,3 +15,10 @@ xgboost-cpu==3.2.0  # trains models.xgboost_model; the image evaluates its trees
 nbformat
 nbclient
 h5py  # reads the GOES flare history (training.pull_features)
+# PFSS features (feature_engineering.pfss, training.pull_gong); the last releases on Python 3.10
+sunkit-magex==1.1.0  # GPL-3; the successor of pfsspy
+sunpy[map]==6.0.6
+astropy==6.1.7
+streamtracer==2.5.0
+scikit-image==0.25.2
+aioftp==0.25.1  # pulled in by sunpy via parfive; 0.26+ needs asyncio.Server (Python >= 3.10.x)
