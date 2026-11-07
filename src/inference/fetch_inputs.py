@@ -6,7 +6,8 @@ feature_engineering.impute). Nothing here raises into the forecast.
 
 Availability is enforced at the source: in-situ minutes before t0 - LATENCY,
 AIA images taken before t0 - CH_LATENCY - d days, flares by peak time and F10.7
-by day (both inside feature_engineering.solar_activity).
+by day (both inside feature_engineering.solar_activity), the GONG map by its upload
+time (connectors.gong, posted by t0 - 10 min).
 """
 
 import sys
@@ -17,12 +18,16 @@ import pandas as pd
 
 from connectors.ace_archive import ACEDailyArchive
 from connectors.base import bytes_downloaded, to_utc
+from connectors.gong import GONGConnector
 from connectors.lasco import LASCOConnector
 from connectors.sdo import SDOConnector
 from connectors.swpc import SWPCF107Connector, SWPCFlareConnector, SWPCRealtime
 from feature_engineering import build, coronagraph, coronal_holes, insitu
 
 BUDGET_SECONDS = 300.0
+# Fetch and solve the GONG/PFSS input on every run, used or not, so staging can check its
+# health before any model uses it (the "pfss" source in the run report).
+PFSS_SHADOW = True
 
 
 def log(msg):
@@ -45,20 +50,49 @@ def default_sources(budget=BUDGET_SECONDS):
         "lasco": LASCOConnector(budget=min(120.0, archive_budget)),
         "flares": SWPCFlareConnector(),
         "f107": SWPCF107Connector(),
+        "gong": GONGConnector(),
     }
+
+
+def pfss_ring(t0, gong):
+    """The PFSS ring of the newest usable GONG map at t0 (raises if there is none)."""
+    from feature_engineering import pfss
+
+    rings = {}
+
+    def accept(data, row):
+        rings[row["name"]] = pfss.reduce(data, row["observed"])
+        return rings[row["name"]] is not None
+
+    started = time.monotonic()
+    row, _ = gong.latest(t0, accept=accept)
+    if row is None:
+        raise RuntimeError("no usable GONG map")
+    ring = rings[row["name"]]
+    log(f"pfss: {row['name']} ({(t0 - row['observed']).total_seconds() / 3600:.1f} h old), "
+        f"{time.monotonic() - started:.1f} s")
+    return ring
+
+
+def _ring_table(t0, ring):
+    from feature_engineering import pfss
+
+    return pfss.RingTable.single(t0, ring)
 
 
 def _before(df, cutoff):
     return None if df is None else df[df.index < cutoff]
 
 
-def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None, lasco_hours=0):
+def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None, lasco_hours=0,
+                 pfss=False):
     """(build.Inputs, report) for a forecast at t0, using data available by t0.
 
     `ch_lag_hours` lists the AIA image lags (hours before t0 - CH_LATENCY) to fetch;
     by default the daily lags of the fixed regressors (build.ch_cutoffs). `lasco_hours`
     > 0 also fetches the LASCO images taken in the last that many hours (by
-    t0 - coronagraph.LATENCY); 0 skips LASCO.
+    t0 - coronagraph.LATENCY); 0 skips LASCO. `pfss` (or PFSS_SHADOW) also fetches the
+    newest GONG map and solves its PFSS ring.
     """
     t0 = to_utc(t0)
     if ch_lag_hours is None:
@@ -83,6 +117,8 @@ def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None, las
         lasco_end = t0 - coronagraph.LATENCY
         jobs["lasco"] = lambda: sources["lasco"].cells(
             lasco_end - pd.Timedelta(hours=lasco_hours), lasco_end)
+    if (pfss or PFSS_SHADOW) and "gong" in sources:
+        jobs["pfss"] = lambda: pfss_ring(t0, sources["gong"])
     pool = ThreadPoolExecutor(max_workers=len(jobs))
     futures = {pool.submit(fn): name for name, fn in jobs.items()}
     done, pending = wait(futures, timeout=budget)
@@ -112,6 +148,7 @@ def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None, las
         flares=got.get("flares"),
         f107=got.get("f107"),
         coronagraph=coronagraph.signal_frame(got["lasco"]) if "lasco" in got else None,
+        pfss=_ring_table(t0, got["pfss"]) if "pfss" in got else None,
     )
     report["rows"] = {
         "plasma_minutes": 0 if plasma is None else int(plasma["speed"].notna().sum()),
@@ -126,6 +163,7 @@ def fetch_inputs(t0, sources=None, budget=BUDGET_SECONDS, ch_lag_hours=None, las
         "lasco_images": None if inputs.coronagraph is None
         else {i: int(inputs.coronagraph[f"{i}max"].notna().sum())
               for i in coronagraph.INSTRUMENTS},
+        "pfss_map": None if inputs.pfss is None else f"{inputs.pfss.taken[0]:%Y-%m-%dT%H:%MZ}",
     }
     report["seconds"] = round(time.monotonic() - started, 1)
     report["megabytes"] = round((bytes_downloaded() - bytes_before) / 1e6, 1)

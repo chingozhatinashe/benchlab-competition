@@ -4,6 +4,7 @@
 #
 # Usage:  python3 model.py 20261111T060000Z   ->  JSON on stdout
 
+import contextlib
 import json
 import sys
 from datetime import datetime, timedelta, timezone
@@ -23,7 +24,9 @@ def main():
         return 2
 
     t0 = datetime.strptime(sys.argv[1], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
-    speeds = predict(t0)
+    # stdout carries only the forecast JSON: anything a library prints goes to stderr
+    with contextlib.redirect_stdout(sys.stderr):
+        speeds = predict(t0)
 
     if len(speeds) != FORECAST_HOURS:
         print(

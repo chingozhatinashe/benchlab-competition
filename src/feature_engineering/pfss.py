@@ -131,10 +131,21 @@ def sheet_points(lat, lon, br):
     return p / np.linalg.norm(p, axis=1, keepdims=True) if len(p) else p
 
 
+def quiet():
+    """Silence sunpy's and astropy's loggers: their INFO lines go to stdout, which carries
+    the forecast JSON (model.py)."""
+    import logging
+
+    for name in ("sunpy", "astropy"):
+        logging.getLogger(name).setLevel(logging.ERROR)
+
+
 def load_map(fits_gz):
     """A sunpy map from a GONG .fits.gz file's bytes."""
     import sunpy.map
     from astropy.io import fits
+
+    quiet()
 
     raw = gzip.decompress(fits_gz) if fits_gz[:2] == b"\x1f\x8b" else fits_gz
     with fits.open(io.BytesIO(raw)) as hdul:
