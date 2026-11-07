@@ -38,6 +38,7 @@ class Inputs:
     coronagraph: pd.DataFrame | None = None  # coronagraph.SIGNALS, indexed by image time
     magnetogram: pd.DataFrame | None = None  # magnetogram.SIGNALS, indexed by cut-off
     protons: pd.Series | None = None  # GOES >=10 MeV flux (pfu), hourly means, by hour start
+    pfss: object | None = None  # pfss.RingTable: PFSS rings of GONG maps, by the t0 they serve
 
 
 def ch_cutoffs(t0):
