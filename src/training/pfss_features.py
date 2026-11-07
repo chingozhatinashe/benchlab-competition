@@ -12,7 +12,8 @@ Variants, each added to the submitted config (training/linear_model_config.json)
 fold:
     single     each ring signal lead-aligned at 72 h ("pfss_<var>_lead_72h": lead k reads the
                longitude that faced Earth about 72 h before t0 + k), and each map scalar
-    delay      the two best ring signals at 48, 96 and 120 h
+    delay      the two best ring signals at 24, 48, 96 and 120 h (below 72 h the late leads
+               read longitudes that face Earth after t0: negative lags)
     together   the best two ring signals together at their best delays, and with the best
                scalar
 A missing value is filled with the median of the fold's fit rows (training.new_features.Folds),
@@ -45,7 +46,7 @@ EXPERIMENTS = HERE.parent / "experiments"
 CACHE_DIR = HERE.parent / "data" / "pfss_features_cache"
 KEEP_GAIN, KEEP_FOLDS = 0.01, 4
 DELAY = 72
-DELAYS = (48, 96, 120)
+DELAYS = (24, 48, 96, 120)
 
 
 def log(msg):

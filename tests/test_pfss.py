@@ -206,3 +206,13 @@ def test_nso_is_used_when_swpc_has_nothing(monkeypatch):
     monkeypatch.setattr(gong, "http_get_bytes", fake_get)
     row, _ = gong.GONGConnector().latest(pd.Timestamp("2026-11-06T18:00Z"))
     assert row["source"] == "nso" and row["name"] == "mrzqs261106t1314c2317_112.fits.gz"
+
+
+def test_ring_signals_take_negative_lead_lags():
+    from models import linear_model as lm
+
+    assert lm.lead_lags(24, "ch_cm").min() == 0  # images: never after t0
+    lags = lm.lead_lags(24, "pfss_d_hcs")
+    assert lags[0] == 24 and lags[-1] == -48  # lead 72 reads the longitude facing Earth at t0+48
+    cfg = lm.Config(features=("pfss_d_hcs_lead_24h",))
+    assert "pfss_d_hcs_at_-48h" in cfg.input_features
