@@ -18,8 +18,8 @@ expansion factor fs and the footpoint's distance theta_b (deg) to the coronal-ho
    source surface and R_INNER, and any systematic timing error; calibrated).
 
 The parameters (Params) are calibrated on the training years (training.wsa_model); the
-rolling variant re-fits a scale, an offset and a time shift on each run's last days
-(rolling_fit).
+rolling variant re-fits an offset and a scale on each run's last days (rolling_fit).
+Not built: neither variant passed the fold study (docs/wsa.md).
 """
 
 from dataclasses import asdict, dataclass

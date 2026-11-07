@@ -54,6 +54,7 @@ bash package_submission.sh                              # builds submission.zip 
 .venv/Scripts/python -m training.pull_gong inventory     # GONG synoptic-map listings (2016-10 -> now) -> src/data/gong/inventory/; --report: posting delays and coverage
 .venv/Scripts/python -m training.pull_gong rings --pilot 2017-07  # PFSS rings (feature_engineering.pfss, sunkit-magex) per 12 h -> src/data/features/pfss/; resumable, ~8 h with 2 workers (~650 MB each)
 .venv/Scripts/python -m training.pfss_features         # PFSS ring features added to the submitted linear model, official metric, on the yearly folds; --sample 500 for the pilot; resumable; d_hcs kept, see docs/pfss.md
+.venv/Scripts/python -m training.wsa_model             # WSA/HUX speed (models.wsa) from the PFSS rings, auto-calibrated per fold (offline + rolling), alone and added to the linear model, on the yearly folds; --sample 500 for the pilot; resumable, ~1 h; not built, see docs/wsa.md
 .venv/Scripts/python -m training.official_rescore       # shipped models + spec baselines scored with the official metric on the yearly folds; resumable; see docs/official_score.md
 .venv/Scripts/python -m training.official_retune        # loss weights re-tuned for the official metric (linear, hybrid, final baseline) on the yearly folds; resumable; --eval-year scores the assets once; see docs/official_retune.md
 .venv/Scripts/python -m training.final_baseline tune     # grid-searches the reference baseline on the training years only
