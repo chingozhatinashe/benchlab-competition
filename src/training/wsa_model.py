@@ -178,13 +178,15 @@ def run(sample=None, seed=0, max_seconds=None):
     cache.mkdir(parents=True, exist_ok=True)
     t = time.perf_counter()
     data = Data(sample, seed)
-    base = tl.candidate_table(data.t0s)
+    shipped = tl.with_fixes(tl.load_config())
+    # the submitted config's PFSS columns, filled per fold below as in training.pfss_features
+    base = tl.with_pfss(tl.candidate_table(data.t0s), data.t0s, shipped.input_features,
+                        fill=False)
     t_table = time.perf_counter() - t
     log(f"{len(data.t0s)} runs ({tag}); tables {t_table:.0f} s; runs with a ring: "
         f"{data.has_ring.mean():.0%}")
     folds = tl.Folds(data.series, base, data.series.index.get_indexer(data.t0s),
                      truth=data.truth)
-    shipped = tl.with_fixes(tl.load_config())
     rows, times = {}, []
 
     for fi, ((start, _), f) in enumerate(zip(tl.FOLDS, folds.folds, strict=True)):
@@ -239,7 +241,7 @@ def run(sample=None, seed=0, max_seconds=None):
                     frame = pd.concat([frame, columns[key, days]], axis=1)
                 xs.append(frame[feats].to_numpy(dtype=float))
             x_fit, x_val = xs
-            new = [i for i, n in enumerate(feats) if n.startswith(SIGNAL)]
+            new = [i for i, n in enumerate(feats) if n.startswith((SIGNAL, "pfss_"))]
             if new:
                 med = np.nanmedian(x_fit[:, new], axis=0)
                 for x in (x_fit, x_val):
