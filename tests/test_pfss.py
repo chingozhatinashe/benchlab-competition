@@ -106,3 +106,51 @@ def test_dipole_ring():
 def test_bad_bytes_give_none():
     pytest.importorskip("sunkit_magex")
     assert pfss.reduce(b"not a fits file") is None
+
+
+def ring_table(t0s, seed=0):
+    rng = np.random.default_rng(seed)
+    n = len(t0s)
+    return pfss.RingTable(pd.DatetimeIndex(t0s), pd.DatetimeIndex(t0s) - pd.Timedelta(hours=1),
+                          rng.normal(size=(n, *pfss.ring_shape())).astype(np.float32),
+                          rng.normal(size=(n, len(pfss.SCALARS))).astype(np.float32))
+
+
+def test_pfss_windows_use_only_rings_up_to_t0():
+    from feature_engineering import build, windows
+
+    t0s = pd.date_range("2024-03-01", "2024-03-10", freq="6h", tz="UTC")
+    table = ring_table(t0s)
+    specs = windows.pfss_candidates()
+    t0 = t0s[20]
+    before = windows.window_table(build.Inputs(pfss=table), [t0], specs)
+    later = t0s > t0
+    scrambled = ring_table(t0s, seed=1)
+    scrambled.ring[~later] = table.ring[~later]
+    scrambled.scalars[~later] = table.scalars[~later]
+    after = windows.window_table(build.Inputs(pfss=scrambled), [t0], specs)
+    pd.testing.assert_frame_equal(before, after)
+    assert before.notna().all().all()
+
+
+def test_pfss_window_reads_the_longitude_facing_earth():
+    from feature_engineering import build, windows
+
+    t0 = pd.Timestamp("2024-03-01T12:00Z")
+    lon = np.arange(pfss.N_LON, dtype=np.float32)
+    table = ring_table([t0])
+    table.ring[0, pfss.RING_VARS.index("d_hcs")] = lon  # value = its own longitude
+    specs = [windows.WindowSpec("pfss_d_hcs", "at", h) for h in (0, 24)]
+    row = windows.window_table(build.Inputs(pfss=table), [t0], specs).iloc[0]
+    expect = pfss.earth_longitude([t0, t0 - pd.Timedelta(hours=24)])
+    assert row.to_numpy() == pytest.approx(expect, abs=1e-3)
+    # the Sun rotates about 13.2 deg a day under Earth, so Carrington longitude falls
+    assert (expect[1] - expect[0]) % 360 == pytest.approx(13.2, abs=0.3)
+
+
+def test_no_rings_give_nan():
+    from feature_engineering import build, windows
+
+    specs = windows.pfss_candidates()[:3]
+    out = windows.window_table(build.Inputs(), [pd.Timestamp("2024-03-01T12:00Z")], specs)
+    assert out.isna().all().all()

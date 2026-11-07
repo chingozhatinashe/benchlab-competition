@@ -220,6 +220,13 @@ def load_rings(directory=RING_DIR):
             cat["ring"][order], cat["scalars"][order])
 
 
+def load_ring_table(directory=RING_DIR):
+    """The pulled rings as a pfss.RingTable (for build.Inputs(pfss=...))."""
+    t0, taken, _, ring, scalars = load_rings(directory)
+    keep = ~t0.duplicated(keep="last")
+    return pfss.RingTable(t0[keep], taken[keep], ring[keep], scalars[keep])
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("step", choices=["inventory", "rings"])

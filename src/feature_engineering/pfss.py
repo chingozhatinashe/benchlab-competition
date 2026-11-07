@@ -53,6 +53,53 @@ def ring_shape():
     return len(RING_VARS), N_LON
 
 
+@dataclass
+class RingTable:
+    """Rings by the t0 they serve (history: training.pull_gong; live: one row at t0)."""
+
+    t0: object  # pd.DatetimeIndex (UTC), sorted
+    taken: object  # pd.DatetimeIndex with NaT where no map was usable
+    ring: np.ndarray  # float32 (n, len(RING_VARS), N_LON), NaN rows where none
+    scalars: np.ndarray  # float32 (n, len(SCALARS))
+
+    @classmethod
+    def single(cls, t0, ring):
+        """A one-row table for a live run (ring may be None: an all-NaN row)."""
+        import pandas as pd
+
+        t0 = pd.DatetimeIndex([pd.Timestamp(t0)])
+        if ring is None:
+            return cls(t0, pd.DatetimeIndex([pd.NaT], tz="UTC"),
+                       np.full((1, *ring_shape()), np.nan, np.float32),
+                       np.full((1, len(SCALARS)), np.nan, np.float32))
+        return cls(t0, pd.DatetimeIndex([pd.Timestamp(ring.taken)]), ring.ring[None],
+                   ring.scalars[None])
+
+    def __len__(self):
+        return len(self.t0)
+
+
+def earth_longitude(times, step_hours=6):
+    """Earth's Carrington longitude (deg, [0, 360)) at each time (sunpy's L0).
+
+    Computed on a step_hours grid around the times and interpolated: L0 is smooth, and sunpy
+    takes ~0.4 ms per time.
+    """
+    import pandas as pd
+    from astropy.time import Time
+    from sunpy.coordinates import sun
+
+    times = pd.DatetimeIndex(times)
+    if len(times) == 0:
+        return np.array([])
+    step = pd.Timedelta(hours=step_hours)
+    grid = pd.date_range(times.min().floor(step) - step, times.max().ceil(step) + step,
+                         freq=step)
+    l0 = np.unwrap(np.radians(sun.L0(Time(grid.tz_convert(None).to_numpy())).deg))
+    x = np.interp(times.asi8.astype(float), grid.asi8.astype(float), l0)
+    return np.degrees(x) % 360
+
+
 def _unit(lat_deg, lon_deg):
     lat, lon = np.radians(lat_deg), np.radians(lon_deg)
     return np.stack([np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)], -1)
