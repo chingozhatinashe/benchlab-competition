@@ -8,7 +8,8 @@ Files are posted 30-45 min later, and the archive keeps each file's original upl
 (checked 2016-10, 2026-07, 2026-11). The listing shows it in MST (UTC-7, all year).
 
 Availability is the upload time itself: a map is usable for a forecast at t0 only if it was
-modified by t0 - MARGIN. History and live runs read the same listings and apply the same rule.
+modified by t0 - MARGIN. History reads NSO's archive; live runs read SWPC's copy of the same
+files (SWPC_URL, posted a few minutes after NSO), falling back to NSO. Both apply this rule.
 """
 
 import re
@@ -23,6 +24,10 @@ BASE_URL = "https://gong2.nso.edu/oQR/zqs"
 # back to the next host; the host that answered is tried first afterwards.
 MIRRORS = (BASE_URL, "https://gong.nso.edu/data/magmap/QR/zqs",
            "https://nispdata.nso.edu/ftp/oQR/zqs")
+# All three are one NSO server, which timed out from GitHub's runners. SWPC republishes the
+# same files byte for byte (checked 2026-11-07), about 4 min after NSO, keeping the last 72
+# (3 days) in one directory listed in UTC. Live runs read SWPC first, NSO if SWPC has none.
+SWPC_URL = "https://services.swpc.noaa.gov/products/gong/zqs/"
 LISTING_UTC_OFFSET = pd.Timedelta(hours=7)  # listing times are MST
 MARGIN = pd.Timedelta(minutes=10)  # same margin as the in-situ data
 MAX_AGE = pd.Timedelta(hours=72)  # real-time outages run for days; a synoptic map ages slowly
@@ -49,8 +54,11 @@ def map_url(name, base=BASE_URL):
     return base + map_path(name)
 
 
-def parse_listing(html):
-    """One row per map in a day's listing: name, observed and modified (UTC), rotation, lon."""
+def parse_listing(html, utc_offset=LISTING_UTC_OFFSET):
+    """One row per map in a listing: name, observed and modified (UTC), rotation, lon.
+
+    `utc_offset` converts the listing's times to UTC (NSO lists MST; SWPC lists UTC).
+    """
     rows = []
     for m in ROW.finditer(html):
         name, ymd, hm, rot, lon, modified = m.groups()
@@ -60,7 +68,7 @@ def parse_listing(html):
     df = pd.DataFrame(rows, columns=COLUMNS).drop_duplicates("name")
     df["observed"] = pd.to_datetime(df["observed"], format="%y%m%d%H%M", utc=True)
     df["modified"] = (pd.to_datetime(df["modified"], format="%Y-%m-%d %H:%M", utc=True)
-                      + LISTING_UTC_OFFSET)
+                      + utc_offset)
     return df.sort_values("observed").reset_index(drop=True)
 
 
@@ -70,6 +78,8 @@ def usable(listing, t0, margin=MARGIN, max_age=MAX_AGE):
     The listing's minute resolution is rounded up, so a map modified at hh:mm:59 is
     never counted as posted at hh:mm.
     """
+    if listing.empty:
+        return listing
     cut = pd.Timestamp(t0) - margin
     posted = listing["modified"] + pd.Timedelta(minutes=1)
     ok = listing[(posted <= cut) & (listing["observed"] >= cut - max_age)]
@@ -79,11 +89,22 @@ def usable(listing, t0, margin=MARGIN, max_age=MAX_AGE):
 class GONGConnector:
     """Newest GONG synoptic map available at t0. Never raises: failures give None."""
 
-    def __init__(self, timeout=15, retries=1, tries=3, mirrors=MIRRORS):
+    def __init__(self, timeout=15, retries=1, tries=3, mirrors=MIRRORS, swpc=True):
         self.timeout = timeout
         self.retries = retries
         self.tries = tries
         self.mirrors = list(mirrors)
+        self.swpc = swpc
+
+    def swpc_listing(self):
+        """SWPC's copy of the last 3 days (column "source" = "swpc"); empty on failure."""
+        try:
+            html = http_get_bytes(SWPC_URL, timeout=self.timeout, retries=self.retries)
+        except Exception as e:
+            log(f"GONG SWPC listing failed: {e!r}")
+            return pd.DataFrame(columns=COLUMNS)
+        df = parse_listing(html.decode("utf-8", errors="replace"), pd.Timedelta(0))
+        return df.assign(source="swpc")
 
     def _get(self, path):
         """GET a path from the first mirror that answers (a 404 is an answer)."""
@@ -110,7 +131,9 @@ class GONGConnector:
             return pd.DataFrame(columns=COLUMNS)
         return parse_listing(html)
 
-    def download(self, name):
+    def download(self, name, source="nso"):
+        if source == "swpc":
+            return http_get_bytes(SWPC_URL + name, timeout=self.timeout, retries=self.retries)
         return self._get(map_path(name))
 
     def latest(self, t0, accept=None, margin=MARGIN, max_age=MAX_AGE):
@@ -121,14 +144,18 @@ class GONGConnector:
         """
         t0 = pd.Timestamp(t0)
         try:
-            days = pd.date_range((t0 - margin - max_age).floor("D"), t0.floor("D"), freq="D")
-            frames = [f for f in (self.listing(d) for d in days) if not f.empty]
-            if not frames:
-                return None, None
-            rows = usable(pd.concat(frames, ignore_index=True), t0, margin, max_age)
+            rows = usable(self.swpc_listing(), t0, margin, max_age) if self.swpc else None
+            if rows is None or rows.empty:
+                days = pd.date_range((t0 - margin - max_age).floor("D"), t0.floor("D"),
+                                     freq="D")
+                frames = [f for f in (self.listing(d) for d in days) if not f.empty]
+                if not frames:
+                    return None, None
+                rows = usable(pd.concat(frames, ignore_index=True), t0, margin, max_age)
+                rows = rows.assign(source="nso")
             for _, row in rows.head(self.tries).iterrows():
                 try:
-                    data = self.download(row["name"])
+                    data = self.download(row["name"], row["source"])
                 except Exception as e:  # try the next older map
                     log(f"GONG {row['name']} failed: {e!r}")
                     continue

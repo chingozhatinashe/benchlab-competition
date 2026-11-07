@@ -171,3 +171,38 @@ def test_gong_falls_back_to_a_mirror(monkeypatch):
     assert calls[1] == gong.MIRRORS[1] + "/202611/mrzqs261106/mrzqs261106t1214c2317_113.fits.gz"
     c.download("mrzqs261106t1314c2317_112.fits.gz")
     assert calls[2].startswith(gong.MIRRORS[1])  # the working mirror first from then on
+
+
+SWPC_LISTING = (
+    '<a href="mrzqs261107t0514c2317_103.fits.gz">mrzqs261107t0514c2317_103.fits.gz</a>'
+    ' 2026-11-07 05:50  237K\n'
+    '<a href="mrzqs261107t0614c2317_103.fits.gz">mrzqs261107t0614c2317_103.fits.gz</a>'
+    ' 2026-11-07 06:50  237K\n')
+
+
+def test_live_runs_read_swpc_first(monkeypatch):
+    urls = []
+
+    def fake_get(url, timeout, retries):
+        urls.append(url)
+        return SWPC_LISTING.encode() if url == gong.SWPC_URL else b"map"
+
+    monkeypatch.setattr(gong, "http_get_bytes", fake_get)
+    row, data = gong.GONGConnector().latest(pd.Timestamp("2026-11-07T07:00Z"))
+    # SWPC lists UTC: the 06:14 map was posted 06:50, after t0 - 10 min
+    assert row["name"] == "mrzqs261107t0514c2317_103.fits.gz" and row["source"] == "swpc"
+    assert urls == [gong.SWPC_URL, gong.SWPC_URL + row["name"]]
+
+
+def test_nso_is_used_when_swpc_has_nothing(monkeypatch):
+    def fake_get(url, timeout, retries):
+        if url == gong.SWPC_URL:
+            raise TimeoutError("timed out")
+        if url.endswith("/"):
+            return LISTING.replace("</a></td>\n", "</a></td>").encode() if "261106" in url \
+                else b""
+        return b"map"
+
+    monkeypatch.setattr(gong, "http_get_bytes", fake_get)
+    row, _ = gong.GONGConnector().latest(pd.Timestamp("2026-11-06T18:00Z"))
+    assert row["source"] == "nso" and row["name"] == "mrzqs261106t1314c2317_112.fits.gz"

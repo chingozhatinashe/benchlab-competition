@@ -57,7 +57,7 @@ def pull_inventory(start=START, end=None, workers=8):
     end = end or pd.Timestamp.now(tz="UTC").floor("D")
     days = pd.date_range(start.floor("D"), end, freq="D")
     months = sorted({f"{d:%Y-%m}" for d in days})
-    connector = gong.GONGConnector(timeout=30, retries=3)
+    connector = gong.GONGConnector(timeout=30, retries=3, swpc=False)
     for key in months:
         path = INVENTORY_DIR / f"{key}.csv"
         if path.exists() and key != months[-1]:
