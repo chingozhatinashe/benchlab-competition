@@ -2,5 +2,17 @@
  {
   "name": "linear-v2",
   "sha": "969671a1954f5dffbb2b704367eddbe09d92c5f8"
+ },
+ {
+  "name": "pfss-shadow",
+  "sha": "7cdedc196c81d2f65096172f93af7ea4fc1175e6"
+ },
+ {
+  "name": "pfss-shadow-2",
+  "sha": "0543315f20b04ea43a98b4f0c54eca1a092b58e1"
+ },
+ {
+  "name": "pfss-shadow-3",
+  "sha": "84111791b6f444ed850e1be4a5d58e2508ba027d"
  }
 ]
