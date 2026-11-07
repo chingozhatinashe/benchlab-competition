@@ -25,6 +25,7 @@ the photosphere seeded every 2 deg.
 """
 
 import contextlib
+import functools
 import gzip
 import io
 import warnings
@@ -82,22 +83,38 @@ class RingTable:
 def earth_longitude(times, step_hours=6):
     """Earth's Carrington longitude (deg, [0, 360)) at each time (sunpy's L0).
 
-    Computed on a step_hours grid around the times and interpolated: L0 is smooth, and sunpy
-    takes ~0.4 ms per time.
+    Computed on a step_hours grid, one cached block per calendar month, and interpolated: L0
+    is smooth, and sunpy takes ~0.4 ms per time.
     """
     import pandas as pd
-    from astropy.time import Time
-    from sunpy.coordinates import sun
 
     times = pd.DatetimeIndex(times)
     if len(times) == 0:
         return np.array([])
+    if times.tz is None:
+        times = times.tz_localize("UTC")
     step = pd.Timedelta(hours=step_hours)
-    grid = pd.date_range(times.min().floor(step) - step, times.max().ceil(step) + step,
-                         freq=step)
-    l0 = np.unwrap(np.radians(sun.L0(Time(grid.tz_convert(None).to_numpy())).deg))
-    x = np.interp(times.asi8.astype(float), grid.asi8.astype(float), l0)
+    first = (times.min() - step).tz_convert(None).to_period("M")
+    last = (times.max() + step).tz_convert(None).to_period("M")
+    blocks = [_l0_month(m.year, m.month, step_hours) for m in pd.period_range(first, last)]
+    grid = np.concatenate([b[0] for b in blocks])
+    l0 = np.unwrap(np.concatenate([b[1] for b in blocks]))
+    x = np.interp(times.asi8.astype(float), grid, l0)
     return np.degrees(x) % 360
+
+
+@functools.lru_cache(maxsize=None)
+def _l0_month(year, month, step_hours):
+    """(grid ns as float, L0 in rad) on the step_hours grid covering one month."""
+    import pandas as pd
+    from astropy.time import Time
+    from sunpy.coordinates import sun
+
+    start = pd.Timestamp(year=year, month=month, day=1)
+    grid = pd.date_range(start, start + pd.offsets.MonthBegin(1), freq=f"{step_hours}h",
+                         inclusive="left")
+    l0 = np.radians(sun.L0(Time(grid.to_numpy())).deg)
+    return grid.tz_localize("UTC").asi8.astype(float), l0
 
 
 def _unit(lat_deg, lon_deg):
