@@ -154,3 +154,20 @@ def test_no_rings_give_nan():
     specs = windows.pfss_candidates()[:3]
     out = windows.window_table(build.Inputs(), [pd.Timestamp("2024-03-01T12:00Z")], specs)
     assert out.isna().all().all()
+
+
+def test_gong_falls_back_to_a_mirror(monkeypatch):
+    calls = []
+
+    def fake_get(url, timeout, retries):
+        calls.append(url)
+        if url.startswith(gong.MIRRORS[0]):
+            raise TimeoutError("timed out")
+        return b"ok"
+
+    monkeypatch.setattr(gong, "http_get_bytes", fake_get)
+    c = gong.GONGConnector()
+    assert c.download("mrzqs261106t1214c2317_113.fits.gz") == b"ok"
+    assert calls[1] == gong.MIRRORS[1] + "/202611/mrzqs261106/mrzqs261106t1214c2317_113.fits.gz"
+    c.download("mrzqs261106t1314c2317_112.fits.gz")
+    assert calls[2].startswith(gong.MIRRORS[1])  # the working mirror first from then on

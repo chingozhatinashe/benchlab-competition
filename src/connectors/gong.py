@@ -18,6 +18,11 @@ import pandas as pd
 from connectors.base import HTTPNotFound, http_get_bytes, log
 
 BASE_URL = "https://gong2.nso.edu/oQR/zqs"
+# The same files (same listing, same upload times) on three NSO hosts. gong2 timed out from
+# GitHub's runners (2026-11-07) and from the dev machine (2026-10-25), so each request falls
+# back to the next host; the host that answered is tried first afterwards.
+MIRRORS = (BASE_URL, "https://gong.nso.edu/data/magmap/QR/zqs",
+           "https://nispdata.nso.edu/ftp/oQR/zqs")
 LISTING_UTC_OFFSET = pd.Timedelta(hours=7)  # listing times are MST
 MARGIN = pd.Timedelta(minutes=10)  # same margin as the in-situ data
 MAX_AGE = pd.Timedelta(hours=72)  # real-time outages run for days; a synoptic map ages slowly
@@ -28,13 +33,20 @@ ROW = re.compile(
 COLUMNS = ["name", "observed", "modified", "rotation", "longitude"]
 
 
-def day_url(day):
-    return f"{BASE_URL}/{day:%Y%m}/mrzqs{day:%y%m%d}/"
+def day_path(day):
+    return f"/{day:%Y%m}/mrzqs{day:%y%m%d}/"
 
 
-def map_url(name):
-    day = pd.to_datetime(name[5:11], format="%y%m%d")
-    return day_url(day) + name
+def day_url(day, base=BASE_URL):
+    return base + day_path(day)
+
+
+def map_path(name):
+    return day_path(pd.to_datetime(name[5:11], format="%y%m%d")) + name
+
+
+def map_url(name, base=BASE_URL):
+    return base + map_path(name)
 
 
 def parse_listing(html):
@@ -67,23 +79,39 @@ def usable(listing, t0, margin=MARGIN, max_age=MAX_AGE):
 class GONGConnector:
     """Newest GONG synoptic map available at t0. Never raises: failures give None."""
 
-    def __init__(self, timeout=20, retries=2, tries=3):
+    def __init__(self, timeout=15, retries=1, tries=3, mirrors=MIRRORS):
         self.timeout = timeout
         self.retries = retries
         self.tries = tries
+        self.mirrors = list(mirrors)
 
-    def _get(self, url):
-        return http_get_bytes(url, timeout=self.timeout, retries=self.retries)
+    def _get(self, path):
+        """GET a path from the first mirror that answers (a 404 is an answer)."""
+        last = None
+        for base in list(self.mirrors):
+            try:
+                body = http_get_bytes(base + path, timeout=self.timeout, retries=self.retries)
+            except HTTPNotFound:
+                raise
+            except Exception as e:
+                log(f"GONG {base} failed: {e!r}")
+                last = e
+                continue
+            if base != self.mirrors[0]:  # remember the host that works
+                self.mirrors.remove(base)
+                self.mirrors.insert(0, base)
+            return body
+        raise last
 
     def listing(self, day):
         try:
-            html = self._get(day_url(day)).decode("utf-8", errors="replace")
+            html = self._get(day_path(day)).decode("utf-8", errors="replace")
         except HTTPNotFound:
             return pd.DataFrame(columns=COLUMNS)
         return parse_listing(html)
 
     def download(self, name):
-        return self._get(map_url(name))
+        return self._get(map_path(name))
 
     def latest(self, t0, accept=None, margin=MARGIN, max_age=MAX_AGE):
         """(row, fits.gz bytes) of the newest usable map, or (None, None).

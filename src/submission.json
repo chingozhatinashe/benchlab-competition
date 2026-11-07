@@ -8,6 +8,8 @@
     "services.swpc.noaa.gov",
     "cdaweb.gsfc.nasa.gov",
     "sdo.gsfc.nasa.gov",
-    "gong2.nso.edu"
+    "gong2.nso.edu",
+    "gong.nso.edu",
+    "nispdata.nso.edu"
   ]
 }
