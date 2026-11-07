@@ -99,7 +99,7 @@ def candidate_table(t0s, ch_fallback=windows.CH_FALLBACK_HOURS):
     return windows.window_table(inputs, t0s, windows.candidates(), ch_fallback=ch_fallback)
 
 
-def with_pfss(table, t0s, names):
+def with_pfss(table, t0s, names, fill=True):
     """`table` with the PFSS columns among `names` (training.pull_gong rings), gaps filled.
 
     A run without a usable GONG map gets the training median, as in the study that chose
@@ -113,7 +113,8 @@ def with_pfss(table, t0s, names):
 
     inputs = build.Inputs(pfss=pull_gong.load_ring_table())
     new = windows.window_table(inputs, t0s, [windows.WindowSpec.parse(n) for n in cols])
-    new = new.fillna(new.median())
+    if fill:
+        new = new.fillna(new.median())
     return table.drop(columns=cols, errors="ignore").join(new)
 
 

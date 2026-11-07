@@ -96,7 +96,7 @@ S_final of the submitted config: 88.49 km/s (0.7926 of persistence).
 **Why `d_hcs` alone:**
 - The pair with the expansion factor is 0.2% better, well under the 1% a feature has to earn.
 - The pair's 48 h delay was picked on the same folds.
-- The WSA study (next) tests the expansion factor again inside the speed formula.
+- The WSA study tested the expansion factor again inside the speed formula: 0.75% at best, not built ([wsa.md](wsa.md)).
 
 **What it measures:**
 
