@@ -55,6 +55,17 @@ one column per distinct L_k, and puts each lead's own column in its design. A mi
 lagged value is filled from the nearest lag of the same run within LEAD_FILL_HOURS;
 standardising, the cap and the median imputation are per input column.
 
+Config.terms adds optional design columns built from what the model already has (the last
+observed speed and the standardised regressors), so they need nothing extra live:
+    hinge:last<450                 max(0, 450 - last speed), km/s (also ">"; a regressor
+                                   name instead of "last" uses its standardised value)
+    gate:<x>:last<450              x times 1[last < 450] (also ">="); x = a regressor,
+                                   "last" or "const"
+    int:<x>*<y>                    product of two operands
+    sq:<x>                         square of an operand
+where "last" as an operand is (last - training mean) / 100. A term that names an optional
+regressor is left out of the submodel.
+
 Config.despike removes isolated one-hour glitches from the speed series
 (feature_engineering.recurrence.despike) before it is used as a fitting target or
 in the recurrence terms. The last observed speed stays raw: its hour can't be
@@ -139,6 +150,7 @@ class Config:
     despike: bool = False  # drop isolated one-hour glitches from targets and recurrence
     optional: tuple = ()  # features that may be missing: a submodel without them
     cap_quantile: float = 0.0  # clip each regressor to its training [q, 1 - q] quantiles; 0 = off
+    terms: tuple = ()  # extra design columns (hinge/gate/int/sq), see the module docstring
 
     def __post_init__(self):
         if self.family not in FAMILIES:
@@ -149,6 +161,10 @@ class Config:
             raise ValueError("cap_quantile must be in [0, 0.5)")
         if not set(self.optional) <= set(self.features):
             raise ValueError("optional features must be among the features")
+        for term in self.terms:
+            unknown = set(term_operands(term)) - set(self.features) - {"last", "const"}
+            if unknown:
+                raise ValueError(f"term {term!r} names unknown regressors {sorted(unknown)}")
         if self.despike:  # the cleaned recurrence window must end SPIKE_SIDE h before t0
             for lag in self.lag_hours:
                 if lag - HORIZON - self.half_width < 1 + SPIKE_SIDE:
@@ -172,7 +188,7 @@ class Config:
 
     @property
     def n_columns(self):
-        return 1 + self.n_speed + len(self.features)
+        return 1 + self.n_speed + len(self.features) + len(self.terms)
 
     @property
     def input_features(self):
@@ -192,6 +208,24 @@ class Config:
             return np.full(HORIZON, names.index(feature))
         return np.array([names.index(lag_column(lead[0], lag))
                          for lag in lead_lags(lead[1], lead[0])])
+
+
+_HINGE = re.compile(r"^(?P<x>[^<>=]+)(?P<op><|>)(?P<v>-?[\d.]+)$")
+_GATE = re.compile(r"^(?P<x>[^:]+):last(?P<op><|>=)(?P<v>-?[\d.]+)$")
+
+
+def term_operands(term):
+    """The operand names a Config.terms entry uses."""
+    kind, _, rest = term.partition(":")
+    if kind == "hinge" and _HINGE.match(rest):
+        return [_HINGE.match(rest)["x"]]
+    if kind == "gate" and _GATE.match(rest):
+        return [_GATE.match(rest)["x"], "last"]
+    if kind == "int" and rest.count("*") == 1:
+        return rest.split("*")
+    if kind == "sq" and rest:
+        return [rest]
+    raise ValueError(f"bad term {term!r}")
 
 
 def boxcox(y, lam):
@@ -264,15 +298,48 @@ class LinearModel:
         `regressors` (n x p, in Config.features order) must already be complete
         (fit: incomplete rows dropped; predict: imputed).
         """
+        cfg = self.config
         speed, last = self.speed_terms(values, positions)
         n = len(positions)
-        x = np.ones((n, HORIZON, self.config.n_columns))
-        x[:, :, 1 : 1 + self.config.n_speed] = speed
-        if self.config.features:
+        x = np.ones((n, HORIZON, cfg.n_columns))
+        x[:, :, 1 : 1 + cfg.n_speed] = speed
+        z = np.zeros((n, 0))
+        if cfg.features:
             z = (np.asarray(regressors, dtype=float) - self.x_mean) / self.x_std
-            for j, f in enumerate(self.config.features):
-                x[:, :, 1 + self.config.n_speed + j] = z[:, self.config.lead_columns(f)]
+            for j, f in enumerate(cfg.features):
+                x[:, :, 1 + cfg.n_speed + j] = z[:, cfg.lead_columns(f)]
+        first = 1 + cfg.n_speed + len(cfg.features)
+        for j, term in enumerate(cfg.terms):
+            x[:, :, first + j] = self._term(term, last, z)
         return x, last
+
+    def _operand(self, name, last, z):
+        """(n, 72) value of a term operand."""
+        n = len(last)
+        if name == "const":
+            return np.ones((n, HORIZON))
+        if name == "last":
+            return np.repeat(((last - self.mean) / 100.0)[:, None], HORIZON, axis=1)
+        return z[:, self.config.lead_columns(name)]
+
+    def _term(self, term, last, z):
+        """(n, 72) design column of one Config.terms entry."""
+        last = np.where(np.isfinite(last), last, self.mean)
+        kind, _, rest = term.partition(":")
+        if kind == "hinge":
+            m = _HINGE.match(rest)
+            base = (np.repeat(last[:, None], HORIZON, axis=1) if m["x"] == "last"
+                    else self._operand(m["x"], last, z))
+            v = float(m["v"])
+            return np.maximum(0.0, v - base) if m["op"] == "<" else np.maximum(0.0, base - v)
+        if kind == "gate":
+            m = _GATE.match(rest)
+            on = last < float(m["v"]) if m["op"] == "<" else last >= float(m["v"])
+            return self._operand(m["x"], last, z) * on[:, None]
+        if kind == "int":
+            a, b = rest.split("*")
+            return self._operand(a, last, z) * self._operand(b, last, z)
+        return self._operand(rest, last, z) ** 2
 
     def fill_leads(self, regressors):
         """Missing lagged values of lead-aligned regressors from the nearest lag in the run."""
@@ -352,8 +419,9 @@ class LinearModel:
         self.medians = (np.nanmedian(x_raw, axis=0) if cfg.features else np.zeros(0))
         self.fallback = None
         if cfg.optional:
-            sub_cfg = replace(cfg, features=tuple(f for f in cfg.features
-                                                  if f not in cfg.optional), optional=())
+            kept = tuple(f for f in cfg.features if f not in cfg.optional)
+            sub_cfg = replace(cfg, features=kept, optional=(), terms=tuple(
+                t for t in cfg.terms if not set(term_operands(t)) & set(cfg.optional)))
             self.fallback = LinearModel(sub_cfg).fit(
                 values, positions, self._select(x_raw, sub_cfg.input_features), end, run_w)
         complete = np.isfinite(x_raw).all(axis=1)
@@ -483,6 +551,7 @@ class LinearModel:
         cfg["features"] = list(cfg["features"])
         cfg["lags_days"] = list(cfg["lags_days"])
         cfg["optional"] = list(cfg["optional"])
+        cfg["terms"] = list(cfg["terms"])
         fallback = getattr(self, "fallback", None)
         return {
             "model": "LinearModel",
@@ -510,6 +579,7 @@ class LinearModel:
         cfg["features"] = tuple(cfg["features"])
         cfg["lags_days"] = tuple(cfg["lags_days"])
         cfg["optional"] = tuple(cfg.get("optional", ()))
+        cfg["terms"] = tuple(cfg.get("terms", ()))
         model = cls(Config(**cfg))
         model.mean = float(d["mean"])
         model.x_mean = np.asarray(d["x_mean"], dtype=float)
