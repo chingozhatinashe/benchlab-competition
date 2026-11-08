@@ -92,3 +92,5 @@ python -m training.regime_models --summary
 ```
 
 **Follow-up (2026-11-08):** a two-model switch with a PFSS-based indicator was tried and aborted after one fold; PFSS doesn't sharpen the slow/stream indicator ([pfss_switch.md](pfss_switch.md)).
+
+**Follow-up (2026-11-08):** a single structural model (ambient wind + first-arrival hazard × amplitude × profile, fitted in one step) is 3–4.5% worse than the linear model ([structural_model.md](structural_model.md)).
