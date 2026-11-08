@@ -64,3 +64,47 @@ def test_at_longitude_wraps():
     ring = np.arange(360.0)[None]
     assert wsa.at_longitude(ring, np.array([[359.5, 360.25, -0.5]]))[0] == pytest.approx(
         [179.5, 0.25, 179.5])
+
+
+def _rings(t0s, log_fs, theta_b):
+    import pandas as pd
+
+    from feature_engineering import pfss
+
+    ring = np.full((len(t0s), *pfss.ring_shape()), np.nan, np.float32)
+    ring[:, pfss.RING_VARS.index("log_fs")] = log_fs
+    ring[:, pfss.RING_VARS.index("theta_b")] = theta_b
+    t0s = pd.DatetimeIndex(t0s)
+    return pfss.RingTable(t0=t0s, taken=t0s - pd.Timedelta(hours=2), ring=ring,
+                          scalars=np.full((len(t0s), len(pfss.SCALARS)), np.nan))
+
+
+def test_wsa_table_constant_ring_gives_one_speed_at_every_lag():
+    import pandas as pd
+
+    from training import hybrid_pfss as hp
+
+    t0s = pd.date_range("2024-03-01", periods=4, freq="6h", tz="UTC")
+    out = hp.wsa_table(_rings(t0s, 1.0, 5.0), t0s, wsa.Params())
+    expected = wsa.source_speed(np.array([[1.0]]), np.array([[5.0]]))[0, 0]
+    assert np.allclose(out.to_numpy(), expected, atol=0.5)
+
+
+def test_wsa_table_uses_only_rings_by_t0():
+    import pandas as pd
+
+    from training import hybrid_pfss as hp
+
+    t0s = pd.date_range("2024-03-01", periods=8, freq="6h", tz="UTC")
+    lon = np.arange(360.0)
+    log_fs = np.stack([1.0 + 0.5 * np.sin(np.radians(lon + 20 * k)) for k in range(8)])
+    rings = _rings(t0s, log_fs, 5.0)
+    early = hp.wsa_table(rings, t0s[:4], wsa.Params())
+    scrambled = rings.ring.copy()
+    scrambled[4:] = np.random.default_rng(0).permutation(scrambled[4:].ravel()).reshape(
+        scrambled[4:].shape)
+    rings2 = _rings(t0s, scrambled[:, 0], 5.0)
+    rings2.ring[:] = scrambled
+    assert np.allclose(hp.wsa_table(rings2, t0s[:4], wsa.Params()).to_numpy(),
+                       early.to_numpy(), equal_nan=True)
+    assert hp.wsa_table(rings, t0s[:1] - pd.Timedelta(hours=1), wsa.Params()).isna().all().all()
