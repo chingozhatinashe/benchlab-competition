@@ -416,3 +416,56 @@ def test_recency_weights_halve_per_half_life_and_average_one():
     assert w.mean() == pytest.approx(1.0)
     assert w[1] / w[0] == pytest.approx(2.0) and w[2] / w[1] == pytest.approx(2.0)
     assert np.all(recency_weights(t0s, end, math.inf) == 1.0)
+
+
+# ---------------------------------------------------------------------- extra terms
+def test_terms_build_the_documented_columns():
+    speed, positions, x = synthetic()
+    terms = ("hinge:last<450", "hinge:last>550", "gate:a:last<450", "gate:const:last>=450",
+             "int:a*b", "sq:b", "int:last*a")
+    cfg = Config(features=("a", "b"), weights="uniform", lags_days=(27.0,), terms=terms)
+    model = LinearModel(cfg).fit(speed, positions, x)
+    design, last = model.design(speed, positions, x)
+    z = (x - model.x_mean) / model.x_std
+    cols = design[:, 5, 1 + cfg.n_speed + 2:]  # lead 6
+    slow = last < 450
+    assert np.allclose(cols[:, 0], np.maximum(0, 450 - last))
+    assert np.allclose(cols[:, 1], np.maximum(0, last - 550))
+    assert np.allclose(cols[:, 2], z[:, 0] * slow)
+    assert np.allclose(cols[:, 3], ~slow)
+    assert np.allclose(cols[:, 4], z[:, 0] * z[:, 1])
+    assert np.allclose(cols[:, 5], z[:, 1] ** 2)
+    assert np.allclose(cols[:, 6], (last - model.mean) / 100 * z[:, 0])
+
+
+def test_terms_round_trip_and_leave_the_submodel(tmp_path):
+    speed, positions, x = synthetic()
+    x = x.copy()
+    x[::7, 1] = np.nan  # b is optional and sometimes missing
+    cfg = Config(features=("a", "b"), optional=("b",), weights="uniform", lags_days=(27.0,),
+                 terms=("hinge:last<450", "int:a*b"))
+    model = LinearModel(cfg).fit(speed, positions, x)
+    assert model.fallback.config.terms == ("hinge:last<450",)
+    model.save(tmp_path / "m.json")
+    again = LinearModel.load(tmp_path / "m.json")
+    assert again.config.terms == cfg.terms
+    assert np.allclose(again.forecast(speed, positions, x), model.forecast(speed, positions, x))
+
+
+def test_terms_must_name_known_regressors():
+    with pytest.raises(ValueError):
+        Config(features=("a",), terms=("int:a*zz",))
+    with pytest.raises(ValueError):
+        Config(features=("a",), terms=("hinge:last~450",))
+
+
+def test_shipped_asset_has_no_terms_and_forecasts_unchanged_through_a_round_trip(tmp_path):
+    model = LinearModel.load()
+    assert model.config.terms == ()
+    speed, _, _ = synthetic(n_feat=1)
+    rows = np.random.default_rng(3).normal(size=(4, len(model.config.input_features)))
+    rows = model.medians + rows * np.abs(model.medians) * 0.1
+    pos = np.array([1000, 1500, 2000, 2500])
+    model.save(tmp_path / "m.json")
+    again = LinearModel.load(tmp_path / "m.json")
+    assert np.allclose(again.forecast(speed, pos, rows), model.forecast(speed, pos, rows))

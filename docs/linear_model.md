@@ -145,6 +145,8 @@ These led to the data fixes below. **The notebook `src/experiments/linear_model.
 - the coefficients, contributions and ablation of each regressor;
 - the coronal-hole gap, the despiking, and forecasts along the year.
 
+**Extra terms (`Config.terms`, 2026-11-08):** optional hinge, gate, interaction and square columns built from the last speed and the standardised regressors (see the module docstring). The shipped config has none; they were tested in [slow_wind.md](slow_wind.md).
+
 **Since the PFSS feature (2026-11-07):** the submitted config scores 0.750 of persistence on the eval year. Its regimes, residuals and input importance are analysed in [model_diagnostics.md](model_diagnostics.md).
 
 ## Data fixes
