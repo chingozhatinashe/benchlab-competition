@@ -106,7 +106,7 @@ ETA_BOUNDS = (np.log(50.0), np.log(5000.0))  # keeps the log-link IRLS away from
 LEAD_GRID = 6  # hours between the lagged columns of a lead-aligned regressor (image grid)
 LEAD_FILL_HOURS = 24  # a missing lagged value is filled from the nearest lag within this
 _LEAD = re.compile(r"^(?P<signal>.+)_lead_(?P<delay>\d+)h$")
-SIGNED_LEAD_PREFIXES = ("pfss_", "wsa_")
+SIGNED_LEAD_PREFIXES = ("pfss_", "wsa_", "structural_")
 
 
 def lead_feature(name):
