@@ -1,6 +1,6 @@
 # XGBoost model (linear + trees hybrid)
 
-> **Not the default since 2026-10-26.** On the official metric it ties with the linear model, both before and after re-tuning ([official_score.md](official_score.md), [official_retune.md](official_retune.md)). It stays available as `SWP_MODEL=hybrid`.
+> **Not the default since 2026-10-26.** On the official metric it ties with the linear model, both before and after re-tuning ([official_score.md](official_score.md), [official_retune.md](official_retune.md)). It stays available as `SWP_MODEL=hybrid`. On the anchor with the PFSS current-sheet distance, and with the PFSS/WSA map inputs added to the trees, it still doesn't beat the linear model ([hybrid_pfss.md](hybrid_pfss.md), 2026-11-08).
 
 **What it is.** Gradient-boosted trees that correct the linear model's forecast
 (`docs/linear_model.md`):

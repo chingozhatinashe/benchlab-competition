@@ -99,7 +99,7 @@ The submitted config stays.
 
 ## Not tried
 
-- WSA in the XGBoost hybrid.
+- WSA in the XGBoost hybrid. *Done 2026-11-08:* roughly neutral (hybrid + WSA 0.10% better than the linear model, 2 of 6 folds); see [hybrid_pfss.md](hybrid_pfss.md).
 - Calibrating against the linear model's objective instead of WSA alone.
 - Other source-surface heights (rss = 2.5 only; the raw maps are cached in `src/data/gong/raw/` to allow this).
 - Ensembles of maps (e.g. the last 24 h of GONG maps).
