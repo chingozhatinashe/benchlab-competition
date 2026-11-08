@@ -4,6 +4,10 @@
   "sha": "969671a1954f5dffbb2b704367eddbe09d92c5f8"
  },
  {
+  "name": "pfss-dhcs",
+  "sha": "5c534bfca8d3491c5d117ab839e4ec21dc149155"
+ },
+ {
   "name": "pfss-shadow",
   "sha": "7cdedc196c81d2f65096172f93af7ea4fc1175e6"
  },
