@@ -90,3 +90,5 @@ XGB_NTHREAD=2 python -m training.regime_models --pilot --folds 2024   # one fold
 XGB_NTHREAD=2 python -m training.regime_models                        # all six folds (~3 min)
 python -m training.regime_models --summary
 ```
+
+**Follow-up (2026-11-08):** a two-model switch with a PFSS-based indicator was tried and aborted after one fold; PFSS doesn't sharpen the slow/stream indicator ([pfss_switch.md](pfss_switch.md)).
