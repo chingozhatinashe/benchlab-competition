@@ -450,7 +450,7 @@ def evaluate(model=None):
     values = series.to_numpy(dtype=float)
     t0s = forecast_times()
     pos = series.index.get_indexer(t0s)
-    table = candidate_table(t0s)
+    table = with_pfss(candidate_table(t0s), t0s, model.config.input_features, fill=False)
     x = table[list(model.config.input_features)].to_numpy(dtype=float)
     actual = targets(values, pos)
     forecasts = {
