@@ -103,7 +103,8 @@ class Data(dg.Data):
         self.table = self.table.join(slopes.astype(np.float32))
 
 
-def score_fold(data, start, end, names, timer):
+def score_fold(data, start, end, names, timer, specs=None):
+    specs = specs or VARIANTS
     start_pos = data.series.index.get_loc(start)
     fit6 = data.runs6[data.runs6 < start]
     val = data.runs6[(data.runs6 >= start) & (data.runs6 < end)]
@@ -116,7 +117,7 @@ def score_fold(data, start, end, names, timer):
                                                      obs, pers)["s_final"]}
     for name in names:
         t = time.perf_counter()
-        cfg = variant_config(data.cfg, VARIANTS[name])
+        cfg = variant_config(data.cfg, specs[name])
         cols = list(cfg.input_features)
         lin = LinearModel(cfg).fit(data.values, pos_fit,
                                    table.loc[fit6, cols].to_numpy(dtype=float), end=start_pos)
