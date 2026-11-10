@@ -233,3 +233,16 @@ time,t0,candidate,sha,variant,kind,severity,detail
 2026-11-10T06:12:09Z,20261110T060000Z,pfss-shadow,7cdedc196c81d2f65096172f93af7ea4fc1175e6,default,source not ok,info,pfss: failed: RuntimeError('no usable GONG map')
 2026-11-10T06:12:09Z,20261110T060000Z,pfss-shadow,7cdedc196c81d2f65096172f93af7ea4fc1175e6,default,run ok,info,"linear, 42.4 s, 16/16 regressors"
 2026-11-10T06:12:09Z,20261110T060000Z,,,,cycle,info,"5 candidates, 10 runs recorded"
+2026-11-10T12:07:31Z,20261110T120000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,baseline,run ok,info,"baseline, 7.3 s, None/None regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,linear-v2,969671a1954f5dffbb2b704367eddbe09d92c5f8,default,run ok,info,"linear, 7.4 s, 16/16 regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-dhcs,5c534bfca8d3491c5d117ab839e4ec21dc149155,baseline,run ok,info,"baseline, 8.7 s, None/None regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-dhcs,5c534bfca8d3491c5d117ab839e4ec21dc149155,default,run ok,info,"linear, 11.2 s, 29/29 regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow-2,0543315f20b04ea43a98b4f0c54eca1a092b58e1,baseline,run ok,info,"baseline, 7.5 s, None/None regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow-2,0543315f20b04ea43a98b4f0c54eca1a092b58e1,default,source not ok,info,pfss: failed: RuntimeError('no usable GONG map')
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow-2,0543315f20b04ea43a98b4f0c54eca1a092b58e1,default,run ok,info,"linear, 47.1 s, 16/16 regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow-3,84111791b6f444ed850e1be4a5d58e2508ba027d,baseline,run ok,info,"baseline, 4.6 s, None/None regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow-3,84111791b6f444ed850e1be4a5d58e2508ba027d,default,run ok,info,"linear, 8.6 s, 16/16 regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow,7cdedc196c81d2f65096172f93af7ea4fc1175e6,baseline,run ok,info,"baseline, 3.4 s, None/None regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow,7cdedc196c81d2f65096172f93af7ea4fc1175e6,default,source not ok,info,pfss: failed: RuntimeError('no usable GONG map')
+2026-11-10T12:07:31Z,20261110T120000Z,pfss-shadow,7cdedc196c81d2f65096172f93af7ea4fc1175e6,default,run ok,info,"linear, 42.8 s, 16/16 regressors"
+2026-11-10T12:07:31Z,20261110T120000Z,,,,cycle,info,"5 candidates, 10 runs recorded"
