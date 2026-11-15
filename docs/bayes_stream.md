@@ -17,7 +17,7 @@
 - **Model:** `src/models/bayes_stream.py` (numpy simulator, point decisions, asset; experimental, not used live).
 - **Study:** `python -m training.bayes_stream` (`--pilot --folds 2024`; `--summary`).
 - **Tests:** `tests/test_bayes_stream.py`.
-- **Analysis (planned):** `src/experiments/bayes_stream.ipynb`; results in `src/experiments/bayes_stream.csv` and `bayes_stream_params.csv`.
+- **Analysis:** `src/experiments/bayes_stream.ipynb` (six-fold scores, convergence and posterior per fold, the sampler study, the hidden-stream mode, 2024 forecasts by regime, calibration); results in `src/experiments/bayes_stream.csv` and `bayes_stream_params.csv`.
 - **Dev requirements:** jax 0.6.2 and numpyro 0.19.0 (CPU), installed into the venv only. They are not in `requirements.txt` or `requirements-dev.txt`, and the tests skip without them. The NumPyro model is in `training`; `models` stays numpy only.
 
 ## Why a generative model
