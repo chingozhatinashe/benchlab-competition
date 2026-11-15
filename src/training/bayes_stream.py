@@ -352,6 +352,61 @@ def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init
     return draws, info
 
 
+def curvature(d, cfg, block="speed", noncentred=(), seed=0, top=6):
+    """The Hessian of NUTS's potential (minus the log density in unconstrained space) at the
+    MAP start (map_point): its spectrum, raw and scaled by its diagonal (what an adapted
+    diagonal mass matrix leaves: correlations and sign, not scale), and which sites make up
+    the extreme eigenvectors (share of the squared loadings per site)."""
+    import jax
+    from jax import random
+    from jax.flatten_util import ravel_pytree
+    from numpyro import handlers
+    from numpyro.infer import init_to_value
+    from numpyro.infer.reparam import LocScaleReparam
+    from numpyro.infer.util import initialize_model
+
+    point, _ = map_point(d, cfg, seed=seed, block=block)
+    model = partial(numpyro_model, d, cfg, block=block)
+    if noncentred:
+        model = handlers.reparam(model, config={k: LocScaleReparam(centered=0)
+                                                for k in noncentred})
+    init = initialize_model(random.PRNGKey(seed), model,
+                            init_strategy=init_to_value(values=point), dynamic_args=False)
+    z = init.param_info.z
+    flat, unravel = ravel_pytree(z)
+    sites = np.concatenate([[k] * int(np.size(v)) for k, v in z.items()])
+    t = time.perf_counter()
+    grad = jax.grad(lambda f: init.potential_fn(unravel(f)))
+    hvp = jax.jit(lambda v: jax.jvp(grad, (flat,), (v,))[1])  # a column at a time: memory
+    eye = np.eye(len(flat))
+    H = np.stack([np.asarray(hvp(eye[i])) for i in range(len(flat))], axis=1)
+    H = (H + H.T) / 2
+    out = {"dims": int(len(flat)), "hessian s": time.perf_counter() - t}
+    diag = np.diag(H)
+    out["diagonal by site"] = {k: [float(diag[sites == k].min()), float(diag[sites == k].max())]
+                               for k in z}
+    scale = 1 / np.sqrt(np.abs(diag))
+    for name, M in (("raw", H), ("scaled", H * scale[:, None] * scale[None, :])):
+        w, V = np.linalg.eigh(M)
+        pos = w[w > 0]
+        res = {"eig max": float(w[-1]), "eig min positive": float(pos.min()) if len(pos) else
+               np.nan, "negative": int((w < 0).sum()), "eig min": float(w[0]),
+               "condition": float(w[-1] / pos.min()) if len(pos) else np.nan}
+
+        def loads(i, V=V):
+            share = {k: float((V[sites == k, i] ** 2).sum()) for k in z}
+            return {k: round(v, 3) for k, v in sorted(share.items(), key=lambda kv: -kv[1])
+                    if v >= 0.02}
+        res["stiffest"] = [{"eig": float(w[-1 - j]), "sites": loads(len(w) - 1 - j)}
+                           for j in range(top)]
+        res["flattest"] = [{"eig": float(pos[j]), "sites": loads(int(np.nonzero(w > 0)[0][j]))}
+                           for j in range(min(top, len(pos)))]
+        res["most negative"] = [{"eig": float(w[j]), "sites": loads(j)}
+                                for j in range(min(top, res["negative"]))]
+        out[name] = res
+    return out
+
+
 def fit_split(d, cfg, **kw):
     """fit_nuts on the observed-arrival posterior's two independent factors, the arrival block
     (w_N, w_tau) and the speed block (the rest), with the draws joined by index (exact: the
@@ -578,7 +633,7 @@ def summarize(rows, pilot=False):
     return table
 
 
-def sampler_test(year, fit, label, block="all", **kw):
+def sampler_test(year, fit, label, block="all", curv=False, **kw):
     """NUTS on a fold's training windows, without scoring: diagnostics, time and peak memory
     per block ("all", "arrivals", "speed", or "split": arrivals then speed), written to
     CACHE_DIR / sampler_<label>.json."""
@@ -588,6 +643,22 @@ def sampler_test(year, fit, label, block="all", **kw):
     ff = fold_fit(data, start)
     log(f"data and windows ready in {time.perf_counter() - t:.0f} s: {ff['wininfo']}; "
         f"peak memory {tx.peak_mb():.0f} MB; settings {kw}")
+    if curv:
+        res = curvature(ff["d"], FITS[fit], block=block,
+                        noncentred=kw.get("noncentred", ()))
+        (CACHE_DIR / f"sampler_{label}.json").write_text(json.dumps(res, indent=1), "utf-8")
+        log(f"{res['dims']} dims, Hessian in {res['hessian s']:.0f} s")
+        log("diagonal (min, max) by site: " + ", ".join(
+            f"{k} {lo:.3g}..{hi:.3g}" for k, (lo, hi) in res["diagonal by site"].items()))
+        for name in ("raw", "scaled"):
+            r = res[name]
+            log(f"{name}: eig max {r['eig max']:.4g}, min positive {r['eig min positive']:.4g}, "
+                f"condition {r['condition']:.3g}, negative {r['negative']} "
+                f"(most negative {r['eig min']:.4g})")
+            for part in ("stiffest", "flattest", "most negative"):
+                for e in r[part]:
+                    log(f"  {part:13s} {e['eig']:11.4g}  {e['sites']}")
+        return res
     draws, out = {}, {"year": year, "fit": fit, "settings": kw, **ff["wininfo"]}
     for b in (("arrivals", "speed") if block == "split" else (block,)):
         t = time.perf_counter()
@@ -627,6 +698,8 @@ def main(argv=None):
     sm.add_argument("--block", choices=("all", "arrivals", "speed", "split"), default="all")
     sm.add_argument("--noncentred", nargs="*", choices=MARKS, default=[],
                     help="mark sites sampled non-centred")
+    sm.add_argument("--curvature", action="store_true",
+                    help="the potential's Hessian at the MAP start instead of a NUTS fit")
     sm.add_argument("--warmup", type=int, default=WARMUP)
     sm.add_argument("--samples", type=int, default=SAMPLES)
     sm.add_argument("--chains", type=int, default=CHAINS)
@@ -641,7 +714,8 @@ def main(argv=None):
     if args.sampler:
         if args.x64:
             numpyro.enable_x64()
-        sampler_test(args.year, args.fit, args.sampler, block=args.block, warmup=args.warmup,
+        sampler_test(args.year, args.fit, args.sampler, block=args.block,
+                     curv=args.curvature, warmup=args.warmup,
                      samples=args.samples, chains=args.chains, init=args.init,
                      dense=args.dense, sequential=not args.parallel,
                      noncentred=tuple(args.noncentred))
