@@ -28,6 +28,7 @@ wind leaves its excess unidentified, and the chains settle in different modes (d
 Sampler status). NUTS (STUDY_NUTS): the non-centred MAP start, the mass matrix started from
 the Hessian there, a dense block on the globals, the chains one after another, float64; the
 observed fit samples its two independent blocks (arrivals; speed) separately (fit_split).
+The latent fit uses fewer draws (LATENT_DRAWS: 300 + 200 per chain; it is about 10x slower).
 
 Variants (refitted per fold; the submitted config's inputs, PFSS gaps at the fit median):
     bayes              observed arrivals, additive streams, predictive mean
@@ -82,6 +83,8 @@ FITS = {"observed": bs.Config(rule="add", event_rise=False),
         "max": bs.Config(), "fixed_rise": bs.Config(event_rise=False)}
 FITS["fixed_rise_add"] = FITS["observed"]
 STUDY_NUTS = {"init": "map", "dense": "globals", "sequential": True, "mass_init": "hessian"}
+# the latent fit costs about 3.7 s per iteration (2024); at 200 + 100 it had ESS 118 already
+LATENT_DRAWS = {"warmup": 300, "samples": 200}
 VARIANTS = {  # name: (fit, decision, slow only)
     "bayes": ("observed", "mean", False),
     "bayes official": ("observed", "official", False),
@@ -431,7 +434,7 @@ def study_fit(d, cfg, **kw):
     """(draws, info) for the study: STUDY_NUTS, split into the two blocks unless latent. info
     has the scalar diagnostics over both blocks (the worst R-hat and ESS, divergences and
     tree-depth hits summed or maxed, times added) and each block's own, prefixed."""
-    kw = {**STUDY_NUTS, **kw}
+    kw = {**STUDY_NUTS, **(LATENT_DRAWS if cfg.latent else {}), **kw}
     if cfg.latent:
         draws, info = fit_nuts(d, cfg, **kw)
         return draws, {k: v for k, v in info.items() if np.isscalar(v)}
@@ -836,9 +839,12 @@ def main(argv=None):
                      noncentred=tuple(args.noncentred), mass_init=args.mass_init)
         return
     numpyro.enable_x64()  # the study fits in float64 (STUDY_NUTS)
-    STUDY_NUTS.update(warmup=args.warmup, samples=args.samples)  # default WARMUP, SAMPLES
+    if (args.warmup, args.samples) != (WARMUP, SAMPLES):  # a quick test: every fit alike
+        STUDY_NUTS.update(warmup=args.warmup, samples=args.samples)
+        LATENT_DRAWS.clear()
     if args.summary:
-        rows = {p.stem: json.loads(p.read_text("utf-8")) for p in sorted(CACHE_DIR.glob("*.json"))}
+        rows = {p.stem: json.loads(p.read_text("utf-8"))
+                for p in sorted(CACHE_DIR.glob("20??.json"))}  # not the sampler runs
         summarize(rows)
         return
     run(args.folds, args.pilot, args.max_seconds, args.variants)

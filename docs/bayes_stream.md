@@ -352,6 +352,20 @@ S_final per fold (the percentages against the reference):
 - R-hat at most 1.011, ESS min 118 (from 200 draws), 0 divergences, no tree-depth hits (51 leapfrog steps). Worst: `w_tau`, `w_N`, `w_a` (1.01).
 - 2510 s: the MAP 265 s, the Hessian 12 s, NUTS about 3.7 s per iteration (it sums over 28 arrival bins per window). Peak memory 1.2 GB.
 - Its posterior differs from the observed fit's: 0.41 expected arrivals per 84 h window (the detector finds about 0.21), a smaller excess (median 115 km/s against 137), a sharp rise (0.7 h) and a shorter decay (59 h against 164). Without the labels, the model explains more of the variation with more, smaller, shorter streams.
+
+**2024 fold** (`--folds 2024 --variants "bayes latent" "linear + bayes latent"`, cached; the latent fit at 300 + 200 per chain, `LATENT_DRAWS`): 2794 s, the fit 2745 s, R-hat 1.005, ESS min 253, 0 divergences.
+
+| Variant | S_final | vs reference | slow wind | intermediate | fast stream | stream arrival | CME |
+|---|---|---|---|---|---|---|---|
+| reference | 107.81 | — | — | — | — | — | — |
+| linear + bayes | 107.92 | +0.10% | −0.08% | +0.07% | +0.34% | +0.05% | +0.09% |
+| linear + bayes latent | 108.15 | +0.32% | +0.17% | +0.48% | +0.23% | −0.17% | +0.64% |
+| bayes latent | 113.14 | +4.9% | −49.6% | −35.8% | +17.4% | +25.3% | +10.7% |
+| bayes | 115.65 | +7.3% | −53.0% | −37.3% | +21.6% | +29.2% | +15.3% |
+
+- **The latent component makes `linear + bayes` slightly worse on 2024** (+0.32% against +0.10%).
+- **On its own the latent model beats the observed one** (+4.9% against +7.3%), with less of the stream-arrival penalty (+25% against +29%), but its arrival skill is lower (AUC 0.64 against 0.69). Its CRPS is 39.9 km/s and its 80% coverage 0.77.
+- The other five folds would take about 4 h. Not run: on 2024 the latent regressor is further from the 1% gain than the observed one.
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
