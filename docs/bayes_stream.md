@@ -222,6 +222,7 @@ Tests in `tests/test_bayes_stream.py`:
 | speed_hess | speed block, mass matrix started from the Hessian (`--mass-init hessian`), 200 + 100 | 912 s | 255 (all) | 1.9 / 3.7 | 1.6 |
 | speed_hess_ncE | speed block, Hessian start and non-centred `log_E`, 200 + 100 | 898 s | 255 (all) | 2.3 / 5.7 | 1.2 |
 | fixed_rise_hess | speed block, **rise width at its population value** (`--fit fixed_rise`), Hessian start, 200 + 100 | 270 s | 63 (none) | 1.4 / 2.3 | 4.2 |
+| fixed_rise_full | the same, 500 + 500 | 565 s | 44 (none) | 1.6 / 4.7 | 1.5 (marks 1.0) |
 
 All runs: 2 chains, 0 divergences.
 
@@ -262,8 +263,12 @@ All runs: 2 chains, 0 divergences.
   - R-hat 1.4 on the globals and 2.3 on the marks, ESS min 4: not converged at 100 draws, but far better than any earlier run. Worst: `rho_up` (1.4), `mu_R` (1.2), `sigma_E` (1.2); `w_D` is at 1.07.
   - The posterior moves: the rise width is exp(1.05) ≈ 2.9 h, and the decay longer, exp(μ_D) ≈ 150 h (σ_D 1.46), well past the end of the window. The decays stay weakly identified.
 
+- **The full-length run doesn't converge.** 500 + 500: still no tree-depth hits (44 leapfrog steps), 565 s, but R-hat 1.6 on the globals and 4.7 on the marks, with some marks at ESS about 1: the chains disagree on some events.
+  - Worst globals: `rho_up` (1.6; chain medians 0.9892 and 0.9904, so each chain is tight but they differ), `w_a` (1.2), `mu_R` (1.17), `w_E` (1.13). Fine: `sigma_eta`, `mu_D`, `rho_eta`, `rho_dn`, `w_D`, `sigma_E` (R-hat ≤ 1.02).
+  - A mark at ESS 1 with the globals nearly mixed looks like single events with two modes (for example a short decay inside the window against a long one past its end), with each chain in a different one.
+
 **Next steps**
-- The full 500 + 500 with `fixed_rise` and the Hessian start (about 0.4 s per iteration: about 15 min), to see whether it converges (R-hat < 1.01, ESS in the hundreds).
+- Find the stuck events: per-event R-hat, chain medians of each mark, the arrival hour and how much of the window is observed.
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
