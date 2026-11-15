@@ -219,6 +219,7 @@ Tests in `tests/test_bayes_stream.py`:
 | arrivals | arrival block only, 200 + 100 | 71 s | 14 (none) | 1.01 / — | 112 |
 | speed | speed block only, 200 + 100 | 914 s | 255 (all) | 3.8 / 6.2 | 1.1 |
 | speed_ncE | speed block, non-centred `log_E` (`--noncentred log_E`), 200 + 100 | 936 s | 255 (all) | 4.4 / 9.0 | 1.1 |
+| speed_hess | speed block, mass matrix started from the Hessian (`--mass-init hessian`), 200 + 100 | 912 s | 255 (all) | 1.9 / 3.7 | 1.6 |
 
 All runs: 2 chains, 0 divergences.
 
@@ -249,8 +250,11 @@ All runs: 2 chains, 0 divergences.
   - 4 directions of negative curvature at the start, in single events' `log_R` and `log_D` (with some `log_E`).
 - (A first version of this check labelled the Hessian's rows in the model's site order instead of jax's sorted flattening order, and named the wrong sites. The numbers were the same; the labels above are the corrected ones.)
 
+- **Starting the mass matrix from the Hessian helps, but not enough.** `--mass-init hessian` (1/|diagonal| at the MAP start) halves the worst R-hat (globals 3.8 → 1.9, marks 6.2 → 3.7; `w_D` 3.8 → 1.6), but every step still hits the tree-depth limit. Worst now: `rho_dn`, `w_a` (1.9), `sigma_D` (1.8).
+- **The MAP start is not where the posterior mass is.** σ_E is 1.45 at the start and about 0.17 in the draws, so the curvature at the start describes a different region from the one the chains sample. With σ_E that small, the peak excesses sit in a centred funnel.
+
 **Next steps**
-- Start NUTS's mass matrix from the Hessian's diagonal at the MAP (the inverse of its absolute value), so the adaptation starts at the right scales (the same model).
+- Both together: the Hessian start and non-centred `log_E` (non-centred alone was tried before the scales were fixed).
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
 - If `w_D` stays stuck, simplify the decay: tighter priors on `w_D` and σ_D, or bounded decays. Then the rest of the list: tie ρ_up to ρ_η, tighter prior on σ_R, bounded rise widths.
 - Check the recovery test failure under the centred marks.
