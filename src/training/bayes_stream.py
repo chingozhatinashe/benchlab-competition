@@ -359,7 +359,11 @@ def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init
                                  for k in glob},
                  "chain medians": {k: [float(np.median(c)) for c in
                                        by_chain[k].reshape(chains, samples, -1)[..., 0]]
-                                   for k in glob}})
+                                   for k in glob},
+                 # per event (the marks' last axis): R-hat and each chain's median
+                 "event r_hat": {k: np.atleast_1d(stats[k]["r_hat"]).tolist() for k in events},
+                 "event chain medians": {k: np.median(by_chain[k], axis=1).tolist()
+                                         for k in events}})
     draws = {k: v.reshape((-1,) + v.shape[2:]) for k, v in by_chain.items()
              if k in bs.GLOBALS}
     if "mu_E" in draws:  # marks at population values: latent fits, or no per-event rise
@@ -677,6 +681,31 @@ def summarize(rows, pilot=False):
     return table
 
 
+def event_table(d, info):
+    """One row per event, the worst-mixing first: its window, arrival hour (tau, 1..84), slot
+    (first or second in its window), the window's arrivals, the observed hours in the window
+    and after tau, the hours from tau to the window's end (72), and per mark (log_E, log_R,
+    log_D) the R-hat and both chains' medians (exp: E in km/s, R and D in hours)."""
+    observed = d["obs"] > 0
+    win, slot, tau = d["ev_win"], d["ev_slot"], d["ev_tau"]
+    after = np.arange(1, observed.shape[1] + 1)[None, :] >= tau[:, None]
+    rows = pd.DataFrame({"event": np.arange(len(win)), "window": win, "tau": tau, "slot": slot,
+                         "arrivals": d["N"][win], "obs hours": observed[win].sum(axis=1),
+                         "obs after tau": (observed[win] & after).sum(axis=1),
+                         "hours to end": np.maximum(observed.shape[1] - tau, 0)})
+    for k, r in info["event r_hat"].items():
+        if k.endswith("_decentered"):
+            continue
+        name = k.removeprefix("log_")
+        rows[f"r_hat {name}"] = r
+        med = np.exp(np.asarray(info["event chain medians"][k]))  # (chains, events)
+        for c, m in enumerate(med):
+            rows[f"med {name} c{c}"] = m
+    rh = [c for c in rows.columns if c.startswith("r_hat ")]
+    rows["r_hat max"] = rows[rh].max(axis=1)
+    return rows.sort_values("r_hat max", ascending=False)
+
+
 def sampler_test(year, fit, label, block="all", curv=False, **kw):
     """NUTS on a fold's training windows, without scoring: diagnostics, time and peak memory
     per block ("all", "arrivals", "speed", or "split": arrivals then speed), written to
@@ -720,6 +749,16 @@ def sampler_test(year, fit, label, block="all", curv=False, **kw):
         for k, r in sorted(info["worst r_hat"].items(), key=lambda kv: -kv[1]):
             log(f"    {k:10s} {r:7.3f}  "
                 + "  ".join(f"{m:9.4g}" for m in info["chain medians"][k]))
+    if "speed" in out or "all" in out:
+        ev = event_table(ff["d"], out.get("speed", out.get("all")))
+        ev.to_csv(CACHE_DIR / f"sampler_{label}_events.csv", index=False, float_format="%.5g")
+        cols = [c for c in ev.columns if not c.startswith("med")]
+        with pd.option_context("display.width", 250, "display.max_columns", 40):
+            log("worst events by R-hat (marks: chain medians; E km/s, R and D hours):\n"
+                + ev.head(15).to_string(index=False))
+            log("events with R-hat > 1.1, against the rest (means):\n"
+                + ev.groupby(ev["r_hat max"] > 1.1)[[c for c in cols if c not in
+                                                     ("event", "window")]].mean().T.to_string())
     if set(bs.GLOBALS) <= set(draws):
         out.update(posterior_summary(draws))
     CACHE_DIR.mkdir(parents=True, exist_ok=True)

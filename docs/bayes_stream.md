@@ -267,8 +267,20 @@ All runs: 2 chains, 0 divergences.
   - Worst globals: `rho_up` (1.6; chain medians 0.9892 and 0.9904, so each chain is tight but they differ), `w_a` (1.2), `mu_R` (1.17), `w_E` (1.13). Fine: `sigma_eta`, `mu_D`, `rho_eta`, `rho_dn`, `w_D`, `sigma_E` (R-hat ≤ 1.02).
   - A mark at ESS 1 with the globals nearly mixed looks like single events with two modes (for example a short decay inside the window against a long one past its end), with each chain in a different one.
 
+**Which events are stuck** (the same fit rerun with the per-event diagnostic, `fixed_rise_events`, identical draws by the seed; `sampler_fixed_rise_events_events.csv`)
+- **Few events, and their peak excess, not their decay.** Of 192 events, 6 have R-hat above 1.1, 9 above 1.05 and 36 above 1.01. Two are stuck badly, both on the peak excess E:
+
+  | Event | Arrival hour | Observed after it | R-hat E | E, chain 1 / 2 (km/s) | R-hat D | D, chain 1 / 2 (h) |
+  |---|---|---|---|---|---|---|
+  | 110 | 54 | 19 h | 4.7 | 411 / 197 | 1.04 | 108 / 197 |
+  | 147 | 59 | 14 h | 2.7 | 278 / 104 | 1.13 | 391 / 145 |
+
+  The next ones are far milder (R-hat 1.26 and below).
+- **So the two-mode-decay guess was wrong.** The stuck events don't differ from the rest in arrival hour (41.5 h against 43.3 h on average), observed hours or hours to the window's end. Their decays mix (R-hat D 1.08 on average); their excesses don't (2.0).
+- **A possible mechanism (not checked):** the smooth max. Where an event's profile stays below the slow wind, the speed doesn't depend on its excess, so there are two explanations of a late rise: a large stream, or a slow wind that relaxes upwards faster (`rho_up`) towards a higher ambient level (`w_a`). Those are the two stuck globals, with each chain in one explanation.
+
 **Next steps**
-- Find the stuck events: per-event R-hat, chain medians of each mark, the arrival hour and how much of the window is observed.
+- Test the mechanism with the additive rule (`Config(rule="add", event_rise=False)`): there an event's excess always shows, so the hidden-stream mode should go. If it does, the choice between the smooth max and the additive rule decides the mixing; if not, look at the two windows' speeds.
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
