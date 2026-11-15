@@ -9,7 +9,7 @@
 - smooth max of the slow wind and the streams, with additive streams as a variant;
 - arrivals both observed in training (the detected arrivals are data) and fully latent, compared.
 
-**Status (2026-11-15): built and tested, not yet scored.**
+**Status (2026-11-15): converges; 2024 pilot worse than the submitted model.**
 - **NUTS doesn't yet mix on the real training data** (2024 fold), so there are no scores.
 - The 2024 pilot was stopped at its first fit.
 - Sampler runs since: the arrival block mixes on its own. The speed block mixes with the rise width at its population value and the additive rule (R-hat ≤ 1.02 on the globals); with the smooth max, two events' excesses stay stuck between two modes.
@@ -292,9 +292,29 @@ All runs: 2 chains, 0 divergences.
   - The observed fit takes about 1 min at 4 + 4 (40 s of it the MAP); at 500 + 500 about 10 min (the speed block 338 s, the arrival block about 3 min).
   - **The latent fit is expensive:** its MAP takes 292 s, and NUTS about 3.4 s per iteration (it sums over 28 arrival bins per window). At 500 + 500 × 2 chains that is about 1.9 h per fold.
 
+## 2024 pilot (2026-11-15)
+
+`python -m training.bayes_stream --pilot --folds 2024 --variants reference bayes "bayes official" "slow wind only" "linear + bayes"` (without `bayes latent`, user's choice: its fit takes about 1.9 h per fold). 563 s, peak memory 0.9 GB; six folds about 1 h.
+
+**The fit converges** (500 + 500 × 2 chains, 497 s): arrival block R-hat 1.003, ESS 637; speed block R-hat 1.016 (marks 1.085), ESS 85 (marks 31); 0 divergences, no tree-depth hits. The posterior predictive checks fit the training windows: 161 arrivals expected against 164 detected, 80% coverage 0.806, the simulated speed quantiles within about 15 km/s of the observed ones.
+
+| Variant | S_final | vs reference | slow wind | intermediate | fast stream | stream arrival | CME |
+|---|---|---|---|---|---|---|---|
+| reference | 107.81 | — | — | — | — | — | — |
+| linear + bayes | 107.92 | +0.1% | −0.1% | +0.1% | +0.3% | +0.0% | +0.1% |
+| bayes official | 108.98 | +1.1% | **−24.7%** | **−16.5%** | +2.3% | +9.3% | +2.1% |
+| bayes | 115.65 | +7.3% | **−53.0%** | **−37.3%** | +21.6% | +29.2% | +15.3% |
+| slow wind only | 132.45 | +22.9% | −61.8% | −31.6% | +39.0% | +57.7% | +30.2% |
+
+(Regime columns: the S_final ratio to the reference within each run regime, as `training.model_diagnostics`.)
+
+- **No variant beats the reference on 2024.** The closest are `linear + bayes` (+0.1%) and `bayes official` (+1.1%); the decision rule needs more than 1% better.
+- **The generative model is good in quiet wind and bad at streams.** The predictive mean (`bayes`) is half better than the reference in slow wind and a third better in intermediate wind, but 29% worse at stream arrivals and 22% worse in fast streams. The official decision trades some of that: a quarter better in slow wind, 9% worse at arrivals. Its arrival skill is modest (AUC 0.69 for P(N ≥ 1) on the validation runs).
+- **Its uncertainty is calibrated:** CRPS 39.2 km/s and 80% coverage 0.79 on the validation runs.
+- **The official decision matters:** the Bayes action under the official weights is 6% better than the predictive mean.
+
 **Next steps**
-- Decide on the latent fit's cost (2024 pilot about 2.2 h with it, about 15 min without; six folds about 13 h with it).
-- Then the timed 2024 pilot, and the go-ahead before the six folds.
+- Six folds (about 1 h) for the decision rule, or stop here as for v2. The latent fit after that only if the six folds look promising.
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
