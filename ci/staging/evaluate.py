@@ -208,7 +208,8 @@ def report(today, now, res, shared, h7, h_all, missed, last_cycle, recent_events
         if h:
             cols = list(next(iter(h.values())).keys())
             lines += [table(["candidate", "variant", *cols],
-                            [[c, v, *r.values()] for (c, v), r in sorted(h.items())]), ""]
+                            [[c, v, *(f1(x) if isinstance(x, float) else x for x in r.values())]
+                             for (c, v), r in sorted(h.items())]), ""]
         else:
             lines += ["No runs.", ""]
     lines += ["## Schedule", "",
