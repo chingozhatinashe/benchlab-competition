@@ -12,7 +12,7 @@
 **Status (2026-11-15): built and tested, not yet scored.**
 - **NUTS doesn't yet mix on the real training data** (2024 fold), so there are no scores.
 - The 2024 pilot was stopped at its first fit.
-- Sampler runs since: the arrival block mixes on its own. The speed block mixes far better with every event's rise width at its population value (no tree-depth hits); a full-length run is next.
+- Sampler runs since: the arrival block mixes on its own. The speed block mixes with the rise width at its population value and the additive rule (R-hat ≤ 1.02 on the globals); with the smooth max, two events' excesses stay stuck between two modes.
 - See [Sampler status](#sampler-status).
 
 - **Model:** `src/models/bayes_stream.py` (numpy simulator, point decisions, asset; experimental, not used live).
@@ -223,6 +223,7 @@ Tests in `tests/test_bayes_stream.py`:
 | speed_hess_ncE | speed block, Hessian start and non-centred `log_E`, 200 + 100 | 898 s | 255 (all) | 2.3 / 5.7 | 1.2 |
 | fixed_rise_hess | speed block, **rise width at its population value** (`--fit fixed_rise`), Hessian start, 200 + 100 | 270 s | 63 (none) | 1.4 / 2.3 | 4.2 |
 | fixed_rise_full | the same, 500 + 500 | 565 s | 44 (none) | 1.6 / 4.7 | 1.5 (marks 1.0) |
+| fixed_rise_add | **additive rule** (`--fit fixed_rise_add`), fixed rise, Hessian start, 500 + 500 | 338 s | 31 (none) | **1.016 / 1.085** | **85 (marks 31)** |
 
 All runs: 2 chains, 0 divergences.
 
@@ -279,8 +280,15 @@ All runs: 2 chains, 0 divergences.
 - **So the two-mode-decay guess was wrong.** The stuck events don't differ from the rest in arrival hour (41.5 h against 43.3 h on average), observed hours or hours to the window's end. Their decays mix (R-hat D 1.08 on average); their excesses don't (2.0).
 - **A possible mechanism (not checked):** the smooth max. Where an event's profile stays below the slow wind, the speed doesn't depend on its excess, so there are two explanations of a late rise: a large stream, or a slow wind that relaxes upwards faster (`rho_up`) towards a higher ambient level (`w_a`). Those are the two stuck globals, with each chain in one explanation.
 
+- **The additive rule mixes: the mechanism holds.** With `Config(rule="add", event_rise=False)` (fit `fixed_rise_add`), everything else as `fixed_rise_full`:
+  - R-hat at most 1.016 on the globals and 1.085 on the marks, ESS min 85 and 31; 31 leapfrog steps, 338 s, peak memory 1.0 GB, 0 divergences.
+  - Events 110 and 147 mix (147 is the worst event, at R-hat 1.085, on its decay), and so do `rho_up` (1.00) and `w_a` (1.00).
+  - With the additive rule an event's excess always shows in the speed, so there is no hidden-stream mode. With the smooth max, a stream under the slow wind leaves its excess unidentified, and a late rise can come from either a large stream or a faster-relaxing slow wind. That second mode is what kept the smooth-max chains apart.
+  - The posterior: the excess median exp(4.92) ≈ 137 km/s (σ_E 0.33), the rise width exp(0.57) ≈ 1.8 h, the decay exp(5.1) ≈ 160 h (σ_D 1.5).
+
 **Next steps**
-- Test the mechanism with the additive rule (`Config(rule="add", event_rise=False)`): there an event's excess always shows, so the hidden-stream mode should go. If it does, the choice between the smooth max and the additive rule decides the mixing; if not, look at the two windows' speeds.
+- Decide what the study fits: the additive rule mixes; the smooth max doesn't (as specified, with per-event or population rise widths).
+- Then switch the study's fits to the working setup (population rise width, the split fit, the non-centred MAP start, the Hessian mass start, sequential chains, float64), and run the timed 2024 pilot.
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.

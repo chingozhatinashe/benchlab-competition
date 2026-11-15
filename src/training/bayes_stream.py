@@ -74,7 +74,8 @@ MIN_OBSERVED = 36  # h of the 72 observed, for a training window
 LATENT_STEP = 3  # h: arrival bins summed out in the latent fit (84 / 3 = 28)
 FITS = {"observed": bs.Config(), "additive": bs.Config(rule="add"),
         "latent": bs.Config(nmax=1, latent=True),
-        "fixed_rise": bs.Config(event_rise=False)}  # sampler study (docs, Sampler status)
+        "fixed_rise": bs.Config(event_rise=False),  # sampler study (docs, Sampler status)
+        "fixed_rise_add": bs.Config(rule="add", event_rise=False)}
 VARIANTS = {  # name: (fit, decision, slow only)
     "bayes": ("observed", "mean", False),
     "bayes official": ("observed", "official", False),
