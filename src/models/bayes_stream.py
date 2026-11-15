@@ -11,7 +11,8 @@ u = 73..84):
                   the same stick restricted to u >= tau_1 + GAP (the first to u <= 84 - GAP)
       marks       excess E = exp(mu_E + w_E . x'(tau) + sigma_E z), rise width
                   R = exp(mu_R + sigma_R z), decay D = exp(mu_D + w_D . x'(tau) + sigma_D z)
-                  (x': x without its constant)
+                  (x': x without its constant; Config.event_rise=False: R = exp(mu_R),
+                  sigma_R = 0)
       profile     s_j(k) = a + E g((k - tau) / R) exp(-max(0, k - tau - 2R) / D), g logistic;
                   tau is the midpoint of the rise, as the detected arrivals
     speed         V = smoothmax(S, s_1, ..., s_N) + eta (log-sum-exp at TEMP km/s; rule
@@ -53,6 +54,7 @@ class Config:
     gap: float = 48.0  # h between two arrivals
     temp: float = 5.0  # km/s, smooth-max temperature
     latent: bool = False  # trained with the arrivals summed out (marks without event effects)
+    event_rise: bool = True  # per-event rise widths; False: every event at exp(mu_R)
 
 
 # ---------------------------------------------------------------------- shared (numpy / jax)

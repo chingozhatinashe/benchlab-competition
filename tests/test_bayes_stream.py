@@ -191,6 +191,25 @@ def test_split_blocks_add_up_to_the_joint_density():
         tbs.numpyro_model(d, bs.Config(nmax=1, latent=True), block="speed")
 
 
+def test_fixed_rise_has_no_event_rise_widths():
+    pytest.importorskip("numpyro")
+    from jax import random
+    from numpyro import handlers
+
+    from training import bayes_stream as tbs
+
+    inp = synthetic_inputs(4, seed=9)
+    y = 380 + np.random.default_rng(10).normal(size=(4, bs.HORIZON)) * 30
+    n_lab = np.zeros((4, bs.N_ARRIVAL))
+    n_lab[0, 20] = n_lab[2, 8] = 1
+    d = tbs.window_data(inp["x"], inp["amb"], inp["last"], y, n_lab)
+    sites = {cfg.event_rise: set(handlers.trace(handlers.seed(
+        tbs.numpyro_model, random.PRNGKey(0))).get_trace(d, cfg))
+        for cfg in (bs.Config(), bs.Config(event_rise=False))}
+    assert sites[True] - sites[False] == {"log_R", "sigma_R"}
+    assert sites[False] <= sites[True]
+
+
 def test_potential_hessian_rows_carry_the_right_site_labels():
     pytest.importorskip("numpyro")
     import numpyro

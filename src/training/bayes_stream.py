@@ -73,7 +73,8 @@ N_PATHS, N_PATHS_FIT = 400, 100
 MIN_OBSERVED = 36  # h of the 72 observed, for a training window
 LATENT_STEP = 3  # h: arrival bins summed out in the latent fit (84 / 3 = 28)
 FITS = {"observed": bs.Config(), "additive": bs.Config(rule="add"),
-        "latent": bs.Config(nmax=1, latent=True)}
+        "latent": bs.Config(nmax=1, latent=True),
+        "fixed_rise": bs.Config(event_rise=False)}  # sampler study (docs, Sampler status)
 VARIANTS = {  # name: (fit, decision, slow only)
     "bayes": ("observed", "mean", False),
     "bayes official": ("observed", "official", False),
@@ -206,13 +207,15 @@ def numpyro_model(d, cfg, block="all"):
         return
 
     sigma_E = numpyro.sample("sigma_E", dist.HalfNormal(0.5))
-    sigma_R = numpyro.sample("sigma_R", dist.HalfNormal(0.5))
+    if cfg.event_rise:
+        sigma_R = numpyro.sample("sigma_R", dist.HalfNormal(0.5))
     sigma_D = numpyro.sample("sigma_D", dist.HalfNormal(0.5))
     win, slot, ev_tau = d["ev_win"], d["ev_slot"], d["ev_tau"]
     xe = xc[win, ev_tau - 1]
     with numpyro.plate("events", len(win)):  # centred: each event's speeds pin its marks
         log_E = numpyro.sample("log_E", dist.Normal(mu_E + xe @ w_E, sigma_E))
-        log_R = numpyro.sample("log_R", dist.Normal(mu_R, sigma_R))
+        log_R = (numpyro.sample("log_R", dist.Normal(mu_R, sigma_R)) if cfg.event_rise
+                 else jnp.full(len(win), mu_R))
         log_D = numpyro.sample("log_D", dist.Normal(mu_D + xe @ w_D, sigma_D))
     E = jnp.zeros((n, 2)).at[win, slot].set(jnp.exp(log_E))
     R = jnp.ones((n, 2)).at[win, slot].set(jnp.exp(log_R))
@@ -359,7 +362,7 @@ def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init
                                    for k in glob}})
     draws = {k: v.reshape((-1,) + v.shape[2:]) for k, v in by_chain.items()
              if k in bs.GLOBALS}
-    if cfg.latent:  # marks at population values
+    if "mu_E" in draws:  # marks at population values: latent fits, or no per-event rise
         for k in ("sigma_E", "sigma_R", "sigma_D"):
             draws.setdefault(k, np.zeros(len(draws["mu_E"])))
     return draws, info

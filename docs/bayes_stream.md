@@ -12,7 +12,7 @@
 **Status (2026-11-15): built and tested, not yet scored.**
 - **NUTS doesn't yet mix on the real training data** (2024 fold), so there are no scores.
 - The 2024 pilot was stopped at its first fit.
-- Sampler runs since: the arrival block mixes on its own, the speed block doesn't (every step at the tree-depth limit; worst `w_D`).
+- Sampler runs since: the arrival block mixes on its own. The speed block mixes far better with every event's rise width at its population value (no tree-depth hits); a full-length run is next.
 - See [Sampler status](#sampler-status).
 
 - **Model:** `src/models/bayes_stream.py` (numpy simulator, point decisions, asset; experimental, not used live).
@@ -221,6 +221,7 @@ Tests in `tests/test_bayes_stream.py`:
 | speed_ncE | speed block, non-centred `log_E` (`--noncentred log_E`), 200 + 100 | 936 s | 255 (all) | 4.4 / 9.0 | 1.1 |
 | speed_hess | speed block, mass matrix started from the Hessian (`--mass-init hessian`), 200 + 100 | 912 s | 255 (all) | 1.9 / 3.7 | 1.6 |
 | speed_hess_ncE | speed block, Hessian start and non-centred `log_E`, 200 + 100 | 898 s | 255 (all) | 2.3 / 5.7 | 1.2 |
+| fixed_rise_hess | speed block, **rise width at its population value** (`--fit fixed_rise`), Hessian start, 200 + 100 | 270 s | 63 (none) | 1.4 / 2.3 | 4.2 |
 
 All runs: 2 chains, 0 divergences.
 
@@ -256,10 +257,15 @@ All runs: 2 chains, 0 divergences.
 
 - **Both together are no better.** The Hessian start with non-centred `log_E` still hits the tree-depth limit on every step, with R-hat 2.3 / 5.7 (worst `w_E`, `w_D`, `sigma_D`). So the sampler-side fixes (start, mass matrix, parameterisation) are used up: what is left is the model's geometry at the event level (each event's peak excess against its rise width, weakly identified decays).
 
+- **The rise width at its population value fixes the trees** (`Config(event_rise=False)`, fit `fixed_rise`: every event's rise width is exp(μ_R), with no per-event `log_R` and no σ_R).
+  - No step hits the tree-depth limit (63 leapfrog steps on average, against 255), so the fit takes 270 s instead of 912 s.
+  - R-hat 1.4 on the globals and 2.3 on the marks, ESS min 4: not converged at 100 draws, but far better than any earlier run. Worst: `rho_up` (1.4), `mu_R` (1.2), `sigma_E` (1.2); `w_D` is at 1.07.
+  - The posterior moves: the rise width is exp(1.05) ≈ 2.9 h, and the decay longer, exp(μ_D) ≈ 150 h (σ_D 1.46), well past the end of the window. The decays stay weakly identified.
+
 **Next steps**
-- Simplify the event level (a model change):
-  - the rise width at its population value (no per-event `log_R`), which removes the excess–rise ridge;
-  - if the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
+- The full 500 + 500 with `fixed_rise` and the Hessian start (about 0.4 s per iteration: about 15 min), to see whether it converges (R-hat < 1.01, ESS in the hundreds).
+- If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
+- Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
 - If `w_D` stays stuck, simplify the decay: tighter priors on `w_D` and σ_D, or bounded decays. Then the rest of the list: tie ρ_up to ρ_η, tighter prior on σ_R, bounded rise widths.
 - Check the recovery test failure under the centred marks.
