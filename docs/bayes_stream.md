@@ -131,12 +131,13 @@ Runs are processed in chunks to bound memory, and 400 paths are drawn per run.
 
 Each variant is refitted per fold on the runs before the fold, with PFSS gaps at the fit median, as in v1 and v2.
 
+**Additive rule only (user, 2026-11-15).** The smooth max doesn't mix (see [Sampler status](#sampler-status)), so every fit uses the additive rule, with the rise width at its population value. The `bayes additive` variant is gone: it is now `bayes`. The study fits with `STUDY_NUTS`: the non-centred MAP start, the mass matrix started from the Hessian, a dense block on the globals, the chains one after another, float64; the observed fit samples its arrival and speed blocks separately (`study_fit`).
+
 | Variant | Fit | Decision |
 |---|---|---|
-| bayes | observed arrivals, smooth max | mean |
+| bayes | observed arrivals, additive, population rise width | mean |
 | bayes official | same posterior | official Bayes action |
-| bayes additive | observed arrivals, additive | mean |
-| bayes latent | latent arrivals, smooth max | mean |
+| bayes latent | latent arrivals, additive | mean |
 | slow wind only | bayes' posterior with N = 0 | mean |
 | linear + bayes | the submitted linear model + bayes' mean as a lead-aligned regressor | — |
 | reference | the submitted linear model (2024 fold: S_final 107.81) | — |
@@ -286,9 +287,14 @@ All runs: 2 chains, 0 divergences.
   - With the additive rule an event's excess always shows in the speed, so there is no hidden-stream mode. With the smooth max, a stream under the slow wind leaves its excess unidentified, and a late rise can come from either a large stream or a faster-relaxing slow wind. That second mode is what kept the smooth-max chains apart.
   - The posterior: the excess median exp(4.92) ≈ 137 km/s (σ_E 0.33), the rise width exp(0.57) ≈ 1.8 h, the decay exp(5.1) ≈ 160 h (σ_D 1.5).
 
+- **The study is switched** to the additive rule and the working setup (see [Planned study](#planned-study)). The sampler mode's `--fit observed` is now that fit; the smooth-max fits of the runs above are `--fit max` (per-event rise widths) and `--fit fixed_rise`.
+- **End-to-end check** (`--pilot --folds 2024 --warmup 4 --samples 4`; 4 draws, so the scores mean nothing): every variant runs, and the reference reproduces S_final 107.81. Peak memory 1.3 GB.
+  - The observed fit takes about 1 min at 4 + 4 (40 s of it the MAP); at 500 + 500 about 10 min (the speed block 338 s, the arrival block about 3 min).
+  - **The latent fit is expensive:** its MAP takes 292 s, and NUTS about 3.4 s per iteration (it sums over 28 arrival bins per window). At 500 + 500 × 2 chains that is about 1.9 h per fold.
+
 **Next steps**
-- Decide what the study fits: the additive rule mixes; the smooth max doesn't (as specified, with per-event or population rise widths).
-- Then switch the study's fits to the working setup (population rise width, the split fit, the non-centred MAP start, the Hessian mass start, sequential chains, float64), and run the timed 2024 pilot.
+- Decide on the latent fit's cost (2024 pilot about 2.2 h with it, about 15 min without; six folds about 13 h with it).
+- Then the timed 2024 pilot, and the go-ahead before the six folds.
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.

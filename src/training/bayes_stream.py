@@ -18,18 +18,21 @@ model's mean path is AR(1) Gaussian (exact: the model adds its noise after the
 streams), and
 
     observed   the detected arrivals in hours 1..84 are data: Poisson count, stick-breaking
-               times, latent marks per event (peak excess, rise width, decay) with
-               population priors (partial pooling)
+               times, latent marks per event (peak excess and decay) with population priors
+               (partial pooling); the rise width at its population value
     latent     arrivals summed out (N <= 1 per window; arrival times in LATENT_STEP-hour
                bins at their middle hour, 28 bins + none); marks at their population values
                (no event effects, which the labels would be needed for)
-NUTS runs in jax's default float32, with the chains in parallel (time; see the pilot).
+Both use the additive rule (user, 2026-11-15): under the smooth max a stream below the slow
+wind leaves its excess unidentified, and the chains settle in different modes (docs,
+Sampler status). NUTS (STUDY_NUTS): the non-centred MAP start, the mass matrix started from
+the Hessian there, a dense block on the globals, the chains one after another, float64; the
+observed fit samples its two independent blocks (arrivals; speed) separately (fit_split).
 
 Variants (refitted per fold; the submitted config's inputs, PFSS gaps at the fit median):
-    bayes              observed arrivals, smooth max, predictive mean
+    bayes              observed arrivals, additive streams, predictive mean
     bayes official     the same posterior, Bayes action under the official-weighted loss
-    bayes additive     observed arrivals, additive streams, predictive mean
-    bayes latent       latent arrivals, smooth max, predictive mean
+    bayes latent       latent arrivals, additive streams, predictive mean
     slow wind only     bayes' posterior with N = 0
     linear + bayes     the submitted linear model + bayes' mean as a lead-aligned regressor
     reference          the submitted linear model
@@ -72,14 +75,15 @@ MAP_STEPS = 4000
 N_PATHS, N_PATHS_FIT = 400, 100
 MIN_OBSERVED = 36  # h of the 72 observed, for a training window
 LATENT_STEP = 3  # h: arrival bins summed out in the latent fit (84 / 3 = 28)
-FITS = {"observed": bs.Config(), "additive": bs.Config(rule="add"),
-        "latent": bs.Config(nmax=1, latent=True),
-        "fixed_rise": bs.Config(event_rise=False),  # sampler study (docs, Sampler status)
-        "fixed_rise_add": bs.Config(rule="add", event_rise=False)}
+FITS = {"observed": bs.Config(rule="add", event_rise=False),
+        "latent": bs.Config(rule="add", nmax=1, latent=True),
+        # sampler study (docs, Sampler status): the smooth max, per-event rise widths
+        "max": bs.Config(), "fixed_rise": bs.Config(event_rise=False)}
+FITS["fixed_rise_add"] = FITS["observed"]
+STUDY_NUTS = {"init": "map", "dense": "globals", "sequential": True, "mass_init": "hessian"}
 VARIANTS = {  # name: (fit, decision, slow only)
     "bayes": ("observed", "mean", False),
     "bayes official": ("observed", "official", False),
-    "bayes additive": ("additive", "mean", False),
     "bayes latent": ("latent", "mean", False),
     "slow wind only": ("observed", "mean", True),
 }
@@ -421,6 +425,29 @@ def hessian_inverse_mass(H, sites, dense_sites=()):
     return out
 
 
+def study_fit(d, cfg, **kw):
+    """(draws, info) for the study: STUDY_NUTS, split into the two blocks unless latent. info
+    has the scalar diagnostics over both blocks (the worst R-hat and ESS, divergences and
+    tree-depth hits summed or maxed, times added) and each block's own, prefixed."""
+    kw = {**STUDY_NUTS, **kw}
+    if cfg.latent:
+        draws, info = fit_nuts(d, cfg, **kw)
+        return draws, {k: v for k, v in info.items() if np.isscalar(v)}
+    draws, infos = fit_split(d, cfg, **kw)
+    scal = {b: {k: v for k, v in i.items() if np.isscalar(v)} for b, i in infos.items()}
+    info = {f"{b} {k}": v for b, i in scal.items() for k, v in i.items()}
+
+    def comb(k, fn):
+        vals = [i[k] for i in scal.values() if k in i and np.isfinite(i[k])]
+        return float(fn(vals)) if vals else np.nan
+    info.update({"r_hat max": comb("r_hat max", max), "ess min": comb("ess min", min),
+                 "r_hat max events": comb("r_hat max events", max),
+                 "ess min events": comb("ess min events", min),
+                 "divergences": int(comb("divergences", sum)),
+                 "tree depth hit": comb("tree depth hit", max)})
+    return draws, info
+
+
 def curvature(d, cfg, block="speed", noncentred=(), seed=0, top=6):
     """The Hessian of NUTS's potential at the MAP start (map_point): its spectrum, raw and
     scaled by its diagonal (what an adapted diagonal mass matrix leaves: correlations and
@@ -543,8 +570,7 @@ def score_fold(data, start, end, names, timer, pilot=False):
     def fitted(key):
         if key not in draws:
             t = time.perf_counter()
-            draws[key], info = fit_nuts(d, FITS[key])
-            info = {k: v for k, v in info.items() if not isinstance(v, dict)}
+            draws[key], info = study_fit(d, FITS[key])
             info["fit s"] = time.perf_counter() - t
             info.update(wininfo, **posterior_summary(draws[key]))
             t = time.perf_counter()
@@ -795,7 +821,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     import numpyro
 
-    numpyro.set_host_device_count(CHAINS)  # chains in parallel (before jax starts)
+    numpyro.set_host_device_count(CHAINS)  # chains in parallel if asked (before jax starts)
     if args.sampler:
         if args.x64:
             numpyro.enable_x64()
@@ -805,6 +831,8 @@ def main(argv=None):
                      dense=args.dense, sequential=not args.parallel,
                      noncentred=tuple(args.noncentred), mass_init=args.mass_init)
         return
+    numpyro.enable_x64()  # the study fits in float64 (STUDY_NUTS)
+    STUDY_NUTS.update(warmup=args.warmup, samples=args.samples)  # default WARMUP, SAMPLES
     if args.summary:
         rows = {p.stem: json.loads(p.read_text("utf-8")) for p in sorted(CACHE_DIR.glob("*.json"))}
         summarize(rows)
