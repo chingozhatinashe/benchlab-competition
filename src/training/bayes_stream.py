@@ -68,6 +68,7 @@ EXPERIMENTS = HERE.parent / "experiments"
 CACHE_DIR = HERE.parent / "data" / "bayes_stream_cache"
 KEEP_GAIN, KEEP_FOLDS = 0.01, 4
 WARMUP, SAMPLES, CHAINS = 500, 500, 2
+MAP_STEPS = 4000
 N_PATHS, N_PATHS_FIT = 400, 100
 MIN_OBSERVED = 36  # h of the 72 observed, for a training window
 LATENT_STEP = 3  # h: arrival bins summed out in the latent fit (84 / 3 = 28)
@@ -139,26 +140,40 @@ def window_data(x, amb, v0, y, n_lab, observed=None):
 
 
 # ---------------------------------------------------------------------- NumPyro model
-def numpyro_model(d, cfg):
+ARRIVAL_SITES = ("w_N", "w_tau")
+
+
+def numpyro_model(d, cfg, block="all"):
+    """block: "all", or with observed arrivals one of the posterior's two independent factors,
+    "arrivals" (w_N, w_tau: the count and time terms) or "speed" (the rest: the speed term)."""
     import jax.numpy as jnp
     import numpyro
     import numpyro.distributions as dist
 
     p = d["x"].shape[-1]
     n = len(d["y"])
+    if block != "all" and cfg.latent:
+        raise ValueError("the latent fit does not split: arrivals enter the speed term")
 
     def vec(name, loc0, scale0, scale):
         loc = jnp.zeros(p).at[0].set(loc0)
         sd = jnp.full(p, scale).at[0].set(scale0)
         return numpyro.sample(name, dist.Normal(loc, sd))
 
+    if block == "arrivals":
+        w_N = vec("w_N", np.log(0.25), 1.0, 0.5)
+        w_tau = vec("w_tau", -3.7, 1.5, 0.5)
+        arrival_factors(d, cfg, w_N, w_tau, jnp, numpyro)
+        return
+
     w_a = numpyro.sample("w_a", dist.Normal(jnp.zeros(3), 1.5))
     rho_up = numpyro.sample("rho_up", dist.Beta(19.0, 1.0))
     rho_dn = numpyro.sample("rho_dn", dist.Beta(19.0, 1.0))
     rho_eta = numpyro.sample("rho_eta", dist.Beta(8.0, 2.0))
     sigma_eta = numpyro.sample("sigma_eta", dist.HalfNormal(50.0))
-    w_N = vec("w_N", np.log(0.25), 1.0, 0.5)
-    w_tau = vec("w_tau", -3.7, 1.5, 0.5)
+    if block == "all":
+        w_N = vec("w_N", np.log(0.25), 1.0, 0.5)
+        w_tau = vec("w_tau", -3.7, 1.5, 0.5)
     mu_E = numpyro.sample("mu_E", dist.Normal(np.log(250.0), 0.5))
     w_E = numpyro.sample("w_E", dist.Normal(jnp.zeros(p - 1), 0.3))
     mu_R = numpyro.sample("mu_R", dist.Normal(np.log(6.0), 0.5))
@@ -168,11 +183,11 @@ def numpyro_model(d, cfg):
     gaps = (d["prev"], d["lag"], d["obs"])
     a = bs.ambient(w_a, d["amb"], jnp)
     slow = bs.slow_mean(a, d["v0"], rho_up, rho_dn, jnp)
-    clp = bs.count_logp(d["xbar"] @ w_N, cfg.nmax, jnp)
-    lp = bs.stick_logp(d["x"] @ w_tau, jnp)
     xc = d["x"][:, :, 1:]
 
     if cfg.latent:  # an arrival in each LATENT_STEP-hour bin, at its middle hour
+        clp = bs.count_logp(d["xbar"] @ w_N, cfg.nmax, jnp)
+        lp = bs.stick_logp(d["x"] @ w_tau, jnp)
         hours = bs.ARRIVALS[LATENT_STEP // 2::LATENT_STEP]
         xb = xc[:, LATENT_STEP // 2::LATENT_STEP]
         lp = bs._logsumexp(lp.reshape(n, -1, LATENT_STEP), -1, jnp)
@@ -204,6 +219,15 @@ def numpyro_model(d, cfg):
     D = jnp.ones((n, 2)).at[win, slot].set(jnp.exp(log_D))
     mean = bs.combine(slow, a, bs.profile(d["tau"], E, R, D, jnp), d["present"], cfg, jnp)
     numpyro.factor("speed", bs.ar1_loglik(d["y"] - mean, rho_eta, sigma_eta, jnp, gaps).sum())
+    if block == "all":
+        arrival_factors(d, cfg, w_N, w_tau, jnp, numpyro)
+
+
+def arrival_factors(d, cfg, w_N, w_tau, jnp, numpyro):
+    """The observed arrivals' count and time terms (they involve w_N and w_tau only)."""
+    n = len(d["y"])
+    clp = bs.count_logp(d["xbar"] @ w_N, cfg.nmax, jnp)
+    lp = bs.stick_logp(d["x"] @ w_tau, jnp)
     numpyro.factor("count", clp[np.arange(n), d["N"]].sum())
     first = bs.restrict(lp, (d["N"][:, None] < 2) | (bs.N_ARRIVAL - cfg.gap >= bs.ARRIVALS),
                         jnp)
@@ -214,16 +238,78 @@ def numpyro_model(d, cfg):
                    + (d["present"][:, 1] * second[np.arange(n), second_t]).sum())
 
 
-def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0):
-    """(draws, info): posterior draws of the global parameters and NUTS diagnostics."""
+def global_sites(d, cfg, block="all"):
+    """Names of the model's global (non-event) sample sites."""
+    from jax import random
+    from numpyro import handlers
+
+    seeded = handlers.seed(partial(numpyro_model, d, cfg, block=block), random.PRNGKey(0))
+    tr = handlers.trace(seeded).get_trace()
+    return tuple(k for k, s in tr.items() if s["type"] == "sample" and not s["is_observed"]
+                 and not k.startswith("log_"))
+
+
+MARKS = ("log_E", "log_R", "log_D")
+
+
+def map_point(d, cfg, steps=MAP_STEPS, seed=0, block="all"):
+    """A starting point for the centred NUTS fit: the posterior mode by SVI with a point-mass
+    guide (AutoDelta, Adam 0.01), found in the non-centred form of the event marks and mapped
+    back to centred values.
+
+    The centred joint density grows without bound as sigma_E, sigma_R, sigma_D -> 0 with every
+    mark at its population mean, so a mode found directly in the centred form collapses the
+    spreads (smoke run 2026-11-15: sigma_E 0.003) and starts NUTS in the funnel's neck. In the
+    non-centred form the marks' standard-normal offsets carry the prior, and the mode keeps
+    the spreads (experiment 1: sigma_E 1.46)."""
+    import numpyro
+    from jax import random
+    from numpyro import handlers
+    from numpyro.infer import SVI, Trace_ELBO, init_to_median
+    from numpyro.infer.autoguide import AutoDelta
+    from numpyro.infer.reparam import LocScaleReparam
+
+    model = handlers.reparam(partial(numpyro_model, d, cfg, block=block),
+                             config={k: LocScaleReparam(centered=0) for k in MARKS})
+    guide = AutoDelta(model, init_loc_fn=init_to_median)
+    svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    res = svi.run(random.PRNGKey(seed), steps, progress_bar=False)
+    point = guide.median(res.params)
+    tr = handlers.trace(handlers.substitute(handlers.seed(model, random.PRNGKey(seed)),
+                                            data=point)).get_trace()
+    init = {k: s["value"] for k, s in tr.items() if s["type"] == "sample"
+            and not s["is_observed"] and not k.endswith("_decentered")}
+    init.update({k: tr[k]["value"] for k in MARKS if k in tr})  # centred marks
+    return init, float(np.asarray(res.losses)[-1])
+
+
+def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init="median",
+             dense="none", sequential=False, max_tree_depth=8, block="all"):
+    """(draws, info): posterior draws of the global parameters and NUTS diagnostics.
+
+    init: "median" (prior medians) or "map" (start every chain at map_point). dense: the mass
+    matrix, "none" (diagonal), "globals" (dense block on the global sites, diagonal on the
+    event marks; memory grows with the globals only) or "all". sequential: run the chains one
+    after another (less memory than in parallel)."""
     import jax
     from jax import random
     from numpyro.diagnostics import summary
-    from numpyro.infer import MCMC, NUTS, init_to_median
+    from numpyro.infer import MCMC, NUTS, init_to_median, init_to_value
 
-    kernel = NUTS(partial(numpyro_model, d, cfg), target_accept_prob=0.9,
-                  init_strategy=init_to_median, max_tree_depth=8)
-    parallel = jax.local_device_count() >= chains
+    info = {}
+    if init == "map":
+        t = time.perf_counter()
+        point, loss = map_point(d, cfg, seed=seed, block=block)
+        info.update({"map s": time.perf_counter() - t, "map loss": loss,
+                     **{f"map {k}": float(point[k]) for k in ("sigma_E", "sigma_R", "sigma_D")
+                        if k in point}})
+        strategy = init_to_value(values=point)
+    else:
+        strategy = init_to_median
+    dense_mass = {"none": False, "all": True, "globals": [global_sites(d, cfg, block)]}[dense]
+    kernel = NUTS(partial(numpyro_model, d, cfg, block=block), target_accept_prob=0.9,
+                  init_strategy=strategy, max_tree_depth=max_tree_depth, dense_mass=dense_mass)
+    parallel = not sequential and jax.local_device_count() >= chains
     mcmc = MCMC(kernel, num_warmup=warmup, num_samples=samples, num_chains=chains,
                 chain_method="parallel" if parallel else "sequential", progress_bar=False)
     mcmc.run(random.PRNGKey(seed), extra_fields=("diverging", "num_steps"))
@@ -237,17 +323,36 @@ def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0):
         return float(fn(np.concatenate(vals))) if vals else np.nan
 
     extra = mcmc.get_extra_fields()
-    info = {"r_hat max": worst(glob, "r_hat", np.nanmax),
-            "ess min": worst(glob, "n_eff", np.nanmin),
-            "r_hat max events": worst(events, "r_hat", np.nanmax),
-            "ess min events": worst(events, "n_eff", np.nanmin),
-            "divergences": int(np.asarray(extra["diverging"]).sum()),
-            "leapfrog mean": float(np.asarray(extra["num_steps"]).mean())}
+    steps = np.asarray(extra["num_steps"])
+    info.update({"r_hat max": worst(glob, "r_hat", np.nanmax),
+                 "ess min": worst(glob, "n_eff", np.nanmin),
+                 "r_hat max events": worst(events, "r_hat", np.nanmax),
+                 "ess min events": worst(events, "n_eff", np.nanmin),
+                 "divergences": int(np.asarray(extra["diverging"]).sum()),
+                 "leapfrog mean": float(steps.mean()),
+                 "tree depth hit": float(np.mean(steps >= 2 ** max_tree_depth - 1)),
+                 "worst r_hat": {k: float(np.nanmax(np.atleast_1d(stats[k]["r_hat"])))
+                                 for k in glob},
+                 "chain medians": {k: [float(np.median(c)) for c in
+                                       by_chain[k].reshape(chains, samples, -1)[..., 0]]
+                                   for k in glob}})
     draws = {k: v.reshape((-1,) + v.shape[2:]) for k, v in by_chain.items()
              if k in bs.GLOBALS}
-    for k in ("sigma_E", "sigma_R", "sigma_D"):  # latent fits: marks at population values
-        draws.setdefault(k, np.zeros(len(draws["mu_E"])))
+    if cfg.latent:  # marks at population values
+        for k in ("sigma_E", "sigma_R", "sigma_D"):
+            draws.setdefault(k, np.zeros(len(draws["mu_E"])))
     return draws, info
+
+
+def fit_split(d, cfg, **kw):
+    """fit_nuts on the observed-arrival posterior's two independent factors, the arrival block
+    (w_N, w_tau) and the speed block (the rest), with the draws joined by index (exact: the
+    blocks are independent a posteriori). (draws, {"arrivals": info, "speed": info})."""
+    draws, infos = {}, {}
+    for block in ("arrivals", "speed"):
+        part, infos[block] = fit_nuts(d, cfg, block=block, **kw)
+        draws.update(part)
+    return draws, infos
 
 
 def posterior_summary(draws):
@@ -286,30 +391,40 @@ def arrival_skill(out, n_lab, m_lab):
             "arrivals expected": float(out["arrivals"][clean].sum())}
 
 
+def fold_fit(data, start):
+    """The fold's fit runs, the model with its statistics and the training windows."""
+    f = {"start_pos": data.series.index.get_loc(start),
+         "fit6": data.runs6[data.runs6 < start], "cols": list(data.cfg.input_features)}
+    f["table"] = table = data.table.copy()
+    table[data.pfss] = table[data.pfss].fillna(table.loc[f["fit6"], data.pfss].median())
+    f["pos_fit"] = data.series.index.get_indexer(f["fit6"])
+    f["x_fit"] = table.loc[f["fit6"], f["cols"]].to_numpy(dtype=float)
+    f["model"] = model = bs.BayesStreamModel(ts.structural_config(data.cfg))
+    model.set_statistics(data.values, f["pos_fit"], f["x_fit"], f["start_pos"])
+    y_fit, q_fit = model.training_targets(data.values, f["pos_fit"], f["start_pos"])
+    model.table = bs.weight_table(np.where(q_fit > 0, y_fit, np.nan), data.cfg.blend)
+    f["d"], f["sim_inp"], f["wininfo"] = training_windows(
+        data, model, table, f["cols"], f["fit6"], f["start_pos"],
+        start - pd.Timedelta(hours=LABEL_GUARD))
+    return f
+
+
 def score_fold(data, start, end, names, timer, pilot=False):
-    start_pos = data.series.index.get_loc(start)
-    cutoff = start - pd.Timedelta(hours=LABEL_GUARD)
-    fit6 = data.runs6[data.runs6 < start]
+    ff = fold_fit(data, start)
+    start_pos, fit6, cols, table, model = (ff[k] for k in ("start_pos", "fit6", "cols",
+                                                           "table", "model"))
+    pos_fit, x_fit, d, sim_inp, wininfo = (ff[k] for k in ("pos_fit", "x_fit", "d", "sim_inp",
+                                                           "wininfo"))
     val = data.runs6[(data.runs6 >= start) & (data.runs6 < end)]
     obs, pers = cs.verifying(data.truth, val), cs.persistence(data.truth, val)
     regime = data.run_regimes(val)
-    table = data.table.copy()
-    table[data.pfss] = table[data.pfss].fillna(table.loc[fit6, data.pfss].median())
-    pos_fit, pos_val = data.series.index.get_indexer(fit6), data.series.index.get_indexer(val)
-    cols = list(data.cfg.input_features)
-    x_fit = table.loc[fit6, cols].to_numpy(dtype=float)
+    pos_val = data.series.index.get_indexer(val)
     x_val = table.loc[val, cols].to_numpy(dtype=float)
     n_val, m_val = run_labels(data, val)
     year = f"{start:%Y}"
     out = {"runs": len(val), "persistence": cs.score(np.repeat(pers[:, None], cs.HORIZON, 1),
                                                      obs, pers)["s_final"], "fits": {}}
-
-    model = bs.BayesStreamModel(ts.structural_config(data.cfg))
-    model.set_statistics(data.values, pos_fit, x_fit, start_pos)
-    y_fit, q_fit = model.training_targets(data.values, pos_fit, start_pos)
-    model.table = bs.weight_table(np.where(q_fit > 0, y_fit, np.nan), data.cfg.blend)
     inp_val = model.prepare(data.values, pos_val, x_val)
-    d, sim_inp, wininfo = training_windows(data, model, table, cols, fit6, start_pos, cutoff)
     log(f"    windows: {wininfo}")
     draws, sims, forecasts = {}, {}, {}
 
@@ -317,6 +432,7 @@ def score_fold(data, start, end, names, timer, pilot=False):
         if key not in draws:
             t = time.perf_counter()
             draws[key], info = fit_nuts(d, FITS[key])
+            info = {k: v for k, v in info.items() if not isinstance(v, dict)}
             info["fit s"] = time.perf_counter() - t
             info.update(wininfo, **posterior_summary(draws[key]))
             t = time.perf_counter()
@@ -454,6 +570,41 @@ def summarize(rows, pilot=False):
     return table
 
 
+def sampler_test(year, fit, label, block="all", **kw):
+    """NUTS on a fold's training windows, without scoring: diagnostics, time and peak memory
+    per block ("all", "arrivals", "speed", or "split": arrivals then speed), written to
+    CACHE_DIR / sampler_<label>.json."""
+    t = time.perf_counter()
+    data = dg.Data()
+    start = next(s for s, _ in YEARLY if s.year == year)
+    ff = fold_fit(data, start)
+    log(f"data and windows ready in {time.perf_counter() - t:.0f} s: {ff['wininfo']}; "
+        f"peak memory {tx.peak_mb():.0f} MB; settings {kw}")
+    draws, out = {}, {"year": year, "fit": fit, "settings": kw, **ff["wininfo"]}
+    for b in (("arrivals", "speed") if block == "split" else (block,)):
+        t = time.perf_counter()
+        part, info = fit_nuts(ff["d"], FITS[fit], block=b, **kw)
+        draws.update(part)
+        info.update({"fit s": time.perf_counter() - t, "peak MB": tx.peak_mb()})
+        out[b] = info
+        log(f"block {b}: fit {info['fit s']:.0f} s, peak memory {info['peak MB']:.0f} MB")
+        for k in ("map s", "map sigma_E", "map sigma_R", "map sigma_D", "r_hat max", "ess min",
+                  "r_hat max events", "ess min events", "divergences", "leapfrog mean",
+                  "tree depth hit"):
+            if k in info and np.isfinite(info[k]):
+                log(f"  {k}: {info[k]:.4g}")
+        log("  worst R-hat by site (chain medians of the first element):")
+        for k, r in sorted(info["worst r_hat"].items(), key=lambda kv: -kv[1]):
+            log(f"    {k:10s} {r:7.3f}  "
+                + "  ".join(f"{m:9.4g}" for m in info["chain medians"][k]))
+    if set(bs.GLOBALS) <= set(draws):
+        out.update(posterior_summary(draws))
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    (CACHE_DIR / f"sampler_{label}.json").write_text(json.dumps(out, indent=1), "utf-8")
+    np.savez_compressed(CACHE_DIR / f"sampler_{label}_draws.npz", **draws)
+    return out
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--pilot", action="store_true")
@@ -461,10 +612,29 @@ def main(argv=None):
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--variants", nargs="*", default=list(ALL))
     parser.add_argument("--summary", action="store_true")
+    sm = parser.add_argument_group("sampler test (--sampler: one fit, no scoring)")
+    sm.add_argument("--sampler", metavar="LABEL")
+    sm.add_argument("--year", type=int, default=2024)
+    sm.add_argument("--fit", choices=list(FITS), default="observed")
+    sm.add_argument("--block", choices=("all", "arrivals", "speed", "split"), default="all")
+    sm.add_argument("--warmup", type=int, default=WARMUP)
+    sm.add_argument("--samples", type=int, default=SAMPLES)
+    sm.add_argument("--chains", type=int, default=CHAINS)
+    sm.add_argument("--init", choices=("median", "map"), default="map")
+    sm.add_argument("--dense", choices=("none", "globals", "all"), default="globals")
+    sm.add_argument("--parallel", action="store_true", help="chains in parallel (more memory)")
+    sm.add_argument("--x64", action="store_true")
     args = parser.parse_args(argv)
     import numpyro
 
     numpyro.set_host_device_count(CHAINS)  # chains in parallel (before jax starts)
+    if args.sampler:
+        if args.x64:
+            numpyro.enable_x64()
+        sampler_test(args.year, args.fit, args.sampler, block=args.block, warmup=args.warmup,
+                     samples=args.samples, chains=args.chains, init=args.init,
+                     dense=args.dense, sequential=not args.parallel)
+        return
     if args.summary:
         rows = {p.stem: json.loads(p.read_text("utf-8")) for p in sorted(CACHE_DIR.glob("*.json"))}
         summarize(rows)

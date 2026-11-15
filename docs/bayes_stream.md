@@ -9,10 +9,10 @@
 - smooth max of the slow wind and the streams, with additive streams as a variant;
 - arrivals both observed in training (the detected arrivals are data) and fully latent, compared.
 
-**Status (2026-11-10): built and tested, not yet scored.**
+**Status (2026-11-15): built and tested, not yet scored.**
 - **NUTS doesn't yet mix on the real training data** (2024 fold), so there are no scores.
 - The 2024 pilot was stopped at its first fit.
-- Two sampler experiments followed. The second was stopped by the system for low memory before it printed anything.
+- Sampler runs since: the arrival block mixes on its own, the speed block doesn't (every step at the tree-depth limit; worst `w_D`).
 - See [Sampler status](#sampler-status).
 
 - **Model:** `src/models/bayes_stream.py` (numpy simulator, point decisions, asset; experimental, not used live).
@@ -165,9 +165,10 @@ Tests in `tests/test_bayes_stream.py`:
 | `test_latent_enumeration_matches_brute_force` | the latent enumeration matches a brute-force sum (rtol 1e-6) |
 | `test_recovery_with_observed_arrivals` | known parameters are recovered from 500 synthetic windows |
 | `test_asset_round_trip` | the asset saves and loads unchanged |
+| `test_split_blocks_add_up_to_the_joint_density` | the arrival and speed blocks' log densities add up to the joint one; the latent fit refuses to split |
 
 **Status of the tests**
-- All 9 passed with the non-centred event marks.
+- All 9 original tests passed with the non-centred event marks.
 - After the switch to centred marks, the recovery test fails: in 11.6 min (1 chain, 300 + 300), the count slope came out at 0.01 against a true value of 0.6. The cause hasn't been checked yet.
 - Two earlier fixes came from this test:
   - the synthetic count input is now constant within a window, because a slope on an hourly-varying input isn't identified from a window count;
@@ -203,13 +204,33 @@ Tests in `tests/test_bayes_stream.py`:
 - **Reading:** each event's marks are pinned by its own speeds, and in that case a non-centred parameterisation mixes poorly. Hence the switch to centred marks.
 
 **Experiment 2: centred marks, dense mass on all parameters, MAP start, 500 + 500**
-- Stopped by the system for low memory before it printed anything. Not rerun yet.
+- Stopped by the system for low memory before it printed anything.
+- The laptop has 7.7 GB, with about 0.6–0.8 GB free on 2026-11-15 (browsers, editors). A dense mass matrix over every event mark grows with the square of the parameter count.
+
+**Sampler runs, 2026-11-15** (`python -m training.bayes_stream --sampler LABEL`: one fit on a fold's windows, no scoring; results in `src/data/bayes_stream_cache/sampler_LABEL.json`)
+- **Lean setup:** float64, the dense mass matrix on the globals only (diagonal on the marks), the chains one after another. Peak memory 1.0–1.1 GB.
+- 2024 fold: 761 training windows, 192 events.
+
+| Run | Setup | Time | Leapfrog | R-hat max (globals / marks) | ESS min |
+|---|---|---|---|---|---|
+| smoke | centred MAP start, 30 + 30 | 330 s | 255 (all) | 21 / 22 | 1 |
+| smoke2 | non-centred MAP start, 30 + 30 | 327 s | 255 (all) | 3.2 / 18 | 1 |
+| medium | non-centred MAP start, 200 + 100 | 1409 s | 255 (all) | 6.2 / 8.1 | 1 |
+| arrivals | arrival block only, 200 + 100 | 71 s | 14 (none) | 1.01 / — | 112 |
+| speed | speed block only, 200 + 100 | 914 s | 255 (all) | 3.8 / 6.2 | 1.1 |
+
+All runs: 2 chains, 0 divergences.
+
+- **The MAP start.** Found directly in the centred form, the mode collapses the event spreads (σ_E 0.003, σ_D 0.002). The centred joint density grows without bound as a spread goes to 0 with every mark at its mean, so NUTS started in the funnel's neck. `map_point` now finds the mode in the non-centred form (`LocScaleReparam`) and maps it back to centred marks (σ_E 1.46, σ_R 2.38, σ_D 2.41, as in experiment 1). That removed the split into two modes (R-hat on the globals 21 → 3.2 at 30 + 30) but not the saturated trees.
+- **The posterior splits exactly into two independent blocks.** With observed arrivals, `w_N` and `w_tau` enter only the count and time terms, never the speed term. `numpyro_model(block=...)` fits either block alone, `fit_split` joins their draws, and `test_split_blocks_add_up_to_the_joint_density` checks the split. The latent fit does not split.
+- **The arrival block mixes on its own.** In the joint fit, `w_N` and `w_tau` were the worst parameters (R-hat 6.2, 3.2) only because the speed block forced tiny steps on everything.
+- **The speed block is the problem:**
+  - Worst: `w_D` (R-hat 3.8; chain medians −0.24 and −0.63), `w_E` (2.2), `rho_dn` (1.8), `sigma_E` (1.6). Fine: `sigma_eta`, `rho_eta`, `mu_R` (R-hat 0.99–1.06).
+  - σ_E falls from 1.45 at the start to about 0.17, so the data barely move each event's peak excess off its population value. That is where centred marks mix worst.
+  - σ_D is about 1.0, and the median decay about 60 h: many decays run past the end of the window, so the decay regression is weakly identified.
 
 **Next steps**
-- Rerun experiment 2 (in the foreground, or lighter: sequential chains, dense mass on the globals only).
-- If the chains still disagree, simplify the event level:
-  - tie ρ_up to ρ_η (one persistence);
-  - tighter priors on σ_R and σ_D;
-  - bounded rise widths.
+- Mixed parameterisation: non-centred `log_E`, centred `log_R` and `log_D` (same model).
+- If `w_D` stays stuck, simplify the decay: tighter priors on `w_D` and σ_D, or bounded decays. Then the rest of the list: tie ρ_up to ρ_η, tighter prior on σ_R, bounded rise widths.
 - Check the recovery test failure under the centred marks.
-- Then run the 2024 pilot (timed, with a six-fold estimate) and wait for the go-ahead before the six folds.
+- Then run the 2024 pilot (timed, with a six-fold estimate), with the split fit, and wait for the go-ahead before the six folds.

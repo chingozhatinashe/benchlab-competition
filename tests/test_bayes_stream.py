@@ -161,6 +161,36 @@ def test_latent_enumeration_matches_brute_force():
     np.testing.assert_allclose(got, total, rtol=1e-6)
 
 
+def test_split_blocks_add_up_to_the_joint_density():
+    pytest.importorskip("numpyro")
+    import numpyro
+    from jax import random
+    from numpyro import handlers
+    from numpyro.infer.util import log_density
+
+    from training import bayes_stream as tbs
+
+    numpyro.enable_x64()
+    cfg = bs.Config()
+    inp = synthetic_inputs(6, seed=5)
+    y = 380 + np.random.default_rng(6).normal(size=(6, bs.HORIZON)) * 30
+    n_lab = np.zeros((6, bs.N_ARRIVAL))
+    n_lab[1, 10] = n_lab[3, 5] = n_lab[3, 40] = 1
+    d = tbs.window_data(inp["x"], inp["amb"], inp["last"], y, n_lab)
+    for seed in range(3):
+        tr = handlers.trace(handlers.seed(tbs.numpyro_model, random.PRNGKey(seed))).get_trace(
+            d, cfg)
+        p = {k: s["value"] for k, s in tr.items()
+             if s["type"] == "sample" and not s["is_observed"]}
+        lp = {b: float(log_density(tbs.numpyro_model, (d, cfg), {"block": b},
+                                   {k: v for k, v in p.items() if (k in tbs.ARRIVAL_SITES)
+                                    == (b == "arrivals") or b == "all"})[0])
+              for b in ("all", "arrivals", "speed")}
+        np.testing.assert_allclose(lp["arrivals"] + lp["speed"], lp["all"], rtol=1e-10)
+    with pytest.raises(ValueError):
+        tbs.numpyro_model(d, bs.Config(nmax=1, latent=True), block="speed")
+
+
 def test_recovery_with_observed_arrivals():
     pytest.importorskip("numpyro")
     from training import bayes_stream as tbs
