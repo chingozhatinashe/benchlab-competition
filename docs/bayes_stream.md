@@ -1,4 +1,4 @@
-# Bayes stream: a Bayesian generative model of slow wind and stream arrivals (in progress)
+# Bayes stream: a Bayesian generative model of slow wind and stream arrivals (not built)
 
 **The question (user, 2026-11-09).** A more principled follow-up to the [structural model](structural_model.md) and the [stream events](stream_events.md) model: a proper Bayesian model with two parts.
 - **Slow wind:** a component from which a 72 h speed path can be sampled.
@@ -9,11 +9,10 @@
 - smooth max of the slow wind and the streams, with additive streams as a variant;
 - arrivals both observed in training (the detected arrivals are data) and fully latent, compared.
 
-**Status (2026-11-15): converges; 2024 pilot worse than the submitted model.**
-- **NUTS doesn't yet mix on the real training data** (2024 fold), so there are no scores.
-- The 2024 pilot was stopped at its first fit.
-- Sampler runs since: the arrival block mixes on its own. The speed block mixes with the rise width at its population value and the additive rule (R-hat ≤ 1.02 on the globals); with the smooth max, two events' excesses stay stuck between two modes.
-- See [Sampler status](#sampler-status).
+**Status (2026-11-15): not built.** On the six folds, `linear + bayes` ties the submitted model (−0.09%, 3 of 6 folds) and the generative model alone is 5–10% worse; see [Six folds](#six-folds-2026-11-15).
+- **Better in quiet wind, worse around streams:** the predictive mean is 27% better than the reference in slow wind, but 21% worse at stream arrivals and 36% worse in fast streams.
+- **Fitted with the additive rule and every event's rise width at its population value** (user, 2026-11-15): as first specified (smooth max, per-event rise widths), NUTS doesn't mix. The diagnosis is in [Sampler status](#sampler-status).
+- `bayes latent` was not run (about 1.9 h per fold).
 
 - **Model:** `src/models/bayes_stream.py` (numpy simulator, point decisions, asset; experimental, not used live).
 - **Study:** `python -m training.bayes_stream` (`--pilot --folds 2024`; `--summary`).
@@ -313,8 +312,37 @@ All runs: 2 chains, 0 divergences.
 - **Its uncertainty is calibrated:** CRPS 39.2 km/s and 80% coverage 0.79 on the validation runs.
 - **The official decision matters:** the Bayes action under the official weights is 6% better than the predictive mean.
 
-**Next steps**
-- Six folds (about 1 h) for the decision rule, or stop here as for v2. The latent fit after that only if the six folds look promising.
+## Six folds (2026-11-15)
+
+`python -m training.bayes_stream --variants reference bayes "bayes official" "slow wind only" "linear + bayes"` (without `bayes latent`). About 8–9 min per fold (the fit 5–8 min); stopped once by Claude Code when the laptop ran low on memory after four folds, and resumed from the cache. Results: `src/experiments/bayes_stream.csv`, `bayes_stream_params.csv`.
+
+**Not built.** No variant passes the decision rule (more than 1% better than the reference, winning at least 4 of 6 folds).
+
+| Variant | vs reference (geometric mean) | Folds won | slow wind | intermediate | fast stream | stream arrival | CME |
+|---|---|---|---|---|---|---|---|
+| linear + bayes | −0.09% | 3 | −0.05% | −0.11% | −0.15% | −0.14% | −0.09% |
+| bayes official | +5.3% | 0 | −2.8% | −3.7% | +8.0% | +5.6% | +6.0% |
+| bayes | +10.0% | 0 | −26.6% | −10.1% | +36.1% | +20.8% | +13.2% |
+| slow wind only | +21.0% | 0 | −37.8% | −2.5% | +54.0% | +43.6% | +26.0% |
+
+S_final per fold (the percentages against the reference):
+
+| Fold | reference | linear + bayes | bayes official | bayes | slow wind only | R-hat (globals / marks) | ESS min |
+|---|---|---|---|---|---|---|---|
+| 2019 | 60.01 | 59.74 (−0.4%) | 63.01 (+5.0%) | 66.61 (+11.0%) | 72.83 (+21.4%) | 1.008 / 1.013 | 131 |
+| 2020 | 68.86 | 68.62 (−0.3%) | 70.55 (+2.5%) | 75.27 (+9.3%) | 85.34 (+23.9%) | 1.187 / 1.150 | 14 |
+| 2021 | 84.93 | 84.89 (−0.0%) | 89.96 (+5.9%) | 92.65 (+9.1%) | 101.84 (+19.9%) | 1.033 / 1.020 | 118 |
+| 2022 | 88.89 | 89.01 (+0.1%) | 100.43 (+13.0%) | 102.24 (+15.0%) | 108.41 (+22.0%) | 1.029 / 1.020 | 54 |
+| 2023 | 111.38 | 111.44 (+0.1%) | 116.57 (+4.7%) | 120.61 (+8.3%) | 128.99 (+15.8%) | 1.056 / 1.137 | 32 |
+| 2024 | 107.81 | 107.92 (+0.1%) | 108.98 (+1.1%) | 115.65 (+7.3%) | 132.45 (+22.9%) | 1.016 / 1.085 | 85 |
+
+- **`linear + bayes` ties the submitted model:** −0.09% on average, 3 folds of 6. The generative model's mean adds almost nothing as a regressor.
+- **On its own the generative model loses in every fold:** `bayes official` by 1.1–13%, the predictive mean by 7–15%.
+- **It is better in quiet wind and worse around streams.** The predictive mean is 27% better than the reference in slow wind and 10% better in intermediate wind, but 21% worse at stream arrivals and 36% worse in fast streams. The official decision gives up most of the quiet-wind gain (−3%) and keeps about a third of the stream losses.
+- **Its uncertainty is calibrated:** CRPS 34.1 km/s and 80% coverage 0.82 on the validation runs (0.81 in the training windows). The arrival skill is modest: AUC 0.69 for P(N ≥ 1).
+- **The fits mostly converge,** with 0 divergences and no tree-depth hits in every fold, but not everywhere: 2020 has R-hat 1.19 and ESS 14, 2023 R-hat 1.06 (marks 1.14) and ESS 32. The arrival block mixes in every fold (R-hat ≤ 1.006, ESS ≥ 637).
+- **The posterior is stable across folds:** an excess median of 136–151 km/s, a rise width of 1.7–2.2 h, a decay of 124–164 h, noise σ_η 9.9–11.0 km/s, and 0.17–0.22 expected arrivals per 84 h window.
+- `bayes latent` was not run (its fit takes about 1.9 h per fold; see the 2024 pilot).
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
