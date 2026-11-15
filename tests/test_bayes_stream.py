@@ -191,6 +191,43 @@ def test_split_blocks_add_up_to_the_joint_density():
         tbs.numpyro_model(d, bs.Config(nmax=1, latent=True), block="speed")
 
 
+def test_potential_hessian_rows_carry_the_right_site_labels():
+    pytest.importorskip("numpyro")
+    import numpyro
+    from jax import random
+    from numpyro import handlers
+    from numpyro.infer import init_to_value
+    from numpyro.infer.util import initialize_model
+
+    from training import bayes_stream as tbs
+
+    numpyro.enable_x64()
+    cfg = bs.Config()
+    inp = synthetic_inputs(5, seed=7)
+    y = 380 + np.random.default_rng(8).normal(size=(5, bs.HORIZON)) * 30
+    n_lab = np.zeros((5, bs.N_ARRIVAL))
+    n_lab[2, 12] = 1
+    d = tbs.window_data(inp["x"], inp["amb"], inp["last"], y, n_lab)
+    tr = handlers.trace(handlers.seed(tbs.numpyro_model, random.PRNGKey(1))).get_trace(
+        d, cfg, block="speed")
+    point = {k: s["value"] for k, s in tr.items()
+             if s["type"] == "sample" and not s["is_observed"]}
+    H, sites = tbs.potential_hessian(d, cfg, point, block="speed")
+    init = initialize_model(random.PRNGKey(0), lambda: tbs.numpyro_model(d, cfg, "speed"),
+                            init_strategy=init_to_value(values=point), dynamic_args=False)
+    z = {k: np.asarray(v, dtype=float) for k, v in init.param_info.z.items()}
+    assert sorted(set(sites)) == sorted(z)
+    for k in ("sigma_eta", "rho_up", "mu_D"):  # scalar sites: second differences
+        def pe(dz, k=k):
+            return float(init.potential_fn({**z, k: z[k] + dz}))
+        h = 1e-4
+        fd = (pe(h) - 2 * pe(0.0) + pe(-h)) / h ** 2
+        np.testing.assert_allclose(H[sites == k, sites == k][0], fd, rtol=1e-3)
+    inv = tbs.hessian_inverse_mass(H, sites, ("sigma_eta", "rho_up"))
+    assert set(inv) == {("sigma_eta", "rho_up"), tuple(sorted(set(sites) - {"sigma_eta",
+                                                                             "rho_up"}))}
+
+
 def test_recovery_with_observed_arrivals():
     pytest.importorskip("numpyro")
     from training import bayes_stream as tbs

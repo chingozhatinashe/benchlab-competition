@@ -239,15 +239,19 @@ All runs: 2 chains, 0 divergences.
 | raw | 9.7e4 | 0.096 | 1.0e6 | 4 |
 | scaled by the diagonal | 3.1 | 0.0077 | 408 | 4 |
 
-- **Raw: one event's decay sets the step size.** The stiffest direction is a single event's `log_D` (curvature 9.7e4, a posterior sd of about 0.003). The next five are also single `log_D`s (800–3200). The other marks' curvatures go down to 0.18, and the flattest directions are the `log_E` marks with `w_E`, `w_D` and `w_a` (about 0.1). NUTS's step has to resolve the stiffest direction, so it needs about √(1e6) = 1000 steps to cross the flattest: hence every iteration at 255.
-- **An adapted diagonal mass matrix would remove most of that** (condition 408). But the adaptation estimates the variances from warmup draws, and the chains barely move, so it never learns them.
+- **Raw: the well-determined globals set the step size; the event decays are the flattest.**
+  - Stiffest: `sigma_eta` (curvature 9.7e4: about 50,000 observed hours pin the noise level to a posterior sd of about 0.003 in log space), then `w_a` (the ambient wind, up to 3200) and `rho_up` (1200), then single events' rise widths `log_R` (800–1100).
+  - Flattest: single events' decays `log_D` (about 0.1). The decay regression `w_D` is the worst-mixing global in every run.
+  - NUTS's step has to resolve the stiffest direction, so crossing the flattest takes about √(1e6) = 1000 steps: hence every iteration at 255.
+- **An adapted mass matrix would remove most of that** (condition 408 after scaling by the diagonal). But the adaptation estimates the variances from warmup draws, and the chains barely move along the flat directions, so it never learns them.
 - **What a diagonal mass leaves is the model's:**
-  - the flattest scaled directions load half on an event's `log_R` and half on its `log_D`: the rise width and the decay trade off within an event, a ridge;
-  - 4 directions of negative curvature at the start, mixing single events' `log_E`, `log_D` and `log_R`, plus one with `rho_up` and `log_R`.
+  - the flattest scaled directions load half on an event's peak excess `log_E` and half on its rise width `log_R`: within an event the two trade off, a ridge;
+  - 4 directions of negative curvature at the start, in single events' `log_R` and `log_D` (with some `log_E`).
+- (A first version of this check labelled the Hessian's rows in the model's site order instead of jax's sorted flattening order, and named the wrong sites. The numbers were the same; the labels above are the corrected ones.)
 
 **Next steps**
 - Start NUTS's mass matrix from the Hessian's diagonal at the MAP (the inverse of its absolute value), so the adaptation starts at the right scales (the same model).
-- If the rise–decay ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
+- If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
 - If `w_D` stays stuck, simplify the decay: tighter priors on `w_D` and σ_D, or bounded decays. Then the rest of the list: tie ρ_up to ρ_η, tighter prior on σ_R, bounded rise widths.
 - Check the recovery test failure under the centred marks.
 - Then run the 2024 pilot (timed, with a six-fold estimate), with the split fit, and wait for the go-ahead before the six folds.

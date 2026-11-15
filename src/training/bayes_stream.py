@@ -285,14 +285,17 @@ def map_point(d, cfg, steps=MAP_STEPS, seed=0, block="all"):
 
 
 def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init="median",
-             dense="none", sequential=False, max_tree_depth=8, block="all", noncentred=()):
+             dense="none", sequential=False, max_tree_depth=8, block="all", noncentred=(),
+             mass_init="identity"):
     """(draws, info): posterior draws of the global parameters and NUTS diagnostics.
 
     init: "median" (prior medians) or "map" (start every chain at map_point). dense: the mass
     matrix, "none" (diagonal), "globals" (dense block on the global sites, diagonal on the
     event marks; memory grows with the globals only) or "all". sequential: run the chains one
     after another (less memory than in parallel). noncentred: mark sites (of MARKS) that NUTS
-    samples as standard-normal offsets (LocScaleReparam; the same model)."""
+    samples as standard-normal offsets (LocScaleReparam; the same model). mass_init: the
+    adaptation's starting inverse mass matrix, "identity" or "hessian" (1 / |diagonal| of
+    the potential's Hessian at the MAP start; needs init="map")."""
     import jax
     from jax import random
     from numpyro import handlers
@@ -310,13 +313,23 @@ def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init
         strategy = init_to_value(values=point)
     else:
         strategy = init_to_median
-    dense_mass = {"none": False, "all": True, "globals": [global_sites(d, cfg, block)]}[dense]
+    dense_sites = global_sites(d, cfg, block)
+    dense_mass = {"none": False, "all": True, "globals": [dense_sites]}[dense]
+    inverse_mass = None
+    if mass_init == "hessian":  # the adaptation starts at the MAP's curvature scales
+        if init != "map" or dense == "all":
+            raise ValueError("mass_init='hessian' needs init='map' and dense 'none'/'globals'")
+        t = time.perf_counter()
+        H, sites = potential_hessian(d, cfg, point, block, noncentred, seed)
+        inverse_mass = hessian_inverse_mass(H, sites, dense_sites if dense == "globals" else ())
+        info["mass init s"] = time.perf_counter() - t
     model = partial(numpyro_model, d, cfg, block=block)
     if noncentred:
         model = handlers.reparam(model, config={k: LocScaleReparam(centered=0)
                                                 for k in noncentred})
     kernel = NUTS(model, target_accept_prob=0.9,
-                  init_strategy=strategy, max_tree_depth=max_tree_depth, dense_mass=dense_mass)
+                  init_strategy=strategy, max_tree_depth=max_tree_depth, dense_mass=dense_mass,
+                  inverse_mass_matrix=inverse_mass)
     parallel = not sequential and jax.local_device_count() >= chains
     mcmc = MCMC(kernel, num_warmup=warmup, num_samples=samples, num_chains=chains,
                 chain_method="parallel" if parallel else "sequential", progress_bar=False)
@@ -352,11 +365,10 @@ def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init
     return draws, info
 
 
-def curvature(d, cfg, block="speed", noncentred=(), seed=0, top=6):
-    """The Hessian of NUTS's potential (minus the log density in unconstrained space) at the
-    MAP start (map_point): its spectrum, raw and scaled by its diagonal (what an adapted
-    diagonal mass matrix leaves: correlations and sign, not scale), and which sites make up
-    the extreme eigenvectors (share of the squared loadings per site)."""
+def potential_hessian(d, cfg, point, block="all", noncentred=(), seed=0):
+    """(H, sites): the Hessian of NUTS's potential (minus the log density in unconstrained
+    space) at `point`, built a column at a time by Hessian-vector products (memory), and the
+    site name of each row, in the order jax flattens the parameters (sorted keys)."""
     import jax
     from jax import random
     from jax.flatten_util import ravel_pytree
@@ -365,7 +377,6 @@ def curvature(d, cfg, block="speed", noncentred=(), seed=0, top=6):
     from numpyro.infer.reparam import LocScaleReparam
     from numpyro.infer.util import initialize_model
 
-    point, _ = map_point(d, cfg, seed=seed, block=block)
     model = partial(numpyro_model, d, cfg, block=block)
     if noncentred:
         model = handlers.reparam(model, config={k: LocScaleReparam(centered=0)
@@ -374,14 +385,44 @@ def curvature(d, cfg, block="speed", noncentred=(), seed=0, top=6):
                             init_strategy=init_to_value(values=point), dynamic_args=False)
     z = init.param_info.z
     flat, unravel = ravel_pytree(z)
-    sites = np.concatenate([[k] * int(np.size(v)) for k, v in z.items()])
-    t = time.perf_counter()
+    names = list(z)
+    index, _ = ravel_pytree({k: np.full(np.shape(v), float(i)) for i, (k, v) in
+                             enumerate(z.items())})  # labels flattened like the parameters
+    sites = np.array(names)[np.asarray(index).astype(int)]
     grad = jax.grad(lambda f: init.potential_fn(unravel(f)))
-    hvp = jax.jit(lambda v: jax.jvp(grad, (flat,), (v,))[1])  # a column at a time: memory
+    hvp = jax.jit(lambda v: jax.jvp(grad, (flat,), (v,))[1])
     eye = np.eye(len(flat))
     H = np.stack([np.asarray(hvp(eye[i])) for i in range(len(flat))], axis=1)
-    H = (H + H.T) / 2
-    out = {"dims": int(len(flat)), "hessian s": time.perf_counter() - t}
+    return (H + H.T) / 2, sites
+
+
+def hessian_inverse_mass(H, sites, dense_sites=()):
+    """NUTS's initial inverse mass matrix from the Hessian's diagonal: 1 / |H_ii| (clipped to
+    [1e-6, 100]), as numpyro's block structure ({dense block: diagonal matrix, the remaining
+    sites: vector}) when `dense_sites`, else as a vector in jax's flattening order."""
+    inv = np.clip(1 / np.maximum(np.abs(np.diag(H)), 1e-12), 1e-6, 100.0)
+    if not dense_sites:
+        return inv
+    rest = tuple(sorted(set(sites) - set(dense_sites)))
+
+    def part(keys):  # a block's entries in the order numpyro ravels a tuple of sites
+        return np.concatenate([inv[sites == k] for k in keys])
+    out = {tuple(dense_sites): np.diag(part(dense_sites))}
+    if rest:
+        out[rest] = part(rest)
+    return out
+
+
+def curvature(d, cfg, block="speed", noncentred=(), seed=0, top=6):
+    """The Hessian of NUTS's potential at the MAP start (map_point): its spectrum, raw and
+    scaled by its diagonal (what an adapted diagonal mass matrix leaves: correlations and
+    sign, not scale), and which sites make up the extreme eigenvectors (share of the squared
+    loadings per site)."""
+    point, _ = map_point(d, cfg, seed=seed, block=block)
+    t = time.perf_counter()
+    H, sites = potential_hessian(d, cfg, point, block, noncentred, seed)
+    z = [str(k) for k in dict.fromkeys(sites)]
+    out = {"dims": int(len(H)), "hessian s": time.perf_counter() - t}
     diag = np.diag(H)
     out["diagonal by site"] = {k: [float(diag[sites == k].min()), float(diag[sites == k].max())]
                                for k in z}
@@ -698,6 +739,7 @@ def main(argv=None):
     sm.add_argument("--block", choices=("all", "arrivals", "speed", "split"), default="all")
     sm.add_argument("--noncentred", nargs="*", choices=MARKS, default=[],
                     help="mark sites sampled non-centred")
+    sm.add_argument("--mass-init", choices=("identity", "hessian"), default="identity")
     sm.add_argument("--curvature", action="store_true",
                     help="the potential's Hessian at the MAP start instead of a NUTS fit")
     sm.add_argument("--warmup", type=int, default=WARMUP)
@@ -718,7 +760,7 @@ def main(argv=None):
                      curv=args.curvature, warmup=args.warmup,
                      samples=args.samples, chains=args.chains, init=args.init,
                      dense=args.dense, sequential=not args.parallel,
-                     noncentred=tuple(args.noncentred))
+                     noncentred=tuple(args.noncentred), mass_init=args.mass_init)
         return
     if args.summary:
         rows = {p.stem: json.loads(p.read_text("utf-8")) for p in sorted(CACHE_DIR.glob("*.json"))}
