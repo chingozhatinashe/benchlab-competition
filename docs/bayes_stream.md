@@ -343,6 +343,15 @@ S_final per fold (the percentages against the reference):
 - **The fits mostly converge,** with 0 divergences and no tree-depth hits in every fold, but not everywhere: 2020 has R-hat 1.19 and ESS 14, 2023 R-hat 1.06 (marks 1.14) and ESS 32. The arrival block mixes in every fold (R-hat ≤ 1.006, ESS ≥ 637).
 - **The posterior is stable across folds:** an excess median of 136–151 km/s, a rise width of 1.7–2.2 h, a decay of 124–164 h, noise σ_η 9.9–11.0 km/s, and 0.17–0.22 expected arrivals per 84 h window.
 - `bayes latent` was not run (its fit takes about 1.9 h per fold; see the 2024 pilot).
+
+## Latent fit (2026-11-15)
+
+**The question (user, 2026-11-15):** does `linear + bayes` do better when the generative model has the arrivals latent (summed out) instead of the detected ones? New variant `linear + bayes latent`: the submitted linear model with the latent fit's mean path as its lead-aligned regressor, as `linear + bayes`.
+
+**Sampler check, 2024** (`--sampler latent_check --fit latent --block all --mass-init hessian`, 200 + 100 × 2 chains): **the latent fit converges.**
+- R-hat at most 1.011, ESS min 118 (from 200 draws), 0 divergences, no tree-depth hits (51 leapfrog steps). Worst: `w_tau`, `w_N`, `w_a` (1.01).
+- 2510 s: the MAP 265 s, the Hessian 12 s, NUTS about 3.7 s per iteration (it sums over 28 arrival bins per window). Peak memory 1.2 GB.
+- Its posterior differs from the observed fit's: 0.41 expected arrivals per 84 h window (the detector finds about 0.21), a smaller excess (median 115 km/s against 137), a sharp rise (0.7 h) and a shorter decay (59 h against 164). Without the labels, the model explains more of the variation with more, smaller, shorter streams.
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.

@@ -35,6 +35,7 @@ Variants (refitted per fold; the submitted config's inputs, PFSS gaps at the fit
     bayes latent       latent arrivals, additive streams, predictive mean
     slow wind only     bayes' posterior with N = 0
     linear + bayes     the submitted linear model + bayes' mean as a lead-aligned regressor
+    linear + bayes latent   the same with bayes latent's mean
     reference          the submitted linear model
 Also per fold: arrival skill on the validation runs, CRPS and 80% coverage, posterior
 summaries, NUTS diagnostics (R-hat, ESS, divergences) and posterior predictive checks on the
@@ -87,7 +88,8 @@ VARIANTS = {  # name: (fit, decision, slow only)
     "bayes latent": ("latent", "mean", False),
     "slow wind only": ("observed", "mean", True),
 }
-ALL = ("reference", *VARIANTS, "linear + bayes")
+LINEAR_PLUS = {"linear + bayes": "observed", "linear + bayes latent": "latent"}  # name: fit
+ALL = ("reference", *VARIANTS, *LINEAR_PLUS)
 
 
 def log(msg):
@@ -595,11 +597,12 @@ def score_fold(data, start, end, names, timer, pilot=False):
         if name == "reference":
             lin = LinearModel(data.cfg).fit(data.values, pos_fit, x_fit, end=start_pos)
             f = lin.forecast(data.values, pos_val, x_val)
-        elif name == "linear + bayes":
+        elif name in LINEAR_PLUS:  # the fit's mean path as a lead-aligned regressor
+            key = LINEAR_PLUS[name]
             fit_inp = model.prepare(data.values, pos_fit, x_fit)
             s_fit = ts.structural_columns(bs.summarize_paths(
-                fitted("observed"), fit_inp, FITS["observed"], n_paths=N_PATHS_FIT)["mean"])
-            s_val = ts.structural_columns(simulated("observed", False)["mean"])
+                fitted(key), fit_inp, FITS[key], n_paths=N_PATHS_FIT)["mean"])
+            s_val = ts.structural_columns(simulated(key, False)["mean"])
             cfg2 = replace(data.cfg, features=(*data.cfg.features, f"{ts.SIGNAL}_lead_0h"))
             c2 = list(cfg2.input_features)
             lin = LinearModel(cfg2).fit(data.values, pos_fit, table.loc[fit6].assign(**s_fit)[
@@ -776,8 +779,9 @@ def sampler_test(year, fit, label, block="all", curv=False, **kw):
         for k, r in sorted(info["worst r_hat"].items(), key=lambda kv: -kv[1]):
             log(f"    {k:10s} {r:7.3f}  "
                 + "  ".join(f"{m:9.4g}" for m in info["chain medians"][k]))
-    if "speed" in out or "all" in out:
-        ev = event_table(ff["d"], out.get("speed", out.get("all")))
+    block_info = out.get("speed", out.get("all"))
+    if block_info and block_info["event r_hat"]:  # observed fits only: the latent has no marks
+        ev = event_table(ff["d"], block_info)
         ev.to_csv(CACHE_DIR / f"sampler_{label}_events.csv", index=False, float_format="%.5g")
         cols = [c for c in ev.columns if not c.startswith("med")]
         with pd.option_context("display.width", 250, "display.max_columns", 40):
