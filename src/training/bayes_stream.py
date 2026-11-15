@@ -277,24 +277,28 @@ def map_point(d, cfg, steps=MAP_STEPS, seed=0, block="all"):
     point = guide.median(res.params)
     tr = handlers.trace(handlers.substitute(handlers.seed(model, random.PRNGKey(seed)),
                                             data=point)).get_trace()
+    # both forms of the marks: centred, and the offsets for a fit with fit_nuts(noncentred=)
     init = {k: s["value"] for k, s in tr.items() if s["type"] == "sample"
-            and not s["is_observed"] and not k.endswith("_decentered")}
-    init.update({k: tr[k]["value"] for k in MARKS if k in tr})  # centred marks
+            and not s["is_observed"]}
+    init.update({k: tr[k]["value"] for k in MARKS if k in tr})
     return init, float(np.asarray(res.losses)[-1])
 
 
 def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init="median",
-             dense="none", sequential=False, max_tree_depth=8, block="all"):
+             dense="none", sequential=False, max_tree_depth=8, block="all", noncentred=()):
     """(draws, info): posterior draws of the global parameters and NUTS diagnostics.
 
     init: "median" (prior medians) or "map" (start every chain at map_point). dense: the mass
     matrix, "none" (diagonal), "globals" (dense block on the global sites, diagonal on the
     event marks; memory grows with the globals only) or "all". sequential: run the chains one
-    after another (less memory than in parallel)."""
+    after another (less memory than in parallel). noncentred: mark sites (of MARKS) that NUTS
+    samples as standard-normal offsets (LocScaleReparam; the same model)."""
     import jax
     from jax import random
+    from numpyro import handlers
     from numpyro.diagnostics import summary
     from numpyro.infer import MCMC, NUTS, init_to_median, init_to_value
+    from numpyro.infer.reparam import LocScaleReparam
 
     info = {}
     if init == "map":
@@ -307,7 +311,11 @@ def fit_nuts(d, cfg, warmup=WARMUP, samples=SAMPLES, chains=CHAINS, seed=0, init
     else:
         strategy = init_to_median
     dense_mass = {"none": False, "all": True, "globals": [global_sites(d, cfg, block)]}[dense]
-    kernel = NUTS(partial(numpyro_model, d, cfg, block=block), target_accept_prob=0.9,
+    model = partial(numpyro_model, d, cfg, block=block)
+    if noncentred:
+        model = handlers.reparam(model, config={k: LocScaleReparam(centered=0)
+                                                for k in noncentred})
+    kernel = NUTS(model, target_accept_prob=0.9,
                   init_strategy=strategy, max_tree_depth=max_tree_depth, dense_mass=dense_mass)
     parallel = not sequential and jax.local_device_count() >= chains
     mcmc = MCMC(kernel, num_warmup=warmup, num_samples=samples, num_chains=chains,
@@ -617,6 +625,8 @@ def main(argv=None):
     sm.add_argument("--year", type=int, default=2024)
     sm.add_argument("--fit", choices=list(FITS), default="observed")
     sm.add_argument("--block", choices=("all", "arrivals", "speed", "split"), default="all")
+    sm.add_argument("--noncentred", nargs="*", choices=MARKS, default=[],
+                    help="mark sites sampled non-centred")
     sm.add_argument("--warmup", type=int, default=WARMUP)
     sm.add_argument("--samples", type=int, default=SAMPLES)
     sm.add_argument("--chains", type=int, default=CHAINS)
@@ -633,7 +643,8 @@ def main(argv=None):
             numpyro.enable_x64()
         sampler_test(args.year, args.fit, args.sampler, block=args.block, warmup=args.warmup,
                      samples=args.samples, chains=args.chains, init=args.init,
-                     dense=args.dense, sequential=not args.parallel)
+                     dense=args.dense, sequential=not args.parallel,
+                     noncentred=tuple(args.noncentred))
         return
     if args.summary:
         rows = {p.stem: json.loads(p.read_text("utf-8")) for p in sorted(CACHE_DIR.glob("*.json"))}

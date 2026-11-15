@@ -218,6 +218,7 @@ Tests in `tests/test_bayes_stream.py`:
 | medium | non-centred MAP start, 200 + 100 | 1409 s | 255 (all) | 6.2 / 8.1 | 1 |
 | arrivals | arrival block only, 200 + 100 | 71 s | 14 (none) | 1.01 / — | 112 |
 | speed | speed block only, 200 + 100 | 914 s | 255 (all) | 3.8 / 6.2 | 1.1 |
+| speed_ncE | speed block, non-centred `log_E` (`--noncentred log_E`), 200 + 100 | 936 s | 255 (all) | 4.4 / 9.0 | 1.1 |
 
 All runs: 2 chains, 0 divergences.
 
@@ -229,8 +230,10 @@ All runs: 2 chains, 0 divergences.
   - σ_E falls from 1.45 at the start to about 0.17, so the data barely move each event's peak excess off its population value. That is where centred marks mix worst.
   - σ_D is about 1.0, and the median decay about 60 h: many decays run past the end of the window, so the decay regression is weakly identified.
 
+- **Mixed parameterisation doesn't help.** Sampling `log_E` non-centred (the rise and decay marks centred) leaves every step at the tree-depth limit; the worst site moves to `w_E` (R-hat 4.4), then `w_D` (2.6). So the excess marks' parameterisation is not what sets the step size.
+
 **Next steps**
-- Mixed parameterisation: non-centred `log_E`, centred `log_R` and `log_D` (same model).
+- Find what sets the step size: the curvature of the log density at the MAP in NUTS's unconstrained space (which parameters span the stiffest and the flattest directions).
 - If `w_D` stays stuck, simplify the decay: tighter priors on `w_D` and σ_D, or bounded decays. Then the rest of the list: tie ρ_up to ρ_η, tighter prior on σ_R, bounded rise widths.
 - Check the recovery test failure under the centred marks.
 - Then run the 2024 pilot (timed, with a six-fold estimate), with the split fit, and wait for the go-ahead before the six folds.
