@@ -220,6 +220,7 @@ Tests in `tests/test_bayes_stream.py`:
 | speed | speed block only, 200 + 100 | 914 s | 255 (all) | 3.8 / 6.2 | 1.1 |
 | speed_ncE | speed block, non-centred `log_E` (`--noncentred log_E`), 200 + 100 | 936 s | 255 (all) | 4.4 / 9.0 | 1.1 |
 | speed_hess | speed block, mass matrix started from the Hessian (`--mass-init hessian`), 200 + 100 | 912 s | 255 (all) | 1.9 / 3.7 | 1.6 |
+| speed_hess_ncE | speed block, Hessian start and non-centred `log_E`, 200 + 100 | 898 s | 255 (all) | 2.3 / 5.7 | 1.2 |
 
 All runs: 2 chains, 0 divergences.
 
@@ -253,8 +254,12 @@ All runs: 2 chains, 0 divergences.
 - **Starting the mass matrix from the Hessian helps, but not enough.** `--mass-init hessian` (1/|diagonal| at the MAP start) halves the worst R-hat (globals 3.8 → 1.9, marks 6.2 → 3.7; `w_D` 3.8 → 1.6), but every step still hits the tree-depth limit. Worst now: `rho_dn`, `w_a` (1.9), `sigma_D` (1.8).
 - **The MAP start is not where the posterior mass is.** σ_E is 1.45 at the start and about 0.17 in the draws, so the curvature at the start describes a different region from the one the chains sample. With σ_E that small, the peak excesses sit in a centred funnel.
 
+- **Both together are no better.** The Hessian start with non-centred `log_E` still hits the tree-depth limit on every step, with R-hat 2.3 / 5.7 (worst `w_E`, `w_D`, `sigma_D`). So the sampler-side fixes (start, mass matrix, parameterisation) are used up: what is left is the model's geometry at the event level (each event's peak excess against its rise width, weakly identified decays).
+
 **Next steps**
-- Both together: the Hessian start and non-centred `log_E` (non-centred alone was tried before the scales were fixed).
+- Simplify the event level (a model change):
+  - the rise width at its population value (no per-event `log_R`), which removes the excess–rise ridge;
+  - if the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
 - If `w_D` stays stuck, simplify the decay: tighter priors on `w_D` and σ_D, or bounded decays. Then the rest of the list: tie ρ_up to ρ_η, tighter prior on σ_R, bounded rise widths.
 - Check the recovery test failure under the centred marks.
