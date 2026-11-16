@@ -63,4 +63,23 @@ S_final per fold (the percentages against the reference):
 - **The stream signals swing with the fold:** `parr` is 3.4% better on 2019 and 3.8% worse on 2022, `stream` similar. They help at stream arrivals and fast streams but cost in slow wind (+1.4–1.5%), so on average they cancel. The generative model's arrival skill also falls over the folds (AUC 0.83 on 2019, 0.53 on 2023; see the Bayes stream notebook).
 - **Splitting the path beats the blended path only through the ambient level** (−0.26% against −0.07% for `mean`).
 
+## Latent fit, 2024 (2026-11-16)
+
+The same features from the latent-arrival fit (`bayes latent`: arrivals summed out, 300 + 200 draws per chain, R-hat 1.005; `--fit latent`), against the observed-arrival fit's, on the 2024 fold only. The other folds would need a latent refit each (~4 h), and were not run. Results: `src/experiments/bayes_features_latent.csv`.
+
+| added to the linear model | latent fit | observed fit |
+|---|---|---|
+| ambient | −0.10% | −0.43% |
+| slow | −0.31% | −0.19% |
+| parr | +1.19% | +1.08% |
+| stream | +1.51% | +1.61% |
+| mean | +0.28% | +0.02% |
+| slow + parr | +1.00% | +0.93% |
+| components | +1.38% | +1.18% |
+| forward | slow + ambient −0.44% | ambient −0.43% |
+
+- **Latent arrivals don't make the stream signals useful:** `parr` and `stream` still cost 1–1.5%, better at stream arrivals but 3–5% worse in slow and intermediate wind.
+- **Only the quiet-wind part helps, as with the observed fit:** the best set reaches the same −0.4% on this fold, where the observed fit's ambient level gave −0.26% over six folds.
+- **Features beat the forecast as a regressor:** the latent mean path as one regressor (`linear + bayes latent`, docs/bayes_stream.md) was +0.32% on 2024.
+
 **Possible next step (not planned):** the ambient level is a smooth function of three inputs (q20, rec27 and a constant) through a fitted sigmoid. A cheaper version is that sigmoid term directly in the linear model (Config.terms), without the Bayesian fit; at 0.26% it is unlikely to pass the rule.

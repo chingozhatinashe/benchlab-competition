@@ -28,7 +28,10 @@ timing, without amplitudes); "components" (ambient, slow, parr, stream); and "fo
 greedy forward selection over the five by the geometric mean over folds (needs every fold:
 in the pilot, by the pilot fold). Decision rule: keep if > 1% better than the reference and
 winning >= 4 of 6 folds. The eval year is not used.
-Results: src/experiments/bayes_features.csv (cache: src/data/bayes_features_cache/).
+--fit latent takes the features from the latent-arrival fit (`bayes latent`; cached in
+training.bayes_stream, 2024 so far) instead of the observed-arrival one.
+Results: src/experiments/bayes_features.csv (cache: src/data/bayes_features_cache/);
+latent: bayes_features_latent.csv (cache: bayes_features_cache/latent/).
 """
 
 import argparse
@@ -52,12 +55,17 @@ from training.folds import YEARLY
 HERE = Path(__file__).resolve().parent
 EXPERIMENTS = HERE.parent / "experiments"
 CACHE_DIR = HERE.parent / "data" / "bayes_features_cache"
+FIT = "observed"  # the bayes_stream fit the features come from (--fit)
 KEEP_GAIN, KEEP_FOLDS = 0.01, 4
 N_DRAWS = 32
 CHUNK = 40  # runs per block in the stream expectation (memory: runs x draws x 84 x 72)
 SIGNALS = ("ambient", "slow", "parr", "stream", "mean")
 SETS = {**{s: (s,) for s in SIGNALS}, "slow + parr": ("slow", "parr"),
         "components": ("ambient", "slow", "parr", "stream")}
+
+
+def cache_dir():
+    return CACHE_DIR if FIT == "observed" else CACHE_DIR / FIT
 
 
 def log(msg):
@@ -127,7 +135,7 @@ def feature_frame(feats, index):
 def fold_parts(data, start, end):
     """Everything a fold needs: fit and validation runs, inputs, features, truth."""
     year = f"{start:%Y}"
-    path = tbs.CACHE_DIR / f"{year}_observed_draws.npz"
+    path = tbs.CACHE_DIR / f"{year}_{FIT}_draws.npz"
     if not path.exists():
         raise FileNotFoundError(f"{path}: run training.bayes_stream for the fold first")
     draws = dict(np.load(path))
@@ -137,7 +145,7 @@ def fold_parts(data, start, end):
     x_val = table.loc[val, cols].to_numpy(dtype=float)
     inp_fit = model.prepare(data.values, ff["pos_fit"], ff["x_fit"])
     inp_val = model.prepare(data.values, data.series.index.get_indexer(val), x_val)
-    cfg = tbs.FITS["observed"]
+    cfg = tbs.FITS[FIT]
     t = time.perf_counter()
     f_fit = feature_frame(features_in_blocks(draws, inp_fit, cfg), ff["fit6"])
     f_val = feature_frame(features_in_blocks(draws, inp_val, cfg), val)
@@ -171,12 +179,12 @@ def run(years=None, pilot=False, max_seconds=None):
     started = time.perf_counter()
     data = dg.Data()
     log(f"data ready in {time.perf_counter() - started:.0f} s")
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_dir().mkdir(parents=True, exist_ok=True)
     rows, parts_by_year, timer = {}, {}, {}
     folds = [(s, e) for s, e in YEARLY if years is None or s.year in years]
     for start, end in folds:
         year = f"{start:%Y}"
-        path = CACHE_DIR / f"{year}.json"
+        path = cache_dir() / f"{year}.json"
         row = {} if pilot or not path.exists() else json.loads(path.read_text("utf-8"))
         todo = [n for n in ("reference", *SETS) if n not in row]
         if todo:
@@ -226,7 +234,7 @@ def forward_selection(data, rows, years, parts_by_year, pilot, timer):
                     rows[y][key] = score_set(data, parts_by_year[y], (*chosen, s))
                     timer["fits"] = timer.get("fits", 0.0) + time.perf_counter() - t
                     if not pilot:
-                        (CACHE_DIR / f"{y}.json").write_text(json.dumps(rows[y]), "utf-8")
+                        (cache_dir() / f"{y}.json").write_text(json.dumps(rows[y]), "utf-8")
             trial[s] = gmean_rel(rows, years, key)[0]
         s_best = min(trial, key=trial.get)
         if trial[s_best] >= best:
@@ -240,7 +248,7 @@ def forward_selection(data, rows, years, parts_by_year, pilot, timer):
                               else rows[y]["reference"])
         rows[y]["forward chosen"] = chosen
         if not pilot:
-            (CACHE_DIR / f"{y}.json").write_text(json.dumps(rows[y]), "utf-8")
+            (cache_dir() / f"{y}.json").write_text(json.dumps(rows[y]), "utf-8")
     return {"chosen": chosen, "path": path_out}
 
 
@@ -258,7 +266,8 @@ def summarize(rows, forward, pilot=False):
         long += [{"fold": y, "variant": name, **rows[y][name]} for y in years]
     table = pd.DataFrame(out).T.sort_values("vs reference")
     if not pilot:
-        pd.DataFrame(long).to_csv(EXPERIMENTS / "bayes_features.csv", index=False,
+        pd.DataFrame(long).to_csv(EXPERIMENTS / ("bayes_features.csv" if FIT == "observed"
+                                                 else f"bayes_features_{FIT}.csv"), index=False,
                                   float_format="%.6g")
     with pd.option_context("display.width", 250, "display.float_format", "{:.4f}".format,
                            "display.max_columns", 30):
@@ -275,10 +284,13 @@ def main(argv=None):
     parser.add_argument("--folds", type=int, nargs="*")
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--summary", action="store_true")
+    parser.add_argument("--fit", choices=("observed", "latent"), default="observed")
     args = parser.parse_args(argv)
+    global FIT
+    FIT = args.fit
     if args.summary:
         rows = {p.stem: json.loads(p.read_text("utf-8"))
-                for p in sorted(CACHE_DIR.glob("20??.json"))}
+                for p in sorted(cache_dir().glob("20??.json"))}
         summarize(rows, None)
         return
     run(args.folds, args.pilot, args.max_seconds)
