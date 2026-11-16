@@ -44,8 +44,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from models import bayes_stream as bs
-from models.linear_model import LinearModel, lag_column, lead_lags
+from models import bayes_model as bm
+from models.bayes_model import features_in_blocks, lead_columns, signal_name
+from models.linear_model import LinearModel
 from training import bayes_stream as tbs
 from training import competition_score as cs
 from training import model_diagnostics as dg
@@ -57,9 +58,7 @@ EXPERIMENTS = HERE.parent / "experiments"
 CACHE_DIR = HERE.parent / "data" / "bayes_features_cache"
 FIT = "observed"  # the bayes_stream fit the features come from (--fit)
 KEEP_GAIN, KEEP_FOLDS = 0.01, 4
-N_DRAWS = 32
-CHUNK = 40  # runs per block in the stream expectation (memory: runs x draws x 84 x 72)
-SIGNALS = ("ambient", "slow", "parr", "stream", "mean")
+SIGNALS = bm.ALL_SIGNALS
 SETS = {**{s: (s,) for s in SIGNALS}, "slow + parr": ("slow", "parr"),
         "components": ("ambient", "slow", "parr", "stream")}
 
@@ -72,58 +71,7 @@ def log(msg):
     print(msg, flush=True)
 
 
-def signal_name(s):
-    return f"structural_bayes_{s}"
-
-
 # ---------------------------------------------------------------------- features
-def features(draws, inp, cfg, n_draws=N_DRAWS, seed=0):
-    """{signal: (n, 72)} posterior-mean features of runs with inputs `inp` (model.prepare)."""
-    rng = np.random.default_rng(seed)
-    n_all = len(draws["rho_up"])
-    idx = rng.choice(n_all, size=min(n_draws, n_all), replace=False)
-    d = {k: draws[k][idx] for k in bs.GLOBALS}
-    x, amb, v0 = inp["x"], inp["amb"], inp["last"]
-    x84 = bs.extend(x)
-    n = len(v0)
-    a = bs.ambient(d["w_a"].T, amb, np)  # (n, P)
-    slow = bs.slow_mean(a, v0[:, None], d["rho_up"], d["rho_dn"], np)  # (n, P, 72)
-    clp = bs.count_logp(x.mean(axis=1) @ d["w_N"].T, cfg.nmax, np)  # (n, P, nmax + 1)
-    p_any = 1.0 - np.exp(clp[..., 0])
-    pi = np.exp(bs.stick_logp(np.einsum("nup,Pp->nPu", x84, d["w_tau"]), np))  # (n, P, 84)
-    parr = p_any[..., None] * np.cumsum(pi, axis=-1)[..., :bs.HORIZON]
-    xc = x84[:, :, 1:]
-    E = np.exp(d["mu_E"][:, None] + np.einsum("nuq,Pq->nPu", xc, d["w_E"]))  # (n, P, 84)
-    D = np.exp(d["mu_D"][:, None] + np.einsum("nuq,Pq->nPu", xc, d["w_D"]))
-    R = np.broadcast_to(np.exp(d["mu_R"])[None, :, None], E.shape)
-    tau = np.broadcast_to(bs.ARRIVALS, E.shape)
-    stream = np.empty((n, bs.HORIZON))
-    for i in range(0, n, CHUNK):  # sum_u pi_u E_u profile_u(k), mean over draws
-        sl = slice(i, min(i + CHUNK, n))
-        prof = bs.profile(tau[sl], E[sl], R[sl], D[sl], np)  # (c, P, 84, 72)
-        stream[sl] = (p_any[sl, :, None] * np.einsum("cPu,cPuk->cPk", pi[sl], prof)).mean(1)
-    out = {"ambient": np.repeat(a.mean(axis=1)[:, None], bs.HORIZON, axis=1),
-           "slow": slow.mean(axis=1), "parr": parr.mean(axis=1), "stream": stream}
-    out["mean"] = out["slow"] + out["stream"]
-    return out
-
-
-def features_in_blocks(draws, inp, cfg, block=1000):
-    """features() over blocks of runs (memory), with the same draws for every block."""
-    n = len(inp["last"])
-    parts = [features(draws, {k: v[i:i + block] for k, v in inp.items()
-                              if k in ("x", "amb", "last")}, cfg)
-             for i in range(0, n, block)]
-    return {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
-
-
-def lead_columns(signal, f):
-    """{"<signal>_at_<L>h": f at lead max(-L, 1)} for the lead-aligned regressor (as
-    training.structural.structural_columns)."""
-    lags = np.unique(lead_lags(0, signal))
-    return {lag_column(signal, lag): f[:, max(-int(lag), 1) - 1] for lag in lags}
-
-
 def feature_frame(feats, index):
     cols = {}
     for s, f in feats.items():

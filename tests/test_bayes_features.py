@@ -1,10 +1,10 @@
-"""training.bayes_features: per-run features from a Bayes stream posterior."""
+"""models.bayes_model features: per-run features from a Bayes stream posterior."""
 
 import numpy as np
 
+from models import bayes_model as bm
 from models import bayes_stream as bs
 from models.linear_model import lead_lags
-from training import bayes_features as bf
 
 P = 6
 
@@ -37,7 +37,7 @@ def draws(n_draws, seed=1):
 def test_features_match_a_direct_calculation():
     inp, dr = inputs(3), draws(4)
     cfg = bs.Config(rule="add", event_rise=False)
-    f = bf.features(dr, inp, cfg, n_draws=4)
+    f = bm.features(dr, inp, cfg, n_draws=4)
     x84 = bs.extend(inp["x"])
     for i in range(3):
         acc = {k: np.zeros(bs.HORIZON) for k in ("ambient", "slow", "parr", "stream")}
@@ -70,7 +70,7 @@ def test_features_match_a_direct_calculation():
 
 
 def test_arrival_probability_rises_with_lead_and_stays_below_p_any():
-    f = bf.features(draws(8), inputs(20, seed=2), bs.Config(rule="add", event_rise=False))
+    f = bm.features(draws(8), inputs(20, seed=2), bs.Config(rule="add", event_rise=False))
     assert (np.diff(f["parr"], axis=1) >= -1e-12).all()
     assert ((f["parr"] >= 0) & (f["parr"] <= 1)).all()
     assert (f["stream"] >= 0).all()
@@ -78,8 +78,8 @@ def test_arrival_probability_rises_with_lead_and_stays_below_p_any():
 
 def test_lead_columns_follow_the_lead_aligned_grid():
     f = np.arange(2 * bs.HORIZON, dtype=float).reshape(2, bs.HORIZON)
-    cols = bf.lead_columns(bf.signal_name("slow"), f)
-    lags = np.unique(lead_lags(0, bf.signal_name("slow")))
+    cols = bm.lead_columns(bm.signal_name("slow"), f)
+    lags = np.unique(lead_lags(0, bm.signal_name("slow")))
     assert len(cols) == len(lags) and lags.min() < 0  # signed lags, as structural_*
     np.testing.assert_array_equal(cols["structural_bayes_slow_at_0h"], f[:, 0])
     np.testing.assert_array_equal(cols["structural_bayes_slow_at_-24h"], f[:, 23])

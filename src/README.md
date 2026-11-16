@@ -31,7 +31,7 @@ mean of RMSE and a percentile TIMSE, averaged over the 72 leads).
 - **Missing regressors:** a missing regressor takes its training median. This includes the current-sheet distance when no GONG map is usable or the PFSS solve fails.
 - **Missing coronal-hole image:** it falls back to one 6 h, then 12 h older, then to the nearest of the other images within 24 h. If the strip is still missing, a submodel fitted without it is used.
 - **Failures:** if the linear model fails, the reference baseline below forecasts; then persistence; then the training mean.
-- **Other modes:** `SWP_MODEL=baseline` submits the reference baseline directly. `SWP_MODEL=hybrid` runs an earlier linear + gradient-boosted-trees hybrid (`models/xgboost_model.py`, `assets/xgboost_model.json`, evaluated in numpy). It is not used by default: on the official metric it is no better.
+- **Other modes:** `SWP_MODEL=baseline` submits the reference baseline directly. `SWP_MODEL=hybrid` runs an earlier linear + gradient-boosted-trees hybrid (`models/xgboost_model.py`, `assets/xgboost_model.json`, evaluated in numpy). It is not used by default: on the official metric it is no better. `SWP_MODEL=bayes` runs the linear model with two extra regressors from a Bayesian stream-arrival model (`models/bayes_model.py`, `assets/bayes_model.json`, numpy only), falling back to the linear model. It is not used by default either: on the training folds it was 0.4% better, short of our 1% rule.
 
 **Runtime.** numpy, pandas and Pillow, plus sunkit-magex, sunpy, astropy, scipy, scikit-image and streamtracer for the PFSS solve.
 - **Inputs:** all sources are fetched in parallel within a 300 s budget: about 3 months of ACE speed, 30 days of ACE plasma and field, about 15 AIA images, flares and one GONG synoptic map (about 240 KB), roughly 20 MB. The PFSS solve takes about 10 s.
@@ -102,9 +102,9 @@ submission/
 ├── model.py             # CLI and output format; calls inference.run_selected_forecast
 ├── connectors/          # data clients (ACE archive, SWPC, SDO/AIA, CDAWeb)
 ├── feature_engineering/ # hourly speeds, recurrence features, regressors, imputation
-├── models/              # the linear model (submitted), the baseline, the hybrid (optional)
+├── models/              # the linear model (submitted), the baseline, the hybrid and bayes (optional)
 ├── inference/           # fetch -> features -> model, with fallbacks
-├── assets/              # fitted weights (linear model, baseline, hybrid), regressor medians
+├── assets/              # fitted weights (linear model, baseline, hybrid, bayes), regressor medians
 └── local_tests/         # run test_local.sh from here before you submit
     ├── test_local.sh
     └── mock_platform.py

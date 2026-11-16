@@ -537,7 +537,7 @@ def arrival_skill(out, n_lab, m_lab):
 
 def fold_fit(data, start):
     """The fold's fit runs, the model with its statistics and the training windows."""
-    f = {"start_pos": data.series.index.get_loc(start),
+    f = {"start_pos": int(data.series.index.searchsorted(start)),  # TRAIN_END: every run
          "fit6": data.runs6[data.runs6 < start], "cols": list(data.cfg.input_features)}
     f["table"] = table = data.table.copy()
     table[data.pfss] = table[data.pfss].fillna(table.loc[f["fit6"], data.pfss].median())

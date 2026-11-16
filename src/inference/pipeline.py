@@ -287,7 +287,72 @@ def run_xgboost_forecast(t0, model=None, history=None, features=None):
     return [float(v) for v in forecast]
 
 
+def load_bayes(path=None):
+    from models.bayes_model import ASSET as BAYES_ASSET
+    from models.bayes_model import BayesModel
+
+    try:
+        return BayesModel.load(path or BAYES_ASSET)
+    except Exception as e:
+        log(f"bayes model asset unusable ({e!r}); falling back to the linear model")
+        return None
+
+
+def run_bayes_forecast(t0, model=None, history=None, features=None):
+    """Bayes model forecast (the linear model + the latent Bayes stream's regressors,
+    models.bayes_model); the linear model if anything fails.
+
+    Live pipeline: the speed history and the submitted linear model's regressors are
+    fetched in parallel; the Bayes regressors are computed from them (numpy, no fetch).
+    """
+    started = time.monotonic()
+    t0 = to_utc(t0)
+    model = model or load_bayes()
+    if model is None:
+        return run_linear_forecast(t0, history=history, features=features)
+    names = model.regressor_names
+    hours = model.history_hours
+    offline = os.environ.get(OFFLINE_ENV) == "1"
+    if history is None and offline:
+        history = empty_history(t0, hours)
+    if features is None and offline:
+        features = {}
+    if history is None or features is None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            h = pool.submit(fetch_history, t0, hours) if history is None else None
+            f = pool.submit(regressor_features, names, t0) if features is None else None
+            if h is not None:
+                try:
+                    history = h.result()
+                except Exception as e:
+                    log(f"fetching history failed ({e!r}); continuing without data")
+                    history = empty_history(t0, hours)
+            if f is not None:
+                try:
+                    features = f.result()
+                except Exception as e:
+                    log(f"regressors failed ({e!r}); all imputed")
+                    features = {}
+    missing = [n for n in names if not np.isfinite(features.get(n, np.nan))]
+    log(f"bayes model: {len(names) - len(missing)}/{len(names)} regressors observed; "
+        f"imputed: {missing or 'none'}")
+    try:
+        forecast = np.asarray(model.predict(history, features), dtype=float)
+    except Exception as e:
+        log(f"bayes model failed ({e!r})")
+        forecast = None
+    if forecast is None or forecast.shape != (FORECAST_HOURS,) or not np.isfinite(forecast).all():
+        log("falling back to the linear model")
+        return run_linear_forecast(t0, history=history, features=features)
+    log(f"bayes model done in {time.monotonic() - started:.1f} s; "
+        f"forecast {forecast.min():.0f}..{forecast.max():.0f} km/s")
+    return [float(v) for v in forecast]
+
+
 HYBRID_CHOICES = ("hybrid", "xgboost")
+BAYES_CHOICES = ("bayes",)
 
 
 def run_selected_forecast(t0):
@@ -295,7 +360,9 @@ def run_selected_forecast(t0):
 
     The linear model falls back to the final baseline, then persistence.
     SWP_MODEL=hybrid (or xgboost) runs the linear + trees hybrid, which falls back to the
-    linear model; SWP_MODEL=baseline runs the final baseline. Anything unexpected that
+    linear model; SWP_MODEL=bayes runs the linear model with the latent Bayes stream's
+    regressors (models.bayes_model), which falls back to the linear model;
+    SWP_MODEL=baseline runs the final baseline. Anything unexpected that
     escapes a model's own fallbacks ends in the final baseline.
     """
     choice = os.environ.get(MODEL_ENV, "").lower()
@@ -304,6 +371,8 @@ def run_selected_forecast(t0):
     try:
         if choice in HYBRID_CHOICES:
             return run_xgboost_forecast(t0)
+        if choice in BAYES_CHOICES:
+            return run_bayes_forecast(t0)
         return run_linear_forecast(t0)
     except Exception as e:
         log(f"{choice or 'linear'} path failed ({e!r}); falling back to the final baseline")
