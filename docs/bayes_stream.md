@@ -9,7 +9,7 @@
 - smooth max of the slow wind and the streams, with additive streams as a variant;
 - arrivals both observed in training (the detected arrivals are data) and fully latent, compared.
 
-**Status (2026-11-15): not built.** On the six folds, `linear + bayes` ties the submitted model (−0.09%, 3 of 6 folds) and the generative model alone is 5–10% worse; see [Six folds](#six-folds-2026-11-15).
+**Status (2026-11-15): not built.** On the six folds, `linear + bayes` ties the submitted model (−0.09%, 3 of 6 folds) and the generative model alone is 5–10% worse; see [Six folds](#six-folds-2026-11-15). With the arrivals latent, `linear + bayes latent` is −0.23% (3 of 6 folds); see [Latent fit](#latent-fit-2026-11-15).
 - **Better in quiet wind, worse around streams:** the predictive mean is 27% better than the reference in slow wind, but 21% worse at stream arrivals and 36% worse in fast streams.
 - **Fitted with the additive rule and every event's rise width at its population value** (user, 2026-11-15): as first specified (smooth max, per-event rise widths), NUTS doesn't mix. The diagnosis is in [Sampler status](#sampler-status).
 - `bayes latent` was not run (about 1.9 h per fold).
@@ -365,7 +365,24 @@ S_final per fold (the percentages against the reference):
 
 - **The latent component makes `linear + bayes` slightly worse on 2024** (+0.32% against +0.10%).
 - **On its own the latent model beats the observed one** (+4.9% against +7.3%), with less of the stream-arrival penalty (+25% against +29%), but its arrival skill is lower (AUC 0.64 against 0.69). Its CRPS is 39.9 km/s and its 80% coverage 0.77.
-- The other five folds would take about 4 h. Not run: on 2024 the latent regressor is further from the 1% gain than the observed one.
+
+**Six folds (2026-11-16; 2021–2023 run by the user in a terminal):** every latent fit converged (R-hat at most 1.015, ESS min 140–334, 0 divergences; 20–56 min per fold, growing with the fit runs). **Not built:** `linear + bayes latent` is −0.23% against the reference, 3 of 6 folds; the rule needs more than 1% and 4 folds.
+
+| Fold | reference | linear + bayes | linear + bayes latent | bayes latent |
+|---|---|---|---|---|
+| 2019 | 60.01 | 59.74 (−0.44%) | **59.25 (−1.25%)** | 64.32 (+7.2%) |
+| 2020 | 68.86 | 68.62 (−0.35%) | **68.13 (−1.06%)** | 71.66 (+4.1%) |
+| 2021 | 84.93 | 84.89 (−0.05%) | 84.99 (+0.07%) | 91.73 (+8.0%) |
+| 2022 | 88.89 | 89.01 (+0.14%) | 89.38 (+0.55%) | 100.33 (+12.9%) |
+| 2023 | 111.38 | 111.44 (+0.05%) | 111.36 (−0.02%) | 120.42 (+8.1%) |
+| 2024 | 107.81 | 107.92 (+0.10%) | 108.15 (+0.32%) | 113.14 (+4.9%) |
+| **geometric mean** | — | −0.09% (3 folds) | **−0.23% (3 folds)** | +7.5% |
+
+By regime (geometric means): `linear + bayes latent` slow wind −0.52%, intermediate −0.15%, fast stream −0.96%, stream arrival −0.12%, CME −0.17%. `bayes latent` alone: CRPS 33.8 km/s, 80% coverage 0.82, arrival AUC 0.65 (the observed fit 34.1, 0.82, 0.69).
+
+- **The latent component helps the linear model slightly more than the observed one** (−0.23% against −0.09%), mostly in fast streams and slow wind, but the gain is concentrated in 2019 and 2020 (the folds where every stream signal did best, docs/bayes_features.md) and reverses on 2022 and 2024.
+- **The latent model alone is better than the observed one** (+7.5% against +10.0%) on every fold, but still 4–13% worse than the reference.
+- **The latent fit expects about 1.6 times more arrivals than the detector finds** (posterior predictive 124–219 against 73–164 per fold): without labels it explains more of the variation with more, smaller, shorter streams (excess about 115 km/s, decay 46–64 h).
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
