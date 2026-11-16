@@ -104,3 +104,7 @@ At t0, for leads k = 1…72, where x(u) holds the inputs for hour t0 + u, lead-a
 
 - **Not tested:** a probabilistic forecast, where the arrival structure could matter more. The competition scores a single deterministic path, and the expected value is optimal for its RMSE part.
 - **A sharper arrival indicator.** The hazard's skill comes from the same inputs the linear model already uses ([pfss_switch.md](pfss_switch.md): in-situ AUC 0.86, no gain from PFSS).
+
+## Follow-ups
+
+- **Stream events (v2, 2026-11-09):** each event with an arrival time, a duration and a free speed profile, several events adding, with the detected arrivals in the loss. Stopped after the 2024 pilot, not built: +2.5% to +20% ([stream_events.md](stream_events.md)).
