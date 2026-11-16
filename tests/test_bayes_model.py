@@ -4,13 +4,13 @@ live path (SWP_MODEL=bayes)."""
 import numpy as np
 import pandas as pd
 import pytest
+from test_bayes_features import draws
 
 from models import bayes_model as bm
 from models import bayes_stream as bs
 from models import structural as st
 from models.linear_model import Config as LinearConfig
 from models.linear_model import LinearModel
-from tests.test_bayes_features import draws
 
 T0 = pd.Timestamp("2026-03-15T12:00Z")
 HORIZON = bs.HORIZON
