@@ -2,7 +2,7 @@
 
 **The question (user, 2026-11-15).** In the [Bayes stream](bayes_stream.md) study, `linear + bayes` gave the submitted linear model only the generative model's blended mean path, and tied the submitted model. Would its fitted parameters do better?
 
-**Status (2026-11-15): not built.** The best variant, the ambient level alone, is 0.26% better than the submitted model and wins 4 of 6 folds; the decision rule needs more than 1%.
+**Status (2026-11-15): not built.** The best variant, the ambient level alone, is 0.26% better than the submitted model and wins 4 of 6 folds; the decision rule needs more than 1%. From the latent-arrival fit, P(arrival by lead) + the mean path is 0.41% better (4 of 6 folds), see [Latent fit](#latent-fit-six-folds-2026-11-16); built as an option, not submitted ([Bayes model](bayes_model.md)).
 - **Study:** `python -m training.bayes_features` (`--pilot --folds 2024`; `--summary`).
 - **Tests:** `tests/test_bayes_features.py`.
 - **Analysis:** `src/experiments/bayes_features.ipynb`; results in `src/experiments/bayes_features.csv`.
@@ -63,23 +63,26 @@ S_final per fold (the percentages against the reference):
 - **The stream signals swing with the fold:** `parr` is 3.4% better on 2019 and 3.8% worse on 2022, `stream` similar. They help at stream arrivals and fast streams but cost in slow wind (+1.4–1.5%), so on average they cancel. The generative model's arrival skill also falls over the folds (AUC 0.83 on 2019, 0.53 on 2023; see the Bayes stream notebook).
 - **Splitting the path beats the blended path only through the ambient level** (−0.26% against −0.07% for `mean`).
 
-## Latent fit, 2024 (2026-11-16)
+## Latent fit, six folds (2026-11-16)
 
-The same features from the latent-arrival fit (`bayes latent`: arrivals summed out, 300 + 200 draws per chain, R-hat 1.005; `--fit latent`), against the observed-arrival fit's, on the 2024 fold only. The other folds would need a latent refit each (~4 h), and were not run. Results: `src/experiments/bayes_features_latent.csv`.
+The same features from the latent-arrival fit (`bayes latent`: arrivals summed out, 300 + 200 draws per chain, every fold converged, R-hat at most 1.015; `--fit latent`), from each fold's cached latent posterior (training.bayes_stream). Results: `src/experiments/bayes_features_latent.csv`.
 
-| added to the linear model | latent fit | observed fit |
-|---|---|---|
-| ambient | −0.10% | −0.43% |
-| slow | −0.31% | −0.19% |
-| parr | +1.19% | +1.08% |
-| stream | +1.51% | +1.61% |
-| mean | +0.28% | +0.02% |
-| slow + parr | +1.00% | +0.93% |
-| components | +1.38% | +1.18% |
-| forward | slow + ambient −0.44% | ambient −0.43% |
+| added to the linear model | latent fit | folds won | observed fit | folds won |
+|---|---|---|---|---|
+| parr | **−0.38%** | 4 | −0.08% | 3 |
+| mean | −0.23% | 3 | −0.07% | 3 |
+| stream | −0.18% | 3 | +0.01% | 3 |
+| slow + parr | −0.18% | 4 | +0.23% | 3 |
+| ambient | −0.02% | 3 | −0.26% | 4 |
+| components | +0.07% | 3 | +0.18% | 3 |
+| slow | +0.17% | 2 | +0.33% | 2 |
+| forward | parr + mean **−0.41%** | 4 | ambient −0.26% | 4 |
 
-- **Latent arrivals don't make the stream signals useful:** `parr` and `stream` still cost 1–1.5%, better at stream arrivals but 3–5% worse in slow and intermediate wind.
-- **Only the quiet-wind part helps, as with the observed fit:** the best set reaches the same −0.4% on this fold, where the observed fit's ambient level gave −0.26% over six folds.
-- **Features beat the forecast as a regressor:** the latent mean path as one regressor (`linear + bayes latent`, docs/bayes_stream.md) was +0.32% on 2024.
+`parr` per fold (S_final against the reference): 2019 −2.3%, 2020 −2.2%, 2021 −0.2%, 2022 +1.8%, 2023 −0.5%, 2024 +1.2% (observed fit: −3.4%, −1.7%, +0.6%, +3.8%, −0.7%, +1.1%). Forward set by regime: fast stream −2.5%, CME −0.7%, stream arrival −0.4%, slow wind −0.3%, intermediate +0.1%.
+
+- **Latent arrivals make the stream signals more useful:** `parr`, `stream` and `mean` all do better from the latent fit, mostly in fast streams; the swing between folds is smaller.
+- **The quiet-wind signals go the other way:** the ambient level no longer helps (−0.02%); the latent fit puts more of the variation in streams.
+- **Not built under the rule** (−0.41% < 1%), but the best Bayes-derived result: features beat the forecast as a regressor (`linear + bayes latent` −0.23%, docs/bayes_stream.md), and the 2024-only check (forward: slow + ambient −0.44%) chose differently from the six folds.
+- **Built anyway as an option (user, 2026-11-16):** the forward set (`parr` + `mean` from a latent fit on all the training data) ships behind `SWP_MODEL=bayes`, not as the submitted model; see [Bayes model](bayes_model.md).
 
 **Possible next step (not planned):** the ambient level is a smooth function of three inputs (q20, rec27 and a constant) through a fitted sigmoid. A cheaper version is that sigmoid term directly in the linear model (Config.terms), without the Bayesian fit; at 0.26% it is unlikely to pass the rule.
