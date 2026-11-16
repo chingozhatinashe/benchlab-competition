@@ -28,6 +28,7 @@ wind leaves its excess unidentified, and the chains settle in different modes (d
 Sampler status). NUTS (STUDY_NUTS): the non-centred MAP start, the mass matrix started from
 the Hessian there, a dense block on the globals, the chains one after another, float64; the
 observed fit samples its two independent blocks (arrivals; speed) separately (fit_split).
+The latent fit uses fewer draws (LATENT_DRAWS: 300 + 200 per chain; it is about 10x slower).
 
 Variants (refitted per fold; the submitted config's inputs, PFSS gaps at the fit median):
     bayes              observed arrivals, additive streams, predictive mean
@@ -35,6 +36,7 @@ Variants (refitted per fold; the submitted config's inputs, PFSS gaps at the fit
     bayes latent       latent arrivals, additive streams, predictive mean
     slow wind only     bayes' posterior with N = 0
     linear + bayes     the submitted linear model + bayes' mean as a lead-aligned regressor
+    linear + bayes latent   the same with bayes latent's mean
     reference          the submitted linear model
 Also per fold: arrival skill on the validation runs, CRPS and 80% coverage, posterior
 summaries, NUTS diagnostics (R-hat, ESS, divergences) and posterior predictive checks on the
@@ -81,13 +83,16 @@ FITS = {"observed": bs.Config(rule="add", event_rise=False),
         "max": bs.Config(), "fixed_rise": bs.Config(event_rise=False)}
 FITS["fixed_rise_add"] = FITS["observed"]
 STUDY_NUTS = {"init": "map", "dense": "globals", "sequential": True, "mass_init": "hessian"}
+# the latent fit costs about 3.7 s per iteration (2024); at 200 + 100 it had ESS 118 already
+LATENT_DRAWS = {"warmup": 300, "samples": 200}
 VARIANTS = {  # name: (fit, decision, slow only)
     "bayes": ("observed", "mean", False),
     "bayes official": ("observed", "official", False),
     "bayes latent": ("latent", "mean", False),
     "slow wind only": ("observed", "mean", True),
 }
-ALL = ("reference", *VARIANTS, "linear + bayes")
+LINEAR_PLUS = {"linear + bayes": "observed", "linear + bayes latent": "latent"}  # name: fit
+ALL = ("reference", *VARIANTS, *LINEAR_PLUS)
 
 
 def log(msg):
@@ -429,7 +434,7 @@ def study_fit(d, cfg, **kw):
     """(draws, info) for the study: STUDY_NUTS, split into the two blocks unless latent. info
     has the scalar diagnostics over both blocks (the worst R-hat and ESS, divergences and
     tree-depth hits summed or maxed, times added) and each block's own, prefixed."""
-    kw = {**STUDY_NUTS, **kw}
+    kw = {**STUDY_NUTS, **(LATENT_DRAWS if cfg.latent else {}), **kw}
     if cfg.latent:
         draws, info = fit_nuts(d, cfg, **kw)
         return draws, {k: v for k, v in info.items() if np.isscalar(v)}
@@ -595,11 +600,12 @@ def score_fold(data, start, end, names, timer, pilot=False):
         if name == "reference":
             lin = LinearModel(data.cfg).fit(data.values, pos_fit, x_fit, end=start_pos)
             f = lin.forecast(data.values, pos_val, x_val)
-        elif name == "linear + bayes":
+        elif name in LINEAR_PLUS:  # the fit's mean path as a lead-aligned regressor
+            key = LINEAR_PLUS[name]
             fit_inp = model.prepare(data.values, pos_fit, x_fit)
             s_fit = ts.structural_columns(bs.summarize_paths(
-                fitted("observed"), fit_inp, FITS["observed"], n_paths=N_PATHS_FIT)["mean"])
-            s_val = ts.structural_columns(simulated("observed", False)["mean"])
+                fitted(key), fit_inp, FITS[key], n_paths=N_PATHS_FIT)["mean"])
+            s_val = ts.structural_columns(simulated(key, False)["mean"])
             cfg2 = replace(data.cfg, features=(*data.cfg.features, f"{ts.SIGNAL}_lead_0h"))
             c2 = list(cfg2.input_features)
             lin = LinearModel(cfg2).fit(data.values, pos_fit, table.loc[fit6].assign(**s_fit)[
@@ -776,8 +782,9 @@ def sampler_test(year, fit, label, block="all", curv=False, **kw):
         for k, r in sorted(info["worst r_hat"].items(), key=lambda kv: -kv[1]):
             log(f"    {k:10s} {r:7.3f}  "
                 + "  ".join(f"{m:9.4g}" for m in info["chain medians"][k]))
-    if "speed" in out or "all" in out:
-        ev = event_table(ff["d"], out.get("speed", out.get("all")))
+    block_info = out.get("speed", out.get("all"))
+    if block_info and block_info["event r_hat"]:  # observed fits only: the latent has no marks
+        ev = event_table(ff["d"], block_info)
         ev.to_csv(CACHE_DIR / f"sampler_{label}_events.csv", index=False, float_format="%.5g")
         cols = [c for c in ev.columns if not c.startswith("med")]
         with pd.option_context("display.width", 250, "display.max_columns", 40):
@@ -832,9 +839,12 @@ def main(argv=None):
                      noncentred=tuple(args.noncentred), mass_init=args.mass_init)
         return
     numpyro.enable_x64()  # the study fits in float64 (STUDY_NUTS)
-    STUDY_NUTS.update(warmup=args.warmup, samples=args.samples)  # default WARMUP, SAMPLES
+    if (args.warmup, args.samples) != (WARMUP, SAMPLES):  # a quick test: every fit alike
+        STUDY_NUTS.update(warmup=args.warmup, samples=args.samples)
+        LATENT_DRAWS.clear()
     if args.summary:
-        rows = {p.stem: json.loads(p.read_text("utf-8")) for p in sorted(CACHE_DIR.glob("*.json"))}
+        rows = {p.stem: json.loads(p.read_text("utf-8"))
+                for p in sorted(CACHE_DIR.glob("20??.json"))}  # not the sampler runs
         summarize(rows)
         return
     run(args.folds, args.pilot, args.max_seconds, args.variants)

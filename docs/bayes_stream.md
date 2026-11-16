@@ -9,7 +9,7 @@
 - smooth max of the slow wind and the streams, with additive streams as a variant;
 - arrivals both observed in training (the detected arrivals are data) and fully latent, compared.
 
-**Status (2026-11-15): not built.** On the six folds, `linear + bayes` ties the submitted model (−0.09%, 3 of 6 folds) and the generative model alone is 5–10% worse; see [Six folds](#six-folds-2026-11-15).
+**Status (2026-11-15): not built.** On the six folds, `linear + bayes` ties the submitted model (−0.09%, 3 of 6 folds) and the generative model alone is 5–10% worse; see [Six folds](#six-folds-2026-11-15). With the arrivals latent, `linear + bayes latent` is −0.23% (3 of 6 folds); see [Latent fit](#latent-fit-2026-11-15).
 - **Better in quiet wind, worse around streams:** the predictive mean is 27% better than the reference in slow wind, but 21% worse at stream arrivals and 36% worse in fast streams.
 - **Fitted with the additive rule and every event's rise width at its population value** (user, 2026-11-15): as first specified (smooth max, per-event rise widths), NUTS doesn't mix. The diagnosis is in [Sampler status](#sampler-status).
 - `bayes latent` was not run (about 1.9 h per fold).
@@ -343,6 +343,46 @@ S_final per fold (the percentages against the reference):
 - **The fits mostly converge,** with 0 divergences and no tree-depth hits in every fold, but not everywhere: 2020 has R-hat 1.19 and ESS 14, 2023 R-hat 1.06 (marks 1.14) and ESS 32. The arrival block mixes in every fold (R-hat ≤ 1.006, ESS ≥ 637).
 - **The posterior is stable across folds:** an excess median of 136–151 km/s, a rise width of 1.7–2.2 h, a decay of 124–164 h, noise σ_η 9.9–11.0 km/s, and 0.17–0.22 expected arrivals per 84 h window.
 - `bayes latent` was not run (its fit takes about 1.9 h per fold; see the 2024 pilot).
+
+## Latent fit (2026-11-15)
+
+**The question (user, 2026-11-15):** does `linear + bayes` do better when the generative model has the arrivals latent (summed out) instead of the detected ones? New variant `linear + bayes latent`: the submitted linear model with the latent fit's mean path as its lead-aligned regressor, as `linear + bayes`.
+
+**Sampler check, 2024** (`--sampler latent_check --fit latent --block all --mass-init hessian`, 200 + 100 × 2 chains): **the latent fit converges.**
+- R-hat at most 1.011, ESS min 118 (from 200 draws), 0 divergences, no tree-depth hits (51 leapfrog steps). Worst: `w_tau`, `w_N`, `w_a` (1.01).
+- 2510 s: the MAP 265 s, the Hessian 12 s, NUTS about 3.7 s per iteration (it sums over 28 arrival bins per window). Peak memory 1.2 GB.
+- Its posterior differs from the observed fit's: 0.41 expected arrivals per 84 h window (the detector finds about 0.21), a smaller excess (median 115 km/s against 137), a sharp rise (0.7 h) and a shorter decay (59 h against 164). Without the labels, the model explains more of the variation with more, smaller, shorter streams.
+
+**2024 fold** (`--folds 2024 --variants "bayes latent" "linear + bayes latent"`, cached; the latent fit at 300 + 200 per chain, `LATENT_DRAWS`): 2794 s, the fit 2745 s, R-hat 1.005, ESS min 253, 0 divergences.
+
+| Variant | S_final | vs reference | slow wind | intermediate | fast stream | stream arrival | CME |
+|---|---|---|---|---|---|---|---|
+| reference | 107.81 | — | — | — | — | — | — |
+| linear + bayes | 107.92 | +0.10% | −0.08% | +0.07% | +0.34% | +0.05% | +0.09% |
+| linear + bayes latent | 108.15 | +0.32% | +0.17% | +0.48% | +0.23% | −0.17% | +0.64% |
+| bayes latent | 113.14 | +4.9% | −49.6% | −35.8% | +17.4% | +25.3% | +10.7% |
+| bayes | 115.65 | +7.3% | −53.0% | −37.3% | +21.6% | +29.2% | +15.3% |
+
+- **The latent component makes `linear + bayes` slightly worse on 2024** (+0.32% against +0.10%).
+- **On its own the latent model beats the observed one** (+4.9% against +7.3%), with less of the stream-arrival penalty (+25% against +29%), but its arrival skill is lower (AUC 0.64 against 0.69). Its CRPS is 39.9 km/s and its 80% coverage 0.77.
+
+**Six folds (2026-11-16; 2021–2023 run by the user in a terminal):** every latent fit converged (R-hat at most 1.015, ESS min 140–334, 0 divergences; 20–56 min per fold, growing with the fit runs). **Not built:** `linear + bayes latent` is −0.23% against the reference, 3 of 6 folds; the rule needs more than 1% and 4 folds.
+
+| Fold | reference | linear + bayes | linear + bayes latent | bayes latent |
+|---|---|---|---|---|
+| 2019 | 60.01 | 59.74 (−0.44%) | **59.25 (−1.25%)** | 64.32 (+7.2%) |
+| 2020 | 68.86 | 68.62 (−0.35%) | **68.13 (−1.06%)** | 71.66 (+4.1%) |
+| 2021 | 84.93 | 84.89 (−0.05%) | 84.99 (+0.07%) | 91.73 (+8.0%) |
+| 2022 | 88.89 | 89.01 (+0.14%) | 89.38 (+0.55%) | 100.33 (+12.9%) |
+| 2023 | 111.38 | 111.44 (+0.05%) | 111.36 (−0.02%) | 120.42 (+8.1%) |
+| 2024 | 107.81 | 107.92 (+0.10%) | 108.15 (+0.32%) | 113.14 (+4.9%) |
+| **geometric mean** | — | −0.09% (3 folds) | **−0.23% (3 folds)** | +7.5% |
+
+By regime (geometric means): `linear + bayes latent` slow wind −0.52%, intermediate −0.15%, fast stream −0.96%, stream arrival −0.12%, CME −0.17%. `bayes latent` alone: CRPS 33.8 km/s, 80% coverage 0.82, arrival AUC 0.65 (the observed fit 34.1, 0.82, 0.69).
+
+- **The latent component helps the linear model slightly more than the observed one** (−0.23% against −0.09%), mostly in fast streams and slow wind, but the gain is concentrated in 2019 and 2020 (the folds where every stream signal did best, docs/bayes_features.md) and reverses on 2022 and 2024.
+- **The latent model alone is better than the observed one** (+7.5% against +10.0%) on every fold, but still 4–13% worse than the reference.
+- **The latent fit expects about 1.6 times more arrivals than the detector finds** (posterior predictive 124–219 against 73–164 per fold): without labels it explains more of the variation with more, smaller, shorter streams (excess about 115 km/s, decay 46–64 h).
 - If the decays still limit the mixing: tighter priors on `w_D` and σ_D, or bounded decays.
 - Then the study needs the fixed-rise fit as its observed fit (and the additive one), and the 2024 pilot.
 - If the excess–rise ridges then limit the mixing: bounded rise widths, or a tighter prior on σ_R.
