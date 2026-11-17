@@ -64,3 +64,17 @@ On every training run, the plain latent fit (`--fit latent`) did not converge: R
 - **The setup checks out:** the reference refitted on the same table equals the shipped linear model exactly.
 
 The eval year doesn't change the choice: the model was chosen on the folds, and it stays an option. The constrained fit has not been scored on the six folds.
+
+## Repeat runs (2026-11-17)
+
+The updated contract requires the same t0 and inputs to give the same forecast, and the organisers may re-run a forecast to check. The Bayes option's only randomness is the choice of posterior draws (seed 0); the asset holds exactly the 32 draws kept, so that choice is fixed.
+
+| check | Bayes option | default (linear) |
+|---|---|---|
+| live, same machine: two separate runs for 2026-11-17 00Z, different hash seeds and thread counts | byte-identical | byte-identical |
+| offline, two processes (`tests/test_determinism.py`, in CI) | byte-identical | byte-identical |
+| 2026-11-17 12Z: staging (Linux container) against a local rerun hours later (Windows) | at most 0.006 km/s apart | at most 0.006 km/s apart |
+
+- **The live runs fetched the same inputs:** all 29 regressors, and the same GONG map as staging.
+- **The cross-platform difference is numerical,** about 1/100,000 of the speed, and equal for both models. That points to shared inputs computed in floating point, probably the PFSS solve, rather than to the Bayes part. A re-run in the same image should be identical, but that hasn't been checked yet, because Docker wasn't running.
+- **Not pinned:** `numpy`, `pandas` and `Pillow` have only lower bounds in `src/requirements.txt`. The contract asks for pinned versions.
