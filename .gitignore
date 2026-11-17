@@ -22,3 +22,6 @@ src/local_tests/out/
 
 # Organiser PDFs (large; summarised in docs/*.md)
 docs/*.pdf
+
+# scoring_demo/score.py output (upstream)
+report.json
