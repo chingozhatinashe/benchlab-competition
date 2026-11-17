@@ -108,3 +108,63 @@ def test_wsa_table_uses_only_rings_by_t0():
     assert np.allclose(hp.wsa_table(rings2, t0s[:4], wsa.Params()).to_numpy(),
                        early.to_numpy(), equal_nan=True)
     assert hp.wsa_table(rings, t0s[:1] - pd.Timedelta(hours=1), wsa.Params()).isna().all().all()
+
+
+def _runtime_table(rings, t0s, lags):
+    from feature_engineering import build, windows
+
+    specs = [windows.WindowSpec(windows.WSA_SIGNAL, "at", lag) for lag in lags]
+    return windows.window_table(build.Inputs(pfss=rings), t0s, specs)
+
+
+def test_runtime_wsa_column_matches_the_study(monkeypatch):
+    # feature_engineering.windows (live) against training.hybrid_pfss.wsa_table (studies)
+    import pandas as pd
+
+    from feature_engineering import windows
+    from training import hybrid_pfss as hp
+
+    params = wsa.Params(v0=330.0, dv=600.0, alpha=0.3, w=1.5, delta=2.0, shift=4.0)
+    monkeypatch.setattr(windows, "wsa_params", lambda: params)
+    t0s = pd.date_range("2024-03-01", periods=8, freq="6h", tz="UTC")
+    lon = np.arange(360.0)
+    log_fs = np.stack([1.0 + 0.8 * np.sin(np.radians(2 * lon + 30 * k)) for k in range(8)])
+    rings = _rings(t0s, log_fs, 3.0 + 2.0 * np.cos(np.radians(lon)))
+    lags = (-72, -36, 0, 12, 24)
+    ours = _runtime_table(rings, t0s, lags)
+    study = hp.wsa_table(rings, t0s, params, lags=lags)
+    np.testing.assert_allclose(ours.to_numpy(), study.to_numpy(), rtol=1e-5)
+    assert np.nanstd(ours.to_numpy()) > 10  # the ring's structure reaches the column
+
+
+def test_runtime_wsa_uses_only_rings_by_t0_and_needs_the_asset(monkeypatch):
+    import pandas as pd
+
+    from feature_engineering import windows
+
+    monkeypatch.setattr(windows, "wsa_params", lambda: wsa.Params())
+    t0s = pd.date_range("2024-03-01", periods=8, freq="6h", tz="UTC")
+    lon = np.arange(360.0)
+    log_fs = np.stack([1.0 + 0.5 * np.sin(np.radians(lon + 20 * k)) for k in range(8)])
+    rings = _rings(t0s, log_fs, 5.0)
+    before = _runtime_table(rings, t0s[3:4], (-24, 0, 24))
+    rings.ring[4:] = np.random.default_rng(0).normal(size=rings.ring[4:].shape)
+    after = _runtime_table(rings, t0s[3:4], (-24, 0, 24))
+    pd.testing.assert_frame_equal(before, after)
+    assert before.notna().all().all()
+    half = _rings(t0s, np.where(lon < 200, np.nan, 1.0)[None].repeat(8, 0), 5.0)
+    assert _runtime_table(half, t0s, (0,)).isna().all().all()  # under half a ring
+    monkeypatch.setattr(windows, "wsa_params", lambda: None)  # no calibration asset
+    assert _runtime_table(rings, t0s, (0,)).isna().all().all()
+    assert windows.uses_pfss([windows.WindowSpec.parse("wsa_speed_at_0h")])
+
+
+def test_wsa_params_load_from_the_asset(tmp_path):
+    import json
+
+    from feature_engineering import windows
+
+    assert windows.wsa_params(tmp_path / "missing.json") is None
+    path = tmp_path / "wsa.json"
+    path.write_text(json.dumps({"params": wsa.Params(v0=300.0, shift=5.0).to_dict()}))
+    assert windows.wsa_params(path) == wsa.Params(v0=300.0, shift=5.0)

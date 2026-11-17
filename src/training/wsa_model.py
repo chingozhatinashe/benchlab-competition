@@ -297,14 +297,39 @@ def summarize(rows, sample=None):
     return table
 
 
+def calibrate_all(seed=0, max_evals=400):
+    """The offline calibration on every training run (2016-10 .. 2025-10) -> the asset the
+    live wsa_speed regressor reads (feature_engineering.windows.WSA_ASSET)."""
+    from feature_engineering import windows
+    from training.datasets import DATA_START, TRAIN_END
+
+    t = time.perf_counter()
+    data = Data()
+    params, s_cal, nfev, s_default = calibrate(data, np.arange(len(data.t0s)), seed, max_evals)
+    info = {"params": params.to_dict(),
+            "fit": {"start": f"{DATA_START:%Y-%m-%dT%H:%MZ}", "end": f"{TRAIN_END:%Y-%m-%dT%H:%MZ}",
+                    "runs": int(len(data.t0s)), "runs with a ring": int(data.has_ring.sum()),
+                    "calibration runs": int(min(CALIBRATION_RUNS, data.has_ring.sum())),
+                    "seed": seed, "evaluations": nfev, "s_final calibrated": s_cal,
+                    "s_final default params": s_default}}
+    windows.WSA_ASSET.write_text(json.dumps(info, indent=1) + "\n", encoding="utf-8")
+    log(f"calibrated in {time.perf_counter() - t:.0f} s ({nfev} evaluations): S_final "
+        f"{s_default:.2f} -> {s_cal:.2f}; {params}; wrote {windows.WSA_ASSET}")
+    return params
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--calibrate", action="store_true",
+                        help="calibrate on every training run -> src/assets/wsa_calibration.json")
     parser.add_argument("--sample", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--summary", action="store_true")
     args = parser.parse_args(argv)
-    if args.summary:
+    if args.calibrate:
+        calibrate_all(args.seed)
+    elif args.summary:
         rows = {p.stem: json.loads(p.read_text(encoding="utf-8"))
                 for p in sorted((CACHE_DIR / "full").glob("*.json"))}
         summarize(rows)
