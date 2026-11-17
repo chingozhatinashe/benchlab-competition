@@ -7,9 +7,9 @@
 
 The record (SCHEMA) holds what the platform would see (exit code, runtime, a valid 72-value
 forecast) and what the model's log says about its inputs:
-    model_used    from the last "done" line: "xgboost done" -> hybrid, "linear model done"
-                  -> linear, "[inference] done" -> baseline; "using the fallback forecast"
-                  -> persistence
+    model_used    from the last "done" line: "xgboost done" -> hybrid, "bayes model done"
+                  -> bayes, "linear model done" -> linear, "[inference] done" -> baseline;
+                  "using the fallback forecast" -> persistence
     fell_back     any "falling back" / "fallback forecast" line
     regressors    "N/M regressors observed" of the top-level model, and the missing names
     sources       the "[fetch_inputs] ... {source: status}" line, with MB and seconds
@@ -35,7 +35,8 @@ BUDGET_S = 900  # 15 min including the image pull
 PULL_MB_PER_S = 100  # test_local.sh's estimate of the pull speed
 LOG_KEEP = 20000  # characters of the log kept in the record
 
-_REGRESSORS = re.compile(r"\[inference\] (xgboost|linear model): (\d+)/(\d+) regressors observed;"
+_REGRESSORS = re.compile(r"\[inference\] (xgboost|bayes model|linear model): (\d+)/(\d+)"
+                         r" regressors observed;"
                          r" (?:missing|imputed): (.*?)(?:; missing optional (\[.*\]))?$")
 _FETCH = re.compile(r"\[fetch_inputs\] inputs in ([\d.]+) s, ([\d.]+) MB: (\{.*\})")
 _DNS = re.compile(r"\b(?:A|AAAA|HTTPS)\? ([A-Za-z0-9.-]+?)\.? ")
@@ -49,6 +50,8 @@ def model_used(log):
             used = "persistence"
         elif "[inference] xgboost done" in line:
             used = "hybrid"
+        elif "[inference] bayes model done" in line:
+            used = "bayes"
         elif "[inference] linear model done" in line:
             used = "linear"
         elif "[inference] done in" in line and used != "persistence":

@@ -38,9 +38,10 @@ Both can be started by hand: Actions → Staging → Run workflow, `job = cycle 
 
 **A cycle, per candidate** (`ci/staging/run_candidate.sh`):
 1. **Build:** `docker build` of the candidate's `src/`, with the base image from the Actions cache (`.github/actions/base-image`, shared with CI). Build time and image size are recorded.
-2. **Two variants, each in a fresh container, exactly as `local_tests/test_local.sh` runs it:**
+2. **Up to three variants, each in a fresh container, exactly as `local_tests/test_local.sh` runs it:**
    - `default`, the submitted model;
-   - `baseline` (`SWP_MODEL=baseline`), its fallback.
+   - `baseline` (`SWP_MODEL=baseline`), its fallback;
+   - `bayes` (`SWP_MODEL=bayes`), the [Bayes model](bayes_model.md) option (since 2026-11-17). It runs only for candidates whose `inference/pipeline.py` has it; older candidates skip it.
 
    Each run gets:
    - argv t0, `INFERENCE_TIMESTAMP`, `SUBMISSION_ID`;

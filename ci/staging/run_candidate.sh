@@ -9,7 +9,9 @@
 # upload endpoint (src/local_tests/mock_platform.py of main), the CPU and memory declared
 # in the candidate's submission.json, and a 900 s limit. "default" sets no SWP_MODEL (the
 # candidate's submitted model); other variants set SWP_MODEL=<variant> (e.g. baseline, the
-# fallback). The container's DNS queries are captured with tcpdump to check the declared
+# fallback). A variant other than default and baseline runs only if the candidate's
+# inference/pipeline.py names it (e.g. "bayes": older candidates lack that model, and an
+# unknown SWP_MODEL would just run the baseline). The container's DNS queries are captured with tcpdump to check the declared
 # domains. One JSON record per variant goes to OUT_DIR (ci/staging/record_run.py).
 set -uo pipefail
 
@@ -21,6 +23,15 @@ OUT=${5:?out dir}
 shift 5
 VARIANTS=("$@")
 [ ${#VARIANTS[@]} -eq 0 ] && VARIANTS=(default baseline)
+KEPT=()
+for v in "${VARIANTS[@]}"; do
+  if [ "$v" = default ] || [ "$v" = baseline ] \n     || grep -qE "[\"']$v[\"']" "$CAND_DIR/src/inference/pipeline.py" 2> /dev/null; then
+    KEPT+=("$v")
+  else
+    echo "== $NAME has no $v model: variant skipped"
+  fi
+done
+VARIANTS=("${KEPT[@]}")
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 MAIN_SRC=$(cd "$HERE/../../src" && pwd)
