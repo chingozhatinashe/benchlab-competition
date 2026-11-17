@@ -63,7 +63,7 @@ from training.folds import SELECTION as FOLDS
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "linear_model_config.json"
-CAP_QUANTILE = 0.05  # regressor cap: 5% in near-miss candidate (b); 0.005 submitted
+CAP_QUANTILE = 0.005  # regressor cap, chosen on the folds (training.regressor_cap)
 EXPERIMENTS = HERE.parent / "experiments"
 CACHE_DIR = HERE.parent / "data" / "linear_model_cache"
 MIN_GAIN = 0.005
