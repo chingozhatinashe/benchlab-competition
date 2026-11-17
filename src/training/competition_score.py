@@ -100,26 +100,25 @@ def recurrence(truth, t0s, horizon=HORIZON):
 
 # ---------------------------------------------------------------------- the metric
 def quantiles(sorted_obs, n_intervals=N_INTERVALS):
-    """The n_intervals + 1 empirical quantiles q_k = Q(k / n_intervals) of sorted data,
-    QUANTILE_METHOD "linear" (numpy's default: position k (n - 1) / n_intervals, linear
-    between neighbours), with the positions in integer arithmetic. np.quantile computes
-    them in floating point, so a quantile that falls exactly on an observation can come
-    out a hair above it (70.00000000000001), and the spec's v >= q_k would then leave
-    that observation out."""
+    """The n_intervals + 1 empirical quantiles q_k = Q(k / n_intervals), exactly as the
+    organisers' scorer computes them (scoring_demo/swp_scoring/core/metric.py: np.quantile,
+    QUANTILE_METHOD). np.quantile works in floating point, so a quantile that falls on an
+    observation can come out a hair above it and leave that observation out of v >= q_k;
+    the leaderboard does the same, so we match it (training.metric_verification)."""
     v = np.asarray(sorted_obs, dtype=float)
-    k = np.arange(n_intervals + 1)
-    lo, rem = np.divmod(k * (len(v) - 1), n_intervals)
-    hi = np.minimum(lo + 1, len(v) - 1)
-    return v[lo] + (rem / n_intervals) * (v[hi] - v[lo])
+    return np.quantile(v, np.arange(n_intervals + 1) / n_intervals, method=QUANTILE_METHOD)
 
 
 def percentile_timse(obs, fc):
-    """TIMSE of one lead's valid pairs, spec section 6 (NaN for fewer than two distinct
-    observations, where v_max - v_min is 0)."""
+    """TIMSE of one lead's valid pairs, spec section 6. If every observation is equal
+    (v_max = v_min) every interval has zero width and TIMSE is 0, as in the organisers'
+    scorer (so that lead's S is 0 and still counts in S_final); NaN without pairs."""
     obs, fc = np.asarray(obs, dtype=float), np.asarray(fc, dtype=float)
-    span = obs.max() - obs.min() if len(obs) else 0.0
-    if span <= 0:
+    if not len(obs):
         return np.nan
+    span = obs.max() - obs.min()
+    if span <= 0:
+        return 0.0
     order = np.argsort(obs, kind="stable")
     v, e2 = obs[order], (obs[order] - fc[order]) ** 2
     q = quantiles(v)

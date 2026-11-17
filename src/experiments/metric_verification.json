@@ -1,0 +1,126 @@
+{
+ "run": "2026-11-17T12:32Z",
+ "demo": {
+  "cycles": 356,
+  "obs matrices identical": true,
+  "climatology": {
+   "expected": 106.45595,
+   "theirs (rerun)": 106.45595012120596,
+   "ours": 106.45595012120596,
+   "rerun reproduces expected": true,
+   "matrix s_final rel diff": 0.0,
+   "matrix s curve max rel diff": 0.0,
+   "matrix rmse curve max rel diff": 0.0,
+   "matrix trmse curve max rel diff": 0.0
+  },
+  "persistence": {
+   "expected": 107.768121,
+   "theirs (rerun)": 107.76812071466708,
+   "ours": 107.76812071466708,
+   "rerun reproduces expected": true,
+   "matrix s_final rel diff": 0.0,
+   "matrix s curve max rel diff": 0.0,
+   "matrix rmse curve max rel diff": 0.0,
+   "matrix trmse curve max rel diff": 0.0
+  },
+  "recurrence_27d": {
+   "expected": 93.509428,
+   "theirs (rerun)": 93.50942847464535,
+   "ours": 93.50942847464535,
+   "rerun reproduces expected": true,
+   "matrix s_final rel diff": 0.0,
+   "matrix s curve max rel diff": 0.0,
+   "matrix rmse curve max rel diff": 0.0,
+   "matrix trmse curve max rel diff": 0.0
+  }
+ },
+ "synthetic": {
+  "continuous, 1448 runs": {
+   "ours s_final": 60.017382433453186,
+   "theirs s_final": 60.017382433453186,
+   "s_final rel diff": 0.0,
+   "s curve max rel diff": 0.0,
+   "rmse curve max rel diff": 0.0,
+   "trmse curve max rel diff": 0.0,
+   "leads ours": 72,
+   "leads theirs": 72
+  },
+  "1 km/s grid (ties), 1448 runs": {
+   "ours s_final": 59.75530458244821,
+   "theirs s_final": 59.75530458244821,
+   "s_final rel diff": 0.0,
+   "s curve max rel diff": 0.0,
+   "rmse curve max rel diff": 0.0,
+   "trmse curve max rel diff": 0.0,
+   "leads ours": 72,
+   "leads theirs": 72
+  },
+  "10 km/s grid (many ties), 300 runs": {
+   "ours s_final": 59.87186565813605,
+   "theirs s_final": 59.87186565813605,
+   "s_final rel diff": 0.0,
+   "s curve max rel diff": 0.0,
+   "rmse curve max rel diff": 0.0,
+   "trmse curve max rel diff": 0.0,
+   "leads ours": 72,
+   "leads theirs": 72
+  },
+  "0.1 km/s grid (ACE resolution), 1448 runs": {
+   "ours s_final": 59.993257402996846,
+   "theirs s_final": 59.993257402996846,
+   "s_final rel diff": 0.0,
+   "s curve max rel diff": 0.0,
+   "rmse curve max rel diff": 0.0,
+   "trmse curve max rel diff": 0.0,
+   "leads ours": 72,
+   "leads theirs": 72
+  },
+  "few runs (12)": {
+   "ours s_final": 58.059810581052744,
+   "theirs s_final": 58.059810581052744,
+   "s_final rel diff": 0.0,
+   "s curve max rel diff": 0.0,
+   "rmse curve max rel diff": 0.0,
+   "trmse curve max rel diff": 0.0,
+   "leads ours": 72,
+   "leads theirs": 72
+  },
+  "one lead with constant observations": {
+   "ours s_final": 58.22564014492721,
+   "theirs s_final": 58.22564014492721,
+   "s_final rel diff": 0.0,
+   "s curve max rel diff": 0.0,
+   "rmse curve max rel diff": 0.0,
+   "trmse curve max rel diff": 0.0,
+   "leads ours": 72,
+   "leads theirs": 72
+  }
+ },
+ "truth": {
+  "hours in demo files": 2928,
+  "valid in demo files": 2022,
+  "valid in our pulled truth": 2022,
+  "valid in one only": 0,
+  "values differ (both valid)": 0
+ },
+ "persistence and eval year": {
+  "eval runs": 1448,
+  "persistence differs (runs)": 1119,
+  "persistence mean abs diff km/s": 9.909185082872929,
+  "submitted model, same matrices": {
+   "ours s_final": 117.98389265936824,
+   "theirs s_final": 117.98389265936824,
+   "s_final rel diff": 0.0,
+   "s curve max rel diff": 0.0,
+   "rmse curve max rel diff": 0.0,
+   "trmse curve max rel diff": 0.0,
+   "leads ours": 72,
+   "leads theirs": 72
+  },
+  "persistence S_final, ours rule": 157.2802459553019,
+  "10% failed runs S_final, ours rule": 121.4018481204006,
+  "persistence S_final, theirs rule": 155.698164824293,
+  "10% failed runs S_final, theirs rule": 121.25050602028344,
+  "submitted model S_final": 117.98389265936824
+ }
+}
