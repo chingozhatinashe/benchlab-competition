@@ -1,5 +1,7 @@
 # The official score, and the shipped models re-scored with it
 
+> **Verified (2026-11-17)** against the organisers' published scorer (`scoring_demo/swp_scoring`): bit-identical after two edge-case fixes (np.quantile, TIMSE 0 for all-equal observations). The persistence rule differs: theirs uses the hour labelled t0. See [metric_verification.md](metric_verification.md).
+
 **What it is.** On 2026-10-25 the organisers released the competition metric, `docs/timse_implementation.pdf`. It is kept locally and not committed, like `docs/Briefing.pdf`. The metric differs from the TIMSE the models were chosen on ([timse.md](timse.md)).
 - implementation: `src/training/competition_score.py`, with the spec's invariants in `tests/test_competition_score.py`;
 - official truth: `src/training/pull_ace_1h.py`;
