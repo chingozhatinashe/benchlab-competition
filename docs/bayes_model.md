@@ -73,8 +73,15 @@ The updated contract requires the same t0 and inputs to give the same forecast, 
 |---|---|---|
 | live, same machine: two separate runs for 2026-11-17 00Z, different hash seeds and thread counts | byte-identical | byte-identical |
 | offline, two processes (`tests/test_determinism.py`, in CI) | byte-identical | byte-identical |
-| 2026-11-17 12Z: staging (Linux container) against a local rerun hours later (Windows) | at most 0.006 km/s apart | at most 0.006 km/s apart |
+| 2026-11-17 12Z: two fresh containers of the image (declared CPU and memory), run hours after t0 | byte-identical | byte-identical |
+| 2026-11-17 12Z: those containers against a local Windows rerun | identical | identical |
+| 2026-11-17 12Z: those containers against staging's run at t0 + 5 min | at most 0.006 km/s apart | at most 0.006 km/s apart |
 
-- **The live runs fetched the same inputs:** all 29 regressors, and the same GONG map as staging.
-- **The cross-platform difference is numerical,** about 1/100,000 of the speed, and equal for both models. That points to shared inputs computed in floating point, probably the PFSS solve, rather than to the Bayes part. A re-run in the same image should be identical, but that hasn't been checked yet, because Docker wasn't running.
-- **Not pinned:** `numpy`, `pandas` and `Pillow` have only lower bounds in `src/requirements.txt`. The contract asks for pinned versions.
+- **The code is deterministic,** on Windows and in the image alike. The image installs the same versions as the dev venv: numpy 2.2.6, pandas 2.3.3, Pillow 12.3.0, scipy 1.15.3.
+- **The gap to staging is in the inputs, not the code.** The ACE daily archive list for the current day keeps filling during the day:
+  - At 12:05, staging took 36,709 minutes from the archive and the newest 96 from SWPC's real-time feed.
+  - Hours later, the archive had 36,763, leaving 40 minutes to the feed.
+
+  The two sources' values for the same minute differ slightly. So a forecast re-run later than its live run can move by about 0.006 km/s.
+- **This is the contract's "same inputs" condition, not randomness.** No source choice avoids it: the real-time feed rolls forward (at 15 UTC it started at 13:02 the day before), so a later rerun has to use the archive for those minutes.
+- **Not pinned:** `numpy`, `pandas` and `Pillow` have only lower bounds in `src/requirements.txt`. The contract asks for pinned versions; pinning them to the versions above would keep the image as it is.
