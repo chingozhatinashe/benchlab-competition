@@ -10,7 +10,7 @@ This covers items (i a), (i c) and (ii) of the follow-up plan.
 - **Analysis:** `src/experiments/slow_wind.ipynb`; results in `src/experiments/slow_wind.csv`.
 
 **Result: nothing passes the 1% / 4-of-6 rule.**
-- **Best:** a tighter regressor cap (5% instead of 1%), 0.83% better on 5 of 6 folds. It goes forward to the combination step as a near-miss.
+- **Best:** a tighter regressor cap (5% instead of 0.5%), 0.83% better on 5 of 6 folds. It goes forward to the combination step as a near-miss.
 - **Slow wind:** no state term reduces the over-forecast.
 - **Loss-weight blend:** it trades slow-wind accuracy against active-wind accuracy one for one.
 
@@ -22,7 +22,7 @@ This covers items (i a), (i c) and (ii) of the follow-up plan.
   - **(i c) quiet wind:**
     - the current-sheet or X-ray term gets its own slope when last < 450 (`gate:<x>:last<450`), or both do;
     - X-ray dropped;
-    - the regressor cap at 5% (`cap_quantile` 0.05, against 0.01).
+    - the regressor cap at 5% (`cap_quantile` 0.05, against the shipped 0.005).
   - **(ii) decay:** `hinge:last>550`; the speed trend over the last 6 or 24 h (`speed_slope_6h/24h`, new window regressors); the 24-h trend × last speed.
   - **Blend:** the loss weights' share of percentile-TIMSE weights at 0.1, 0.15, 0.2 and 0.35 (shipped: 0.25). The 0.1 and 0.2 points were added after the one-fold pilot.
 - **Score:** official S_final relative to persistence, as a geometric mean over the six yearly folds, and per run regime.
