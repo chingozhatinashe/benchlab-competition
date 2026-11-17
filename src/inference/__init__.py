@@ -3,11 +3,12 @@
 from inference.pipeline import (
     FORECAST_HOURS,
     fetch_history,
+    run_bayes_forecast,
     run_forecast,
     run_linear_forecast,
     run_selected_forecast,
     run_xgboost_forecast,
 )
 
-__all__ = ["FORECAST_HOURS", "fetch_history", "run_forecast", "run_linear_forecast",
-           "run_selected_forecast", "run_xgboost_forecast"]
+__all__ = ["FORECAST_HOURS", "fetch_history", "run_bayes_forecast", "run_forecast",
+           "run_linear_forecast", "run_selected_forecast", "run_xgboost_forecast"]
