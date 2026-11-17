@@ -82,6 +82,10 @@ FITS = {"observed": bs.Config(rule="add", event_rise=False),
         # sampler study (docs, Sampler status): the smooth max, per-event rise widths
         "max": bs.Config(), "fixed_rise": bs.Config(event_rise=False)}
 FITS["fixed_rise_add"] = FITS["observed"]
+# the latent fit on every training run had two modes in the rise width (0.7 h / 1 h, below
+# the hourly data's resolution) and the decay inputs (docs/bayes_model.md): rise fixed at 1 h,
+# a tighter prior on w_D
+FITS["latent_constrained"] = replace(FITS["latent"], rise_h=1.0, w_D_sd=0.15)
 STUDY_NUTS = {"init": "map", "dense": "globals", "sequential": True, "mass_init": "hessian"}
 # the latent fit costs about 3.7 s per iteration (2024); at 200 + 100 it had ESS 118 already
 LATENT_DRAWS = {"warmup": 300, "samples": 200}
@@ -187,9 +191,12 @@ def numpyro_model(d, cfg, block="all"):
         w_tau = vec("w_tau", -3.7, 1.5, 0.5)
     mu_E = numpyro.sample("mu_E", dist.Normal(np.log(250.0), 0.5))
     w_E = numpyro.sample("w_E", dist.Normal(jnp.zeros(p - 1), 0.3))
-    mu_R = numpyro.sample("mu_R", dist.Normal(np.log(6.0), 0.5))
+    if cfg.rise_h is None:
+        mu_R = numpyro.sample("mu_R", dist.Normal(np.log(6.0), 0.5))
+    else:  # fixed (kept in the draws for the forecast)
+        mu_R = numpyro.deterministic("mu_R", jnp.asarray(np.log(cfg.rise_h)))
     mu_D = numpyro.sample("mu_D", dist.Normal(np.log(48.0), 0.5))
-    w_D = numpyro.sample("w_D", dist.Normal(jnp.zeros(p - 1), 0.3))
+    w_D = numpyro.sample("w_D", dist.Normal(jnp.zeros(p - 1), cfg.w_D_sd))
 
     gaps = (d["prev"], d["lag"], d["obs"])
     a = bs.ambient(w_a, d["amb"], jnp)

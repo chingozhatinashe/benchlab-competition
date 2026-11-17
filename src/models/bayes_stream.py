@@ -55,6 +55,10 @@ class Config:
     temp: float = 5.0  # km/s, smooth-max temperature
     latent: bool = False  # trained with the arrivals summed out (marks without event effects)
     event_rise: bool = True  # per-event rise widths; False: every event at exp(mu_R)
+    # training priors (the draws carry their result): a fixed rise width in h instead of
+    # fitting mu_R, and the prior sd of the decay inputs w_D
+    rise_h: float | None = None
+    w_D_sd: float = 0.3
 
 
 # ---------------------------------------------------------------------- shared (numpy / jax)
