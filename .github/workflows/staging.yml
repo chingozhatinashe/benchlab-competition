@@ -44,7 +44,9 @@ permissions:
 
 env:
   MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.job || (github.event.schedule == '40 3 * * *' && 'evaluate' || 'cycle') }}
-  VARIANTS: "default baseline"  # default = the candidate's submitted model; then its fallback
+  # default = the candidate's submitted model; then its fallback; bayes = the Bayes model
+  # option (SWP_MODEL=bayes), only for candidates that have it (run_candidate.sh)
+  VARIANTS: "default baseline bayes"
 
 jobs:
   candidates:

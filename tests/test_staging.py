@@ -32,6 +32,15 @@ BASELINE_LOG = """\
 [inference] t0 2026-10-26 06:00: 2159/2160 hours observed, latest 2026-10-26 05:00
 [inference] done in 2.0 s; forecast 340..380 km/s
 """
+BAYES_LOG = """[inference] bayes model: 15/16 regressors observed; imputed: ['bt_mean_1h']
+[inference] bayes model done in 7.0 s; forecast 330..370 km/s
+"""
+BAYES_FALLBACK_LOG = """[inference] bayes model: 16/16 regressors observed; imputed: none
+[inference] bayes model failed (RuntimeError('boom'))
+[inference] falling back to the linear model
+[inference] linear model: 16/16 regressors observed; imputed: none
+[inference] linear model done in 6.5 s; forecast 333..375 km/s
+"""
 PERSISTENCE_LOG = """\
 [inference] model failed (RuntimeError('x')); falling back to persistence
 [inference] using the fallback forecast
@@ -56,6 +65,11 @@ def test_log_parsing():
     assert record_run.model_used(BASELINE_LOG) == "baseline"
     assert record_run.model_used(PERSISTENCE_LOG) == "persistence"
     assert record_run.fell_back(PERSISTENCE_LOG)
+    assert record_run.model_used(BAYES_LOG) == "bayes"
+    assert record_run.regressors(BAYES_LOG) == (15, 16, ["bt_mean_1h"])
+    assert not record_run.fell_back(BAYES_LOG)
+    assert record_run.model_used(BAYES_FALLBACK_LOG) == "linear"
+    assert record_run.fell_back(BAYES_FALLBACK_LOG)
 
 
 def test_dns_and_declared_domains():
