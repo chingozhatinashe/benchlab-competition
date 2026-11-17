@@ -157,12 +157,15 @@ def evaluate(path=bm.ASSET, linear="submitted"):
     ff = tbs.fold_fit(data, TRAIN_END)
     ref = LinearModel(data.cfg).fit(data.values, ff["pos_fit"], ff["x_fit"], end=ff["start_pos"])
     shipped = LinearModel.load()
+    # the shipped linear model reads the submitted config's table ((b) has other columns)
+    sub = data if linear == "submitted" else dg.Data(linear_config())
+    assert sub.eval_t0s.equals(t0s)
     forecasts = {
         "bayes model": model.forecast(data.full_values, pos, xv),
         "reference (same table)": ref.forecast(data.full_values, pos, xv),
         "shipped linear model": shipped.forecast(
-            data.full_values, pos,
-            data.eval_table[list(shipped.config.input_features)].to_numpy(dtype=float)),
+            sub.full_values, pos,
+            sub.eval_table[list(shipped.config.input_features)].to_numpy(dtype=float)),
         "persistence": np.repeat(pers[:, None], cs.HORIZON, axis=1),
     }
     rows = {k: dg.regime_scores(f, obs, pers, regime) for k, f in forecasts.items()}
@@ -170,7 +173,8 @@ def evaluate(path=bm.ASSET, linear="submitted"):
     base = table.loc["reference (same table)"]
     rel = (table / base - 1).add_suffix(" vs reference")
     out = table.join(rel[["all vs reference"]])
-    out.to_csv(EXPERIMENTS / "bayes_model_eval_year.csv", float_format="%.6g",
+    name = "bayes_model_eval_year" + ("" if linear == "submitted" else f"_{linear}")
+    out.to_csv(EXPERIMENTS / f"{name}.csv", float_format="%.6g",
                lineterminator="\n")
     with pd.option_context("display.width", 250, "display.float_format", "{:.4f}".format,
                            "display.max_columns", 30):

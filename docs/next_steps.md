@@ -80,7 +80,7 @@ A failed run scores as persistence (+33% for that run), so live reliability coun
 5. **Retrain** the linear model with (b)'s config, score the eval year once (descriptive), run the tests and the contract checks, and time a live run (`inference.check_features`).
 6. **Staging:** tag `upload_candidate/near-miss-b`, at least several days next to (a).
 
-**(c): (b) + the Bayes parr and mean. Prepared 2026-11-17; two long runs are next, in a terminal (dev only: jax, numpyro).**
+**(c): (b) + the Bayes parr and mean. Built 2026-11-17** ([near_miss.md](near_miss.md#candidate-c-built-2026-11-17)): −1.80% on the folds as built (5 of 6; −0.38% over (b), 4 of 6); eval year −0.26% against (b) and −0.76% against the submitted model; in staging as the `bayes` variant of `upload_candidate/near-miss-c`. The steps below are done.
 - **Runtime:** the code exists. `models.bayes_model` computes parr and mean in numpy from 32 posterior draws.
 - **The candidate commit:** the linear model is (b) and the Bayes model is (c). Staging then runs (b) as `default` and (c) as `bayes`, with (c) falling back to (b).
 
@@ -175,4 +175,5 @@ These were tried, are documented, and showed no realistic path to the bar. Don't
 1. **Done 2026-11-17:** step 1 ran; (a) is in staging, not submitted ([near_miss.md](near_miss.md)). Step 5 ran: the over-forecast is a detection problem ([slow_bias.md](slow_bias.md)).
 2. **Done 2026-11-17:** the constrained fit converged; [bayes_model.md](bayes_model.md) and PR #57 are updated. The fold fits for steps 2 and 3 can start in your terminal when the laptop is free.
 3. **By 19 Nov:** the submitted model stays (step 1's (a) didn't hold on the eval year).
-4. **After the freeze:** step 1b ((b), then (c)), with staging deciding between them; step 2, then step 3; step 4 if step 2 doesn't pass. Set up step 6 at any time.
+4. **Done 2026-11-17:** step 1b; (b) and (c) are in staging (`near-miss-b`, and `near-miss-c` with (c) as its `bayes` variant).
+5. **After the freeze:** staging decides between (a), (b) and (c); step 2, then step 3; step 4 if step 2 doesn't pass. Set up step 6 at any time.
