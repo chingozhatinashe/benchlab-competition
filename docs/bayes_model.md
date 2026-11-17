@@ -84,4 +84,4 @@ The updated contract requires the same t0 and inputs to give the same forecast, 
 
   The two sources' values for the same minute differ slightly. So a forecast re-run later than its live run can move by about 0.006 km/s.
 - **This is the contract's "same inputs" condition, not randomness.** No source choice avoids it: the real-time feed rolls forward (at 15 UTC it started at 13:02 the day before), so a later rerun has to use the archive for those minutes.
-- **Not pinned:** `numpy`, `pandas` and `Pillow` have only lower bounds in `src/requirements.txt`. The contract asks for pinned versions; pinning them to the versions above would keep the image as it is.
+- **Pinned (2026-11-17):** `numpy==2.2.6`, `pandas==2.3.3` and `Pillow==12.3.0` in `src/requirements.txt` (they had only lower bounds), as the contract asks. The rebuilt image gives byte-identical forecasts for both models.
