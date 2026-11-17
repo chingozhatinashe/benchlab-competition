@@ -72,7 +72,7 @@ A failed run scores as persistence (+33% for that run), so live reliability coun
 
 (b) and (c) pass the fold rule with larger gains than (a), and they improve slow-wind runs, where (a) and the eval year are weakest. They weren't picked because each step beyond (a) wins only 3 of 6 folds, and because they need new runtime code. Building them makes them testable live, in staging, next to (a) and the submitted model.
 
-**(b): (a) + the WSA speed.**
+**(b): (a) + the WSA speed. Built 2026-11-17** ([near_miss.md](near_miss.md#candidate-b-built-2026-11-17)): eval year −0.50% against the submitted model; in staging as `upload_candidate/near-miss-b`. Steps 1–5 below are done; step 6 is running.
 1. **Runtime:** a `models.wsa` path in the live run. Each run already solves the newest GONG map for the PFSS rings (`inference.fetch_inputs`, `feature_engineering.pfss`). Add the WSA source speed and HUX propagation to Earth from those rings, read at the lead-aligned lags (`wsa_speed_lead_0h`). Use the offline calibration fitted on every training run, stored in an asset.
 2. **Calibration:** `training.wsa_model`'s offline calibration on all training runs (2016-10 → 2025-10). It is cached per fold now; fit it once more on everything.
 3. **Fallbacks:** a run without a GONG map or ring gets the training median, as the PFSS current-sheet distance does now (`training.linear_model.with_pfss`).
