@@ -64,3 +64,24 @@ On every training run, the plain latent fit (`--fit latent`) did not converge: R
 - **The setup checks out:** the reference refitted on the same table equals the shipped linear model exactly.
 
 The eval year doesn't change the choice: the model was chosen on the folds, and it stays an option. The constrained fit has not been scored on the six folds.
+
+## Repeat runs (2026-11-17)
+
+The updated contract requires the same t0 and inputs to give the same forecast, and the organisers may re-run a forecast to check. The Bayes option's only randomness is the choice of posterior draws (seed 0); the asset holds exactly the 32 draws kept, so that choice is fixed.
+
+| check | Bayes option | default (linear) |
+|---|---|---|
+| live, same machine: two separate runs for 2026-11-17 00Z, different hash seeds and thread counts | byte-identical | byte-identical |
+| offline, two processes (`tests/test_determinism.py`, in CI) | byte-identical | byte-identical |
+| 2026-11-17 12Z: two fresh containers of the image (declared CPU and memory), run hours after t0 | byte-identical | byte-identical |
+| 2026-11-17 12Z: those containers against a local Windows rerun | identical | identical |
+| 2026-11-17 12Z: those containers against staging's run at t0 + 5 min | at most 0.006 km/s apart | at most 0.006 km/s apart |
+
+- **The code is deterministic,** on Windows and in the image alike. The image installs the same versions as the dev venv: numpy 2.2.6, pandas 2.3.3, Pillow 12.3.0, scipy 1.15.3.
+- **The gap to staging is in the inputs, not the code.** The ACE daily archive list for the current day keeps filling during the day:
+  - At 12:05, staging took 36,709 minutes from the archive and the newest 96 from SWPC's real-time feed.
+  - Hours later, the archive had 36,763, leaving 40 minutes to the feed.
+
+  The two sources' values for the same minute differ slightly. So a forecast re-run later than its live run can move by about 0.006 km/s.
+- **This is the contract's "same inputs" condition, not randomness.** No source choice avoids it: the real-time feed rolls forward (at 15 UTC it started at 13:02 the day before), so a later rerun has to use the archive for those minutes.
+- **Pinned (2026-11-17):** `numpy==2.2.6`, `pandas==2.3.3` and `Pillow==12.3.0` in `src/requirements.txt` (they had only lower bounds), as the contract asks. The rebuilt image gives byte-identical forecasts for both models.
