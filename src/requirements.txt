@@ -5,9 +5,9 @@
 #   --extra-index-url https://download.pytorch.org/whl/cpu
 #   torch==2.3.1+cpu
 
-numpy>=1.26
-pandas>=2.2
-Pillow>=10.0
+numpy==2.2.6
+pandas==2.3.3
+Pillow==12.3.0
 
 # PFSS model of the GONG synoptic maps (feature_engineering.pfss): sunkit-magex (GPL-3, the
 # successor of pfsspy) on sunpy maps; the last releases that support Python 3.10.

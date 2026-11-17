@@ -5,6 +5,20 @@ history and five regressors: the interplanetary field, coronal holes in SDO/AIA 
 X-ray flares, density at L1 and the distance to the heliospheric current sheet from a PFSS
 model of GONG magnetograms.
 
+## Public summary
+
+We forecast the hourly solar wind speed at L1 for the next 72 hours with a per-lead linear model: one ridge regression for each lead hour, predicting the change from the last observed speed.
+
+**Inputs**, all published before the forecast time:
+- **The speed history:** the last hourly speed, and the speed about one and a half solar rotations earlier (27 and 13.5 days), since high-speed streams from coronal holes tend to recur.
+- **Coronal holes:** the area of dark coronal holes near the central meridian in SDO/AIA 193 Å images. Each lead hour uses the image from about 3 days before it, roughly the travel time of the wind from the Sun.
+- **The heliospheric current sheet:** the angular distance to it, at the solar longitude that faced Earth about 3 days earlier. It comes from a potential-field source-surface model of the latest GONG magnetogram, solved at every run.
+- **In-situ and flare data:** the interplanetary magnetic field strength and plasma density at L1, and the peak X-ray flare flux of the last 3 days.
+
+**Training:** on 2016–2025, with a loss that blends squared error with the competition's tail-weighted error. Every choice of inputs and settings was made on six yearly walk-forward folds with the official metric, and a final year was held out for reporting. On the folds the model scores about 0.78 of persistence.
+
+**Robustness:** a missing input takes its training median, or a submodel fitted without it. If the model fails, a speed-only baseline (persistence blended with solar-rotation recurrence) takes over, so every run returns a forecast. The model is deterministic: the same time and inputs give the same forecast.
+
 ## The submitted model
 
 The forecast is a per-lead linear model (`models/linear_model.py`,

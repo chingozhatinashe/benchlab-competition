@@ -30,7 +30,7 @@
 | 2 | Gated linear / Bayes-official combination | 1–2 days, plus the fold fits | Moderate to good | No |
 | 3 | Bayes official path as a regressor | ~½ day once the fold fits exist | Low to moderate | Only if the fold fits exist |
 | 4 | Residual diffusion model, with a direct neural control | 2–4 days to a pilot | About a coin flip | No |
-| 5 | Is the slow-wind bias optimal for the metric? | ~2 h, analysis only | — | Yes |
+| 5 | Is the slow-wind bias optimal for the metric? | **Done 2026-11-17:** no; detection is the problem (oracle −1.8% to −2.5%, 6 of 6; realistic indicator 0%) | — | — |
 | 6 | Archive live WSA-Enlil | ~1 h to set up | — (pays off after the competition) | Set-up only |
 
 ### 1. Near-miss combination (pre-registered)
@@ -132,6 +132,12 @@ The loss blend trades slow-wind accuracy against active-wind accuracy one for on
 - **If the oracle helps but the realistic version doesn't:** the problem is detection, which points back to step 2's gate.
 - **Untested either way:** a target transform such as log speed.
 
+**Result (2026-11-17, [slow_bias.md](slow_bias.md)):** by the reading fixed before running, the oracle passes and the realistic indicator fails: the problem is detecting slow runs.
+- **The oracle:** shifting only the true slow-wind runs down, by a shift chosen on the training runs, is 1.8% better (one shift) to 2.5% better (per lead) on all six folds, through RMSE, with TRMSE unchanged. So the metric doesn't reward the over-forecast.
+- **Last speed < 450:** it chooses no shift; only 41% of the runs it flags stay slow.
+- **A global shift:** worse (+3% at 20 km/s); the current overall lean is right.
+- **The ceiling is about 2–2.5%** overall, even with perfect detection. That bounds the slow-wind part of step 2, whose gate is a realistic detector.
+
 ### 6. Archive live WSA-Enlil
 
 `json/enlil_time_series.json` on SWPC is the only live input that forecasts CME arrivals. It can't be trained on, because there is no archive ([features.md](features.md)). A scheduled pull every 6 hours, stored with the staging records, would build the archive for future model work. It doesn't help this competition.
@@ -151,7 +157,7 @@ These were tried, are documented, and showed no realistic path to the bar. Don't
 
 ## Order of work
 
-1. **Done 2026-11-17:** step 1 ran; (a) is in staging, not submitted ([near_miss.md](near_miss.md)). Next: step 5's oracle check.
+1. **Done 2026-11-17:** step 1 ran; (a) is in staging, not submitted ([near_miss.md](near_miss.md)). Step 5 ran: the over-forecast is a detection problem ([slow_bias.md](slow_bias.md)).
 2. **Done 2026-11-17:** the constrained fit converged; [bayes_model.md](bayes_model.md) and PR #57 are updated. The fold fits for steps 2 and 3 can start in your terminal when the laptop is free.
 3. **By 19 Nov:** the submitted model stays (step 1's (a) didn't hold on the eval year).
 4. **After the freeze:** step 1b ((b), then (c)), with staging deciding between them; step 2, then step 3; step 4 if step 2 doesn't pass. Set up step 6 at any time.

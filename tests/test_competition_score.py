@@ -39,14 +39,16 @@ def test_exactly_100_intervals_with_velocity_width_weights():
     fc[-1] += 10.0  # one error, only in the top pair
     # M_k = 100 / (101 - k) for the set v >= q_k = 10 k; TIMSE = sum 10 M_k / 1000
     expected = sum(10.0 * 100.0 / (101 - k) for k in range(100)) / 1000.0
-    assert cs.percentile_timse(obs, fc) == pytest.approx(expected)
+    # np.quantile (the organisers' scorer, which we match) puts 8 of these quantiles a hair
+    # above their observation, dropping it from v >= q_k: 0.03% off the exact formula
+    assert cs.percentile_timse(obs, fc) == pytest.approx(expected, rel=1e-3)
     # with uneven spacing, velocity widths differ from equal 1/100 weights
     obs = 300.0 + np.arange(101, dtype=float) ** 2 / 10.0  # widths grow with speed
     fc = obs.copy()
     fc[-1] += 10.0
     widths = np.diff(obs) / (obs[-1] - obs[0])
     mse = np.array([100.0 / (101 - k) for k in range(100)])
-    assert cs.percentile_timse(obs, fc) == pytest.approx(np.sum(widths * mse))
+    assert cs.percentile_timse(obs, fc) == pytest.approx(np.sum(widths * mse), rel=1e-3)
     assert cs.percentile_timse(obs, fc) != pytest.approx(mse.mean(), rel=1e-3)
     assert len(cs.quantiles(obs)) == cs.N_INTERVALS + 1 == 101
 
@@ -177,3 +179,10 @@ def test_model_loss_weights_reproduce_the_official_timse():
     assert np.allclose(np.nanmean(np.where(np.isfinite(y), ow, np.nan), axis=0), 1.0)
     assert np.all(ow[~np.isfinite(y)] == 0)
     assert np.allclose(official_weights(y, 0.0)[np.isfinite(y)], 1)
+
+
+def test_constant_observations_give_zero_timse():
+    # as the organisers' scorer: zero-width intervals only, so TIMSE 0 and S 0 for that lead
+    obs = np.full(20, 400.0)
+    assert cs.percentile_timse(obs, obs + 5.0) == 0.0
+    assert np.isnan(cs.percentile_timse(np.array([]), np.array([])))
