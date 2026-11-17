@@ -35,9 +35,10 @@ Data fixes (with_fixes), applied to every config that is scored or trained:
 - the coronal-hole strip falls back to an image 6 h, then 12 h older
   (feature_engineering.windows), and is "optional": a run still missing it is
   forecast by a submodel fitted without it, not by imputing the median;
-- each regressor is capped at its training [0.5%, 99.5%] quantiles (CAP_QUANTILE,
-  chosen on the folds by training.regressor_cap), so an out-of-range input such as
-  the 61 nT Bt of 2026-01-20 isn't extrapolated.
+- each regressor is capped at its training [5%, 95%] quantiles (CAP_QUANTILE; 0.5%
+  from training.regressor_cap until 2026-11-17, then 5% with the 1 h density window,
+  training.near_miss), so an out-of-range input such as the 61 nT Bt of 2026-01-20
+  isn't extrapolated.
 """
 
 import argparse
@@ -63,7 +64,7 @@ from training.folds import SELECTION as FOLDS
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "linear_model_config.json"
-CAP_QUANTILE = 0.005  # regressor cap, chosen on the folds (training.regressor_cap)
+CAP_QUANTILE = 0.05  # regressor cap, chosen on the folds (training.near_miss; was 0.005)
 EXPERIMENTS = HERE.parent / "experiments"
 CACHE_DIR = HERE.parent / "data" / "linear_model_cache"
 MIN_GAIN = 0.005
