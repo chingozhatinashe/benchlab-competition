@@ -69,4 +69,6 @@ None of this changes a model choice: every reported score moves by less than 10�
 
   Model choices compare variants against the same persistence, so none would change.
 
-**Open decision:** switch `competition_score.persistence` to their rule (lag 0, 72 h look-back), or keep ours and note the difference. Switching makes the staging scores match the leaderboard exactly, including failed runs. The ratios in the docs would then differ by about 1% from the earlier ones.
+**Decision (user, 2026-11-17): keep our rule.** Persistence stays the latest valid hour labelled ≤ t0 − 1 h (`competition_score.PERSISTENCE_LAG`). That follows the spec's "no observation after t0", and it keeps every reported ratio comparable with the earlier ones.
+- **Where staging differs from the leaderboard:** in persistence scores, and in failed runs (scored as persistence). Under the organisers' rule both would score about 1% better.
+- **Model scores are unaffected.**
