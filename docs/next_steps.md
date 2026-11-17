@@ -29,7 +29,7 @@
 | 2 | Gated linear / Bayes-official combination | 1–2 days, plus the fold fits | Moderate to good | No |
 | 3 | Bayes official path as a regressor | ~½ day once the fold fits exist | Low to moderate | Only if the fold fits exist |
 | 4 | Residual diffusion model, with a direct neural control | 2–4 days to a pilot | About a coin flip | No |
-| 5 | Is the slow-wind bias optimal for the metric? | ~2 h, analysis only | — | Yes |
+| 5 | Is the slow-wind bias optimal for the metric? | **Done 2026-11-17:** no; detection is the problem (oracle −1.8% to −2.5%, 6 of 6; realistic indicator 0%) | — | — |
 | 6 | Archive live WSA-Enlil | ~1 h to set up | — (pays off after the competition) | Set-up only |
 
 ### 1. Near-miss combination (pre-registered)
@@ -104,6 +104,12 @@ The loss blend trades slow-wind accuracy against active-wind accuracy one for on
 - **If even the oracle doesn't help:** the bias is optimal for the metric. Stop chasing it, and drop slow-wind work from future plans.
 - **If the oracle helps but the realistic version doesn't:** the problem is detection, which points back to step 2's gate.
 - **Untested either way:** a target transform such as log speed.
+
+**Result (2026-11-17, [slow_bias.md](slow_bias.md)):** by the reading fixed before running, the oracle passes and the realistic indicator fails: the problem is detecting slow runs.
+- **The oracle:** shifting only the true slow-wind runs down, by a shift chosen on the training runs, is 1.8% better (one shift) to 2.5% better (per lead) on all six folds, through RMSE, with TRMSE unchanged. So the metric doesn't reward the over-forecast.
+- **Last speed < 450:** it chooses no shift; only 41% of the runs it flags stay slow.
+- **A global shift:** worse (+3% at 20 km/s); the current overall lean is right.
+- **The ceiling is about 2–2.5%** overall, even with perfect detection. That bounds the slow-wind part of step 2, whose gate is a realistic detector.
 
 ### 6. Archive live WSA-Enlil
 
