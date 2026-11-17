@@ -140,6 +140,11 @@ def pfss_candidates():
     return specs + [WindowSpec(s, "at", 0) for s in PFSS_SCALARS]
 
 
+def wsa_candidates():
+    """The WSA/HUX speed at the PFSS lags (not in `candidates`)."""
+    return [WindowSpec(WSA_SIGNAL, "at", h) for h in PFSS_LAG_HOURS]
+
+
 def uses_pfss(specs):
     return any(s.signal in PFSS_SIGNALS for s in specs)
 
