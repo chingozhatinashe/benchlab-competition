@@ -1,5 +1,9 @@
 [
  {
+  "name": "bayes-option",
+  "sha": "65b376f304363b27146d5b439e613d31332e809d"
+ },
+ {
   "name": "linear-v2",
   "sha": "969671a1954f5dffbb2b704367eddbe09d92c5f8"
  },
