@@ -31,6 +31,7 @@ from models import bayes_model as bm
 from models.linear_model import LinearModel
 from training import bayes_stream as tbs
 from training import competition_score as cs
+from training import linear_model as tl
 from training import model_diagnostics as dg
 from training.datasets import DATA_START, TRAIN_END
 
@@ -46,19 +47,32 @@ def log(msg):
     print(msg, flush=True)
 
 
-def fit_label(warmup, samples, seed, fit=FIT):
+def linear_config(linear="submitted"):
+    """The linear config the model builds on: the submitted one, or near-miss candidate "b"
+    (training.near_miss; the stream model then takes (b)'s regressors too)."""
+    cfg = tl.with_fixes(tl.load_config())
+    if linear == "submitted":
+        return cfg
+    from training import near_miss as nm
+
+    return nm.candidate_config(linear, cfg)
+
+
+def fit_label(warmup, samples, seed, fit=FIT, linear="submitted"):
     """The cache name of a fit: its FITS key alone at the study's settings (LATENT_DRAWS,
-    seed 0)."""
+    seed 0) on the submitted regressors."""
+    label = fit if linear == "submitted" else f"{fit}_{linear}"
     if (warmup, samples, seed) == (tbs.LATENT_DRAWS["warmup"], tbs.LATENT_DRAWS["samples"], 0):
-        return fit
-    return f"{fit}_w{warmup}_s{samples}_seed{seed}"
+        return label
+    return f"{label}_w{warmup}_s{samples}_seed{seed}"
 
 
-def latent_fit(ff, refit=False, warmup=None, samples=None, seed=0, fit=FIT):
+def latent_fit(ff, refit=False, warmup=None, samples=None, seed=0, fit=FIT,
+               linear="submitted"):
     """(draws, info) of the latent fit on the training windows, cached per setting."""
     warmup = warmup or tbs.LATENT_DRAWS["warmup"]
     samples = samples or tbs.LATENT_DRAWS["samples"]
-    label = fit_label(warmup, samples, seed, fit)
+    label = fit_label(warmup, samples, seed, fit, linear)
     path, info_path = CACHE_DIR / f"{label}_draws.npz", CACHE_DIR / f"{label}_fit.json"
     if path.exists() and info_path.exists() and not refit:
         log(f"latent fit from the cache ({path})")
@@ -103,13 +117,14 @@ def build(data, ff, draws, fit=FIT):
     return model
 
 
-def train(out=bm.ASSET, refit=False, warmup=None, samples=None, seed=0, fit=FIT):
+def train(out=bm.ASSET, refit=False, warmup=None, samples=None, seed=0, fit=FIT,
+          linear="submitted"):
     started = time.perf_counter()
-    data = dg.Data()
+    data = dg.Data(linear_config(linear))
     ff = tbs.fold_fit(data, TRAIN_END)
     log(f"data ready in {time.perf_counter() - started:.0f} s: {ff['wininfo']}, "
         f"{len(ff['fit6'])} training runs")
-    draws, info = latent_fit(ff, refit, warmup, samples, seed, fit)
+    draws, info = latent_fit(ff, refit, warmup, samples, seed, fit, linear)
     log(f"latent fit: {info['fit s']:.0f} s, R-hat max {info['r_hat max']:.3f}, "
         f"ESS min {info['ess min']:.0f}, divergences {info['divergences']:.0f}")
     t = time.perf_counter()
@@ -122,16 +137,16 @@ def train(out=bm.ASSET, refit=False, warmup=None, samples=None, seed=0, fit=FIT)
                       **{k: info.get(k, d) for k, d in (
                           ("warmup", tbs.LATENT_DRAWS["warmup"]),
                           ("samples", tbs.LATENT_DRAWS["samples"]), ("seed", 0),
-                          ("fit", fit))}}
+                          ("fit", fit))}, "linear": linear}
     model.save(out)
     log(f"linear part fitted in {time.perf_counter() - t:.0f} s; wrote {out} "
         f"({Path(out).stat().st_size / 1e3:.0f} kB)")
     return model
 
 
-def evaluate(path=bm.ASSET):
+def evaluate(path=bm.ASSET, linear="submitted"):
     t = time.perf_counter()
-    data = dg.Data()
+    data = dg.Data(linear_config(linear))
     model = bm.BayesModel.load(path)
     t0s = data.eval_t0s
     pos = data.full.index.get_indexer(t0s)
@@ -142,12 +157,15 @@ def evaluate(path=bm.ASSET):
     ff = tbs.fold_fit(data, TRAIN_END)
     ref = LinearModel(data.cfg).fit(data.values, ff["pos_fit"], ff["x_fit"], end=ff["start_pos"])
     shipped = LinearModel.load()
+    # the shipped linear model reads the submitted config's table ((b) has other columns)
+    sub = data if linear == "submitted" else dg.Data(linear_config())
+    assert sub.eval_t0s.equals(t0s)
     forecasts = {
         "bayes model": model.forecast(data.full_values, pos, xv),
         "reference (same table)": ref.forecast(data.full_values, pos, xv),
         "shipped linear model": shipped.forecast(
-            data.full_values, pos,
-            data.eval_table[list(shipped.config.input_features)].to_numpy(dtype=float)),
+            sub.full_values, pos,
+            sub.eval_table[list(shipped.config.input_features)].to_numpy(dtype=float)),
         "persistence": np.repeat(pers[:, None], cs.HORIZON, axis=1),
     }
     rows = {k: dg.regime_scores(f, obs, pers, regime) for k, f in forecasts.items()}
@@ -155,7 +173,8 @@ def evaluate(path=bm.ASSET):
     base = table.loc["reference (same table)"]
     rel = (table / base - 1).add_suffix(" vs reference")
     out = table.join(rel[["all vs reference"]])
-    out.to_csv(EXPERIMENTS / "bayes_model_eval_year.csv", float_format="%.6g",
+    name = "bayes_model_eval_year" + ("" if linear == "submitted" else f"_{linear}")
+    out.to_csv(EXPERIMENTS / f"{name}.csv", float_format="%.6g",
                lineterminator="\n")
     with pd.option_context("display.width", 250, "display.float_format", "{:.4f}".format,
                            "display.max_columns", 30):
@@ -172,14 +191,16 @@ def main(argv=None):
     parser.add_argument("--warmup", type=int, help="per chain (default: LATENT_DRAWS, 300)")
     parser.add_argument("--samples", type=int, help="per chain (default: LATENT_DRAWS, 200)")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--linear", choices=("submitted", "b"), default="submitted",
+                        help="the linear config to build on (b: near-miss candidate (b))")
     parser.add_argument("--fit", default=FIT, choices=[k for k, c in tbs.FITS.items() if c.latent],
                         help="the latent fit's variant (training.bayes_stream.FITS)")
     args = parser.parse_args(argv)
     if args.command == "train":
         train(refit=args.refit, warmup=args.warmup, samples=args.samples, seed=args.seed,
-              fit=args.fit)
+              fit=args.fit, linear=args.linear)
     else:
-        evaluate()
+        evaluate(linear=args.linear)
 
 
 if __name__ == "__main__":

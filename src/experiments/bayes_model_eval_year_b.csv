@@ -1,0 +1,5 @@
+,all,CME,stream arrival,fast stream,intermediate,slow wind,all vs reference
+bayes model,117.083,142.206,99.6687,86.6106,66.3887,61.3784,-0.00261487
+reference (same table),117.39,143.509,98.5882,83.6703,66.1093,61.9583,0
+shipped linear model,117.984,140.939,104.408,82.984,69.0991,61.3438,0.00505721
+persistence,157.28,190.79,150.84,106.379,90.8283,50.176,0.339807

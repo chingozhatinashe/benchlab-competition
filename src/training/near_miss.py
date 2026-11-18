@@ -3,6 +3,7 @@
     python -m training.near_miss --pilot --folds 2024   # one fold, timed, not cached
     python -m training.near_miss [--max-seconds N]      # every fold; resumable
     python -m training.near_miss --summary
+    python -m training.near_miss --fit-c [--folds 2024]  # (c)'s constrained fold fits, ~2 h each
 
 Step 1 of docs/next_steps.md. Each near-miss was at least 0.3% better on at least 4 of 6
 folds alone, short of the 1% bar:
@@ -21,6 +22,10 @@ not more than 1% worse; the smallest passing set wins. The parts were chosen on 
 so the summary also reports, for each fold, the candidate the rule picks on the other five.
 The eval year is not used. The WSA calibration comes from training.wsa_model's cache and the
 Bayes draws from training.bayes_stream's (run those first).
+"(c) constrained" (step 1b, docs/next_steps.md): (c) as it would ship, its Bayes features from
+constrained latent fold fits (training.bayes_stream FITS["latent_constrained"]) whose stream
+model takes (b)'s regressors, with each fold's own WSA calibration. --fit-c makes the fits
+(cached in near_miss_cache/c_folds/); a later run scores the variant for every fitted fold.
 Results: src/experiments/near_miss.csv (cache: src/data/near_miss_cache/).
 """
 
@@ -39,6 +44,7 @@ from models import wsa
 from models.bayes_model import signal_name
 from models.linear_model import LinearModel
 from training import bayes_features as bf
+from training import bayes_stream as tbs
 from training import competition_score as cs
 from training import model_diagnostics as dg
 from training import pull_features as pf
@@ -66,6 +72,12 @@ CANDIDATES = {
     "(c) (b) + bayes": ("cap 5%", "density 1h", "wsa", "bayes"),
 }
 VARIANTS = {"reference": (), **{p: (p,) for p in PARTS}, **CANDIDATES}
+SHORT = dict(zip("abc", CANDIDATES, strict=True))  # candidate_config("b") etc.
+# (c) as it would ship: the Bayes features from constrained latent fold fits whose stream
+# model takes (b)'s regressors (fit-c), not the plain fits on the reference's regressors
+C_FIT = "latent_constrained"
+C_NAME = "(c) constrained"
+C_DIR = CACHE_DIR / "c_folds"
 
 
 def log(msg):
@@ -90,6 +102,11 @@ def variant_config(cfg, parts):
             cfg = replace(cfg, cap_quantile=spec["cap_quantile"])
     return replace(cfg, features=tuple(features),
                    optional=tuple(f for f in cfg.optional if f in features))
+
+
+def candidate_config(name, cfg):
+    """The config of candidate "a", "b" or "c" (cfg: any submitted config)."""
+    return variant_config(reference_config(cfg), CANDIDATES[SHORT[name]])
 
 
 class Data(dg.Data):
@@ -120,8 +137,84 @@ def wsa_frame(data, year, t0s):
     return pd.DataFrame(tw.wsa_columns(data.wsa, rows, params), index=t0s)
 
 
+def c_fold(data, start):
+    """tbs.fold_fit with the stream model on (b)'s regressors: data.table gets the fold's
+    WSA columns (its own calibration, fit-run median where there is no ring)."""
+    year = f"{start:%Y}"
+    cfg_b = candidate_config("b", data.cfg)
+    frame = wsa_frame(data, year, data.runs6)
+    fit6 = data.runs6[data.runs6 < start]
+    frame = frame.fillna(frame.loc[fit6].median())
+    saved = data.cfg, data.table
+    data.cfg = cfg_b
+    data.table = data.table.drop(columns=list(frame), errors="ignore").join(
+        frame.astype(np.float32))
+    try:
+        return tbs.fold_fit(data, start), cfg_b, data.table
+    finally:
+        data.cfg, data.table = saved
+
+
+def c_paths(year):
+    return C_DIR / f"{year}_{C_FIT}_draws.npz", C_DIR / f"{year}_{C_FIT}_fit.json"
+
+
+def fit_c(years=None):
+    """The constrained latent fold fits for (c), one fold at a time, cached (resumable)."""
+    import numpyro
+
+    numpyro.enable_x64()  # as the study (STUDY_NUTS)
+    data = Data()
+    C_DIR.mkdir(parents=True, exist_ok=True)
+    for start, _ in YEARLY:
+        year = f"{start:%Y}"
+        draws_path, info_path = c_paths(year)
+        if (years is not None and start.year not in years) or draws_path.exists():
+            continue
+        t = time.perf_counter()
+        ff, _, _ = c_fold(data, start)
+        log(f"{year}: {ff['wininfo']}; fitting {C_FIT} ...")
+        draws, info = tbs.study_fit(ff["d"], tbs.FITS[C_FIT])
+        info = {k: float(v) if isinstance(v, (int, float, np.floating, np.integer)) else v
+                for k, v in info.items()}
+        info["fit s"] = time.perf_counter() - t
+        np.savez_compressed(draws_path, **draws)
+        info_path.write_text(json.dumps(info), encoding="utf-8")
+        log(f"{year}: {info['fit s']:.0f} s, R-hat max {info['r_hat max']:.3f}, ESS min "
+            f"{info['ess min']:.0f}, divergences {info['divergences']:.0f}")
+
+
+def score_c(data, start, end):
+    """(c) constrained on the fold: (b)'s config + parr and mean from the fit-c draws."""
+    year = f"{start:%Y}"
+    ff, cfg_b, table = c_fold(data, start)
+    draws = dict(np.load(c_paths(year)[0]))
+    val = data.runs6[(data.runs6 >= start) & (data.runs6 < end)]
+    cols, model = list(cfg_b.input_features), ff["model"]
+    x_val = table.loc[val, cols].to_numpy(dtype=float)
+    pos_val = data.series.index.get_indexer(val)
+    inp_fit = model.prepare(data.values, ff["pos_fit"], ff["x_fit"])
+    inp_val = model.prepare(data.values, pos_val, x_val)
+    cfg = tbs.FITS[C_FIT]
+    f_fit = bf.feature_frame(bf.features_in_blocks(draws, inp_fit, cfg), ff["fit6"])
+    f_val = bf.feature_frame(bf.features_in_blocks(draws, inp_val, cfg), val)
+    cfg_c = replace(cfg_b, features=(*cfg_b.features, *BAYES))
+    names = list(cfg_c.input_features)
+    fit_tab = ff["table"].loc[ff["fit6"]].join(f_fit)
+    lin = LinearModel(cfg_c).fit(data.values, ff["pos_fit"], fit_tab[names].to_numpy(float),
+                                 end=ff["start_pos"])
+    f = lin.forecast(data.values, pos_val, table.loc[val].join(f_val)[names].to_numpy(float))
+    obs, pers = cs.verifying(data.truth, val), cs.persistence(data.truth, val)
+    regime = data.run_regimes(val)
+    row = dg.regime_scores(f, obs, pers, regime)
+    row["residual slow wind"] = float(np.nanmean((obs - f)[regime == "slow wind"]))
+    return row
+
+
 def score_fold(data, start, end, names, timer):
     year = f"{start:%Y}"
+    if names == [C_NAME]:
+        return {C_NAME: score_c(data, start, end)}
     t = time.perf_counter()
     parts = bf.fold_parts(data, start, end)  # the Bayes features of the latent fold fit
     ff, val = parts["ff"], parts["val"]
@@ -139,6 +232,9 @@ def score_fold(data, start, end, names, timer):
                                                      obs, pers)["s_final"]}
     for name in names:
         t = time.perf_counter()
+        if name == C_NAME:
+            out[name] = score_c(data, start, end)
+            continue
         cfg = variant_config(data.cfg, VARIANTS[name])
         cols = list(cfg.input_features)
         lin = LinearModel(cfg).fit(data.values, ff["pos_fit"], fit_tab[cols].to_numpy(float),
@@ -166,6 +262,8 @@ def run(years=None, pilot=False, max_seconds=None):
         path = CACHE_DIR / f"{year}.json"
         row = {} if pilot or not path.exists() else json.loads(path.read_text("utf-8"))
         todo = [n for n in names if n not in row]
+        if C_NAME not in row and c_paths(year)[0].exists():
+            todo.append(C_NAME)  # once fit-c has fitted this fold
         if todo:
             if max_seconds and time.perf_counter() - started > max_seconds:
                 log("time limit reached; run the same command again to continue")
@@ -203,7 +301,7 @@ def pick(rows, years):
 
 def summarize(rows, pilot=False):
     years = sorted(rows)
-    names = [n for n in VARIANTS if all(n in rows[y] for y in years)]
+    names = [n for n in (*VARIANTS, C_NAME) if all(n in rows[y] for y in years)]
     out, long = {}, []
     for name in names:
         gain, won, slow_g, keep = judge(rows, years, name)
@@ -244,8 +342,13 @@ def main(argv=None):
     parser.add_argument("--folds", type=int, nargs="*")
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--summary", action="store_true")
+    parser.add_argument("--fit-c", action="store_true",
+                        help="the constrained latent fold fits for (c) (NUTS, ~2 h per fold, "
+                             "dev only: jax, numpyro); resumable; --folds to pick")
     args = parser.parse_args(argv)
-    if args.summary:
+    if args.fit_c:
+        fit_c(args.folds)
+    elif args.summary:
         summarize({p.stem: json.loads(p.read_text(encoding="utf-8"))
                    for p in sorted(CACHE_DIR.glob("*.json"))})
     else:

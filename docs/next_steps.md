@@ -80,11 +80,26 @@ A failed run scores as persistence (+33% for that run), so live reliability coun
 5. **Retrain** the linear model with (b)'s config, score the eval year once (descriptive), run the tests and the contract checks, and time a live run (`inference.check_features`).
 6. **Staging:** tag `upload_candidate/near-miss-b`, at least several days next to (a).
 
-**(c): (b) + the Bayes parr and mean.**
-1. **Runtime:** the code exists. `models.bayes_model` computes parr and mean in numpy from 32 posterior draws, and `SWP_MODEL=bayes` runs it in staging. (c) is the same with (b)'s regressors and cap.
-2. **Refit:** the constrained latent fit (`training.bayes_model train --fit latent_constrained`, ~45 min, in a terminal) on (b)'s regressors, since the draws depend on the stream model's inputs. Then refit the linear part with (c)'s config.
-3. **Check on the folds first:** the six-fold (c) used the plain latent fold fits; rerun `training.near_miss` with the constrained fold fits (~2 h per fold) before trusting −1.92% for the shipped version.
-4. **Then** the eval year once, the tests, and staging as `upload_candidate/near-miss-c`.
+**(c): (b) + the Bayes parr and mean. Built 2026-11-17** ([near_miss.md](near_miss.md#candidate-c-built-2026-11-17)): −1.80% on the folds as built (5 of 6; −0.38% over (b), 4 of 6); eval year −0.26% against (b) and −0.76% against the submitted model; in staging as the `bayes` variant of `upload_candidate/near-miss-c`. The steps below are done.
+- **Runtime:** the code exists. `models.bayes_model` computes parr and mean in numpy from 32 posterior draws.
+- **The candidate commit:** the linear model is (b) and the Bayes model is (c). Staging then runs (b) as `default` and (c) as `bayes`, with (c) falling back to (b).
+
+1. **The fold check (~2 h per fold, resumable, one fold at a time):**
+
+       .venv/Scripts/python -m training.near_miss --fit-c                # all six folds, ~12 h
+       .venv/Scripts/python -m training.near_miss --fit-c --folds 2024   # or one fold at a time
+
+   - **What it fits:** constrained latent fold fits whose stream model takes (b)'s regressors, with each fold's own WSA calibration. They are cached in `src/data/near_miss_cache/c_folds/`.
+   - **Then** `python -m training.near_miss` scores "(c) constrained" for every fitted fold, next to the cached variants.
+   - **This replaces −1.92%,** which came from plain fits on the reference's regressors, with the version that would ship.
+   - **Keep (c) only if it passes the fold rule on its own:** more than 1% better than the reference, at least 4 of 6 folds, slow-wind runs at most 1% worse. Report its step over (b) too.
+2. **The final model (~45 min):**
+
+       .venv/Scripts/python -m training.bayes_model train --linear b
+
+   - **What it does:** the constrained latent fit on every training run, with (b)'s regressors, cached as `latent_constrained_b`. Then the linear part with (c)'s config, written to `src/assets/bayes_model.json`.
+   - **Where:** run it on the `near_miss_c` branch. The asset goes on the candidate commit only.
+3. **Then:** the R-hat check, `training.bayes_model evaluate --linear b` (the eval year, once), the tests, and staging as `upload_candidate/near-miss-c`.
 
 **Decide from staging,** not the folds alone: (a), (b) and (c) passed the same fold rule, and the eval year disagreed for (a). A week or more of live scores, next to the submitted model, is the evidence that's left.
 
@@ -160,4 +175,5 @@ These were tried, are documented, and showed no realistic path to the bar. Don't
 1. **Done 2026-11-17:** step 1 ran; (a) is in staging, not submitted ([near_miss.md](near_miss.md)). Step 5 ran: the over-forecast is a detection problem ([slow_bias.md](slow_bias.md)).
 2. **Done 2026-11-17:** the constrained fit converged; [bayes_model.md](bayes_model.md) and PR #57 are updated. The fold fits for steps 2 and 3 can start in your terminal when the laptop is free.
 3. **By 19 Nov:** the submitted model stays (step 1's (a) didn't hold on the eval year).
-4. **After the freeze:** step 1b ((b), then (c)), with staging deciding between them; step 2, then step 3; step 4 if step 2 doesn't pass. Set up step 6 at any time.
+4. **Done 2026-11-17:** step 1b; (b) and (c) are in staging (`near-miss-b`, and `near-miss-c` with (c) as its `bayes` variant).
+5. **After the freeze:** staging decides between (a), (b) and (c); step 2, then step 3; step 4 if step 2 doesn't pass. Set up step 6 at any time.

@@ -149,7 +149,9 @@ def contributions(model, values, positions, regressors):
 class Data:
     """Speed series, truth, run tables and event flags, built once."""
 
-    def __init__(self):
+    def __init__(self, cfg=None):
+        """cfg: the linear config whose regressors the tables hold (default: the submitted
+        one, with the data fixes)."""
         from training import pull_ace_1h, pull_gong
 
         self.series = load_train()
@@ -159,9 +161,11 @@ class Data:
         self.runs6 = tl.training_runs(self.series)
         self.eval_t0s = forecast_times()
         self.truth = pull_ace_1h.load()
-        self.cfg = tl.with_fixes(tl.load_config())
+        self.cfg = cfg or tl.with_fixes(tl.load_config())
         names = self.cfg.input_features
-        self.pfss = [n for n in names if n.startswith("pfss_")]
+        # ring columns (PFSS, and the WSA speed computed from the ring), from the GONG history
+        self.pfss = [n for n in names
+                     if windows.WindowSpec.parse(n).signal in windows.PFSS_SIGNALS]
         base = [n for n in names if n not in self.pfss]
         hourly = tx.feature_table(tx.hourly_runs(self.series), base,
                                   ch.CACHE_DIR / "table_hourly.pkl")
