@@ -25,12 +25,20 @@ availability rules as feature_engineering.build:
               longitude that faced Earth `lag` hours before t0 ("pfss_<var>_at_<L>h", var in
               pfss.RING_VARS); the map's scalars as "pfss_<scalar>_at_0h" (pfss_candidates;
               not in `candidates`)
+    WSA       "wsa_speed_at_<L>h": the WSA/HUX speed at 1 AU (models.wsa) from the same ring,
+              read at the longitude that faced Earth L hours before t0 plus the calibrated
+              shift; the calibration is assets/wsa_calibration.json (training.wsa_model
+              calibrate). NaN without a ring with at least half its longitudes, or without
+              the asset (the model then imputes its training median)
 
 A window statistic needs at least half its hours (or days), otherwise it is NaN.
 """
 
+import functools
+import json
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -57,7 +65,9 @@ PROTON_FLOOR = 1.0  # pfu: quiet-time levels differ by satellite and file versio
 PROTON_LATENCY = pd.Timedelta(minutes=10)
 PFSS_RING = tuple(f"pfss_{v}" for v in pfss.RING_VARS)  # pfss_log_fs, pfss_theta_b, ...
 PFSS_SCALARS = tuple(f"pfss_{v}" for v in pfss.SCALARS)
-PFSS_SIGNALS = PFSS_RING + PFSS_SCALARS
+WSA_SIGNAL = "wsa_speed"
+WSA_ASSET = Path(__file__).resolve().parents[1] / "assets" / "wsa_calibration.json"
+PFSS_SIGNALS = PFSS_RING + PFSS_SCALARS + (WSA_SIGNAL,)  # all need the GONG map's ring
 PFSS_LAG_HOURS = tuple(range(-72, 121, 6))  # negative: longitudes facing Earth after t0
 
 
@@ -128,6 +138,11 @@ def pfss_candidates():
     """Ring signals at every lag of the 6-hour grid, and the map scalars (lag 0)."""
     specs = [WindowSpec(s, "at", h) for s in PFSS_RING for h in PFSS_LAG_HOURS]
     return specs + [WindowSpec(s, "at", 0) for s in PFSS_SCALARS]
+
+
+def wsa_candidates():
+    """The WSA/HUX speed at the PFSS lags (not in `candidates`)."""
+    return [WindowSpec(WSA_SIGNAL, "at", h) for h in PFSS_LAG_HOURS]
 
 
 def uses_pfss(specs):
@@ -276,14 +291,58 @@ def _ch_at(series, t0s, hours, fallback):
     return out
 
 
+def _ring_rows(rings, t0s):
+    """(row of the ring table per t0, True where one is usable: at most CH_GRID older)."""
+    i = rings.t0.searchsorted(t0s, side="right") - 1
+    ok = i >= 0
+    ok[ok] = (t0s[ok] - rings.t0[i[ok]]) < CH_GRID
+    return i, ok
+
+
+@functools.lru_cache(maxsize=4)
+def wsa_params(path=WSA_ASSET):
+    """The calibrated models.wsa.Params, or None without the asset."""
+    from models import wsa
+
+    path = Path(path)
+    if not path.exists():
+        return None
+    return wsa.Params(**json.loads(path.read_text(encoding="utf-8"))["params"])
+
+
+def _wsa(rings, spec, t0s, cache):
+    """The WSA/HUX speed at 1 AU at the longitude facing Earth `hours` before t0 (+ shift).
+    `cache` keeps each ring's 1 AU solution across the lags of one window_table call."""
+    from models import wsa
+
+    out = np.full(len(t0s), np.nan)
+    params = wsa_params()
+    if rings is None or len(rings) == 0 or len(t0s) == 0 or params is None:
+        return out
+    i, ok = _ring_rows(rings, t0s)
+    log_fs = rings.ring[:, pfss.RING_VARS.index("log_fs")]
+    ok[ok] = np.isfinite(log_fs[i[ok]]).mean(axis=1) > 0.5  # as training.wsa_model
+    if not ok.any():
+        return out
+    rows = np.unique(i[ok])
+    todo = [r for r in rows if r not in cache]
+    if todo:
+        v1 = wsa.hux(wsa.source_speed(log_fs[todo],
+                                      rings.ring[todo, pfss.RING_VARS.index("theta_b")],
+                                      params))
+        cache.update(zip(todo, v1, strict=True))
+    v1 = np.stack([cache[r] for r in i[ok]])
+    lon = pfss.earth_longitude(t0s[ok] - spec.hours * HOUR)
+    out[ok] = wsa.at_longitude(v1, (lon + params.shift)[:, None])[:, 0]
+    return out
+
+
 def _pfss(rings, spec, t0s):
     """A PFSS ring signal at the longitude facing Earth `hours` before t0, or a map scalar."""
     out = np.full(len(t0s), np.nan)
     if rings is None or len(rings) == 0 or len(t0s) == 0:
         return out
-    i = rings.t0.searchsorted(t0s, side="right") - 1
-    ok = i >= 0
-    ok[ok] = (t0s[ok] - rings.t0[i[ok]]) < CH_GRID
+    i, ok = _ring_rows(rings, t0s)
     if not ok.any():
         return out
     name = spec.signal.removeprefix("pfss_")
@@ -310,7 +369,7 @@ def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
     """One column per spec (NaN where unknown), one row per t0."""
     t0s = pd.DatetimeIndex(t0s)
     last = t0s - HOUR
-    cols = {}
+    cols, wsa_cache = {}, {}
     for spec in specs:
         if spec.signal in INSITU_SIGNALS or spec.signal == "bz":
             hourly = inputs.hourly
@@ -332,6 +391,8 @@ def window_table(inputs, t0s, specs, ch_fallback=CH_FALLBACK_HOURS):
             mg = getattr(inputs, "magnetogram", None)
             cols[spec.name] = (np.full(len(t0s), np.nan) if mg is None or mg.empty
                                else _ch_at(mg[spec.signal], t0s, spec.hours, ch_fallback))
+        elif spec.signal == WSA_SIGNAL:
+            cols[spec.name] = _wsa(getattr(inputs, "pfss", None), spec, t0s, wsa_cache)
         elif spec.signal in PFSS_SIGNALS:
             cols[spec.name] = _pfss(getattr(inputs, "pfss", None), spec, t0s)
         else:

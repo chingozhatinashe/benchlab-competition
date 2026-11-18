@@ -6,7 +6,7 @@
 - **On the six folds,** all three candidates pass the rule. It picks the smallest, (a) cap 5% + density 1 h: 1.08% better, 5 of 6 folds.
 - **On the eval year,** (a) is 0.45% worse than the submitted model, so the submitted model stays.
 - **In staging,** (a) runs as `upload_candidate/near-miss-a`, to collect live scores next to the submitted model.
-- **(b) and (c)** go back to [next_steps.md](next_steps.md) as builds for after the freeze.
+- **(b) and (c)** go back to [next_steps.md](next_steps.md) as builds (step 1b). **(b) is built (2026-11-17)** and runs in staging as `upload_candidate/near-miss-b`; see [Candidate (b)](#candidate-b-built-2026-11-17).
 - **Study:** `python -m training.near_miss` (`--pilot --folds 2024`; `--summary`). Results: `src/experiments/near_miss.csv`. Notebook: `src/experiments/near_miss.ipynb`.
 
 ## Setup
@@ -72,3 +72,34 @@ By fold (S_final relative to the reference):
 **Decision (user, 2026-11-17):** by the project's rule the eval year doesn't choose. But this would change the submitted model two days before the freeze, for a borderline fold gain against a measured eval-year loss. The submitted model stays.
 - **(a) in staging:** `upload_candidate/near-miss-a` (commit `2043c1a`), a commit where (a) is the default. Staging scores it live next to the submitted model.
 - **This branch** restores the submitted config; only the study, its results and the docs go to `main`.
+
+## Candidate (b), built (2026-11-17)
+
+Step 1b of [next_steps.md](next_steps.md): (a) plus the WSA speed, built for live runs and put in staging. It is not submitted.
+
+**The live WSA speed:**
+- **Code:** `feature_engineering.windows` has a `wsa_speed` signal. From the run's PFSS ring (the newest GONG map, already solved for the current-sheet distance), it takes the WSA source speed, propagates it to 1 AU by HUX (`models.wsa`), and reads it at the longitude that faced Earth L hours before t0, plus the calibrated shift. `wsa_speed_lead_0h` expands into 13 lags, from −72 to 0 h.
+- **Calibration:** `src/assets/wsa_calibration.json`, from `python -m training.wsa_model --calibrate`. It is the study's offline calibration, run once on every training run (2016-10 → 2025-10, 1,500 calibration runs, 400 evaluations, 12 min). The WSA speed's own S_final went from 189.1 to 119.0.
+- **Gaps:** a run without a usable ring (under half its longitudes), or without the asset, gets NaN, and the linear model imputes its training median, as for the current-sheet distance. On the eval year, 4.6% of runs had no WSA value.
+- **Tests** (`tests/test_wsa.py`):
+  - the live column matches the study's `training.hybrid_pfss.wsa_table`;
+  - it uses no ring after t0;
+  - it is NaN without a ring or the asset;
+  - it triggers the GONG fetch.
+
+**The model:** the submitted config with cap 5%, `density_mean_1h` and `wsa_speed_lead_0h`, refitted on every training run.
+
+**Eval year** (descriptive, once; official metric, live imputation):
+
+| | S_final | vs submitted | CME | stream arrival | fast stream | intermediate | slow wind |
+|---|---|---|---|---|---|---|---|
+| **(b)** | 117.39 | **−0.50%** | +1.8% | −5.6% | +0.8% | −4.3% | +1.0% |
+| (a) | 118.51 | +0.45% | +1.4% | −3.3% | −2.6% | −0.3% | +3.4% |
+| submitted model | 117.98 | — | | | | | |
+
+- **The eval year confirms (b)'s direction:** better than the submitted model, though by less than on the folds (−1.42%).
+- **The gain comes from stream arrivals and intermediate wind.** CME and slow-wind runs are slightly worse.
+
+**Live:** a run for 2026-11-17 12Z observed all 42 regressors and took 90 s on the laptop, almost all of it fetching inputs.
+
+**Staging:** `upload_candidate/near-miss-b` (commit `ba15c39`, where (b) is the default). This branch restores the submitted config; the WSA code and its asset go to `main`, unused by the submitted model.

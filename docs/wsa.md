@@ -12,7 +12,7 @@ It was scored on its own and as a regressor added to the submitted linear model,
 - **Study:** `python -m training.wsa_model` (`--sample 500` for the pilot).
 - **Analysis:** `src/experiments/wsa_model.ipynb`; results in `src/experiments/wsa_model.csv`.
 
-**Result: nothing passes the 1% / 4-of-6 rule, so nothing is built.**
+**Result: nothing passes the 1% / 4-of-6 rule, so nothing is built.** (Since 2026-11-17 the WSA speed can be computed live, as `wsa_speed_lead_0h`, for the near-miss candidate (b): see [near_miss.md](near_miss.md#candidate-b-built-2026-11-17).)
 - **Best variant:** the offline-calibrated WSA speed for the hour being forecast (`wsa_speed_lead_0h`), 0.75% better on 4 of 6 folds.
 - **WSA alone:** 7.5% worse than persistence.
 - **Rolling re-fit:** it makes the feature worse.
