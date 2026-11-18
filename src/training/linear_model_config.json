@@ -17,8 +17,9 @@
     "bt_mean_1h",
     "ch_cm_lead_72h",
     "xray_peak_max_72h",
-    "density_mean_24h",
-    "pfss_d_hcs_lead_72h"
+    "density_mean_1h",
+    "pfss_d_hcs_lead_72h",
+    "wsa_speed_lead_0h"
   ],
   "selection": {
     "runs": 13148,

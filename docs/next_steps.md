@@ -2,6 +2,8 @@
 
 **Context.** The model freeze is on 2026-11-19. The submitted model is the linear model (official weights, coronal-hole lead alignment, PFSS current-sheet distance). The Bayes model is built as an option behind `SWP_MODEL=bayes` ([bayes_model.md](bayes_model.md), PR #57). Its constrained latent fit (`--fit latent_constrained`) converged on 2026-11-17 (R-hat 1.028); on the eval year it is 0.15% better than the reference. This plan ranks what is left to try, including avenues that need more time than the freeze allows.
 
+**Submitted 2026-11-18 (user decision):** candidate (c), the Bayes model on (b), falling back to (b)'s linear model ([near_miss.md](near_miss.md)).
+
 **Bottom line.**
 - **Before the freeze:** the pre-registered near-miss combination (step 1) passed on the folds but not on the eval year, so the submitted model stays; (a) runs in staging. Building (b) and (c) is step 1b.
 - **After the freeze:** the strongest bet is a gated combination of the linear model and the Bayes stream's official-decision path (step 2). It comes before the diffusion model (step 4).

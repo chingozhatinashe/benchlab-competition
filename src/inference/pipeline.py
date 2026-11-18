@@ -353,17 +353,19 @@ def run_bayes_forecast(t0, model=None, history=None, features=None):
 
 HYBRID_CHOICES = ("hybrid", "xgboost")
 BAYES_CHOICES = ("bayes",)
+LINEAR_CHOICES = ("linear",)
 
 
 def run_selected_forecast(t0):
-    """The forecast model.py submits: the linear model by default (since 2026-10-26).
+    """The forecast model.py submits: the Bayes model by default (since 2026-11-18; the
+    linear model 2026-10-26 -> 11-18).
 
-    The linear model falls back to the final baseline, then persistence.
-    SWP_MODEL=hybrid (or xgboost) runs the linear + trees hybrid, which falls back to the
-    linear model; SWP_MODEL=bayes runs the linear model with the latent Bayes stream's
-    regressors (models.bayes_model), which falls back to the linear model;
-    SWP_MODEL=baseline runs the final baseline. Anything unexpected that
-    escapes a model's own fallbacks ends in the final baseline.
+    The Bayes model (models.bayes_model: the linear model with the latent Bayes stream's
+    regressors) falls back to the linear model, which falls back to the final baseline,
+    then persistence. SWP_MODEL=linear runs the linear model alone; SWP_MODEL=hybrid (or
+    xgboost) the linear + trees hybrid, which falls back to the linear model;
+    SWP_MODEL=baseline the final baseline. Any other value runs the default. Anything
+    unexpected that escapes a model's own fallbacks ends in the final baseline.
     """
     choice = os.environ.get(MODEL_ENV, "").lower()
     if choice == "baseline":
@@ -371,9 +373,9 @@ def run_selected_forecast(t0):
     try:
         if choice in HYBRID_CHOICES:
             return run_xgboost_forecast(t0)
-        if choice in BAYES_CHOICES:
-            return run_bayes_forecast(t0)
-        return run_linear_forecast(t0)
+        if choice in LINEAR_CHOICES:
+            return run_linear_forecast(t0)
+        return run_bayes_forecast(t0)
     except Exception as e:
-        log(f"{choice or 'linear'} path failed ({e!r}); falling back to the final baseline")
+        log(f"{choice or 'bayes'} path failed ({e!r}); falling back to the final baseline")
         return run_forecast(t0)
