@@ -24,7 +24,7 @@ def forecast(model, run):
     return out.stdout
 
 
-@pytest.mark.parametrize("model", ["default", "bayes"])
+@pytest.mark.parametrize("model", ["default", "linear"])
 def test_repeat_runs_are_byte_identical(model):
     first, second = forecast(model, 1), forecast(model, 2)
     assert first and first == second

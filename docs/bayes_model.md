@@ -1,4 +1,6 @@
-# Bayes model: the linear model with the latent Bayes stream's regressors (an option, not submitted)
+# Bayes model: the linear model with the latent Bayes stream's regressors
+
+**Submitted since 2026-11-18 (user decision).** The shipped asset is near-miss candidate (c): the constrained latent fit and the linear part both on (b)'s config ([near_miss.md](near_miss.md#candidate-c-built-2026-11-17)). It is the default path; `SWP_MODEL=linear` runs (b)'s linear model alone, which is also its fallback. The sections below describe the earlier option on the submitted config (2026-11-16).
 
 **The decision (user, 2026-11-16).** The [Bayes features](bayes_features.md) study found one set that helps: from the latent-arrival [Bayes stream](bayes_stream.md) fit, P(arrival by lead) and the mean path as two extra regressors of the submitted linear model. On the six folds it was 0.41% better than the submitted model and won 4 of 6, short of the 1% rule. The user made an exception: build it, but don't make it the submitted model.
 

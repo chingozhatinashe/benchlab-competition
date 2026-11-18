@@ -101,16 +101,19 @@ def test_broken_bayes_model_falls_back_to_the_linear_model(monkeypatch):
     assert out == [1.0] * HORIZON and calls[0]["history"] is history
 
 
-def test_swp_model_bayes_selects_the_bayes_model(monkeypatch):
+def test_the_bayes_model_is_the_default(monkeypatch):
     from inference import pipeline
 
     calls = []
     monkeypatch.setattr(pipeline, "run_linear_forecast", lambda t0: calls.append("linear") or [])
     monkeypatch.setattr(pipeline, "run_bayes_forecast", lambda t0: calls.append("bayes") or [])
-    for choice in ("bayes", "BAYES", "linear"):
-        monkeypatch.setenv(pipeline.MODEL_ENV, choice)
+    for choice in (None, "bayes", "BAYES", "linear"):
+        if choice is None:
+            monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
+        else:
+            monkeypatch.setenv(pipeline.MODEL_ENV, choice)
         pipeline.run_selected_forecast(T0)
-    assert calls == ["bayes", "bayes", "linear"]
+    assert calls == ["bayes", "bayes", "bayes", "linear"]
 
 
 shipped = pytest.mark.skipif(not bm.ASSET.exists(), reason="no bayes model asset")
@@ -118,10 +121,13 @@ shipped = pytest.mark.skipif(not bm.ASSET.exists(), reason="no bayes model asset
 
 @shipped
 def test_shipped_asset_is_consistent():
-    # built on the submitted config of 2026-11-16; it fetches its own regressors, so it
-    # need not follow later changes of the submitted linear model
+    # the submitted model since 2026-11-18: near-miss (c), built on (b)'s linear config,
+    # which is also the shipped linear model (its fallback reuses the fetched regressors)
+    from models.linear_model import LinearModel
+
     model = bm.BayesModel.load()
     assert set(model.regressor_names) <= set(model.linear.config.input_features)
+    assert set(LinearModel.load().config.input_features) <= set(model.regressor_names)
     assert model.signals == bm.SIGNALS and len(model.stream.draws["rho_up"]) == bm.N_DRAWS
     assert model.stream.bayes.latent
 
@@ -131,7 +137,7 @@ def test_bayes_live_path_offline(monkeypatch, capsys):
     from inference import pipeline
 
     monkeypatch.setenv(pipeline.OFFLINE_ENV, "1")
-    monkeypatch.setenv(pipeline.MODEL_ENV, "bayes")
+    monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
     out = pipeline.run_selected_forecast(T0)
     assert len(out) == HORIZON and np.isfinite(out).all()
     assert "bayes model done" in capsys.readouterr().err

@@ -197,13 +197,14 @@ def test_submission_default_is_the_linear_model(monkeypatch):
     monkeypatch.setattr(pipeline, "run_forecast", lambda t0: calls.append("baseline") or [])
     monkeypatch.setattr(pipeline, "run_linear_forecast", lambda t0: calls.append("linear") or [])
     monkeypatch.setattr(pipeline, "run_xgboost_forecast", lambda t0: calls.append("xgb") or [])
+    monkeypatch.setattr(pipeline, "run_bayes_forecast", lambda t0: calls.append("bayes") or [])
     for choice in (None, "linear", "hybrid", "xgboost", "baseline", "unknown"):
         if choice is None:
             monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
         else:
             monkeypatch.setenv(pipeline.MODEL_ENV, choice)
         pipeline.run_selected_forecast(T0)
-    assert calls == ["linear", "linear", "xgb", "xgb", "baseline", "linear"]
+    assert calls == ["bayes", "linear", "xgb", "xgb", "baseline", "bayes"]
 
 
 def test_unexpected_failure_in_a_model_path_ends_in_the_baseline(monkeypatch):
@@ -214,18 +215,20 @@ def test_unexpected_failure_in_a_model_path_ends_in_the_baseline(monkeypatch):
 
     monkeypatch.setattr(pipeline, "run_xgboost_forecast", boom)
     monkeypatch.setattr(pipeline, "run_linear_forecast", boom)
+    monkeypatch.setattr(pipeline, "run_bayes_forecast", boom)
     monkeypatch.setattr(pipeline, "run_forecast", lambda t0: [2.0] * HORIZON)
     monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
     assert pipeline.run_selected_forecast(T0) == [2.0] * HORIZON
-    monkeypatch.setenv(pipeline.MODEL_ENV, "hybrid")
-    assert pipeline.run_selected_forecast(T0) == [2.0] * HORIZON
+    for choice in ("hybrid", "linear"):
+        monkeypatch.setenv(pipeline.MODEL_ENV, choice)
+        assert pipeline.run_selected_forecast(T0) == [2.0] * HORIZON
 
 
-def test_submitted_forecast_offline_runs_the_linear_model(monkeypatch, capsys):
+def test_linear_model_still_runs_offline_when_selected(monkeypatch, capsys):
     from inference import pipeline
 
     monkeypatch.setenv(pipeline.OFFLINE_ENV, "1")
-    monkeypatch.delenv(pipeline.MODEL_ENV, raising=False)
+    monkeypatch.setenv(pipeline.MODEL_ENV, "linear")
     out = pipeline.run_selected_forecast(T0)
     assert len(out) == HORIZON and np.isfinite(out).all()
     assert "linear model done" in capsys.readouterr().err

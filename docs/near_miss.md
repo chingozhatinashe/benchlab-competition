@@ -2,6 +2,8 @@
 
 **The question (2026-11-17).** Four changes to the submitted linear model were each at least 0.3% better on at least 4 of 6 folds, but short of the 1% bar on their own. Do they pass together? This is step 1 of [next_steps.md](next_steps.md).
 
+**Submitted (user decision, 2026-11-18):** candidate (c) is the submitted model: the Bayes model built on (b), the default path (`inference.run_selected_forecast`), falling back to (b)'s linear model, which ships as `src/assets/linear_model.json`. Its staging candidate `upload_candidate/near-miss-c` ran cleanly (no failures or fallbacks); no live scores yet at the decision.
+
 **Result: (a) passes on the folds but not on the eval year, so it is not submitted (user decision, 2026-11-17).**
 - **On the six folds,** all three candidates pass the rule. It picks the smallest, (a) cap 5% + density 1 h: 1.08% better, 5 of 6 folds.
 - **On the eval year,** (a) is 0.45% worse than the submitted model, so the submitted model stays.

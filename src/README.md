@@ -1,55 +1,59 @@
-# Solar wind speed forecast — linear model with coronal holes and the PFSS current sheet (team TINASHE)
+# Solar wind speed forecast — linear model with a Bayesian stream-arrival model, coronal holes and PFSS (team TINASHE)
 
 A 72-hour hourly forecast of the solar wind speed at L1 (ACE SWEPAM), from the speed
-history and five regressors: the interplanetary field, coronal holes in SDO/AIA images,
-X-ray flares, density at L1 and the distance to the heliospheric current sheet from a PFSS
-model of GONG magnetograms.
+history, six regressors (the interplanetary field, coronal holes in SDO/AIA images, X-ray
+flares, density at L1, and the current-sheet distance and WSA speed from a PFSS model of
+GONG magnetograms), and two regressors from a Bayesian model of stream arrivals.
 
 ## Public summary
 
 We forecast the hourly solar wind speed at L1 for the next 72 hours with a per-lead linear model: one ridge regression for each lead hour, predicting the change from the last observed speed.
 
 **Inputs**, all published before the forecast time:
-- **The speed history:** the last hourly speed, and the speed about one and a half solar rotations earlier (27 and 13.5 days), since high-speed streams from coronal holes tend to recur.
-- **Coronal holes:** the area of dark coronal holes near the central meridian in SDO/AIA 193 Å images. Each lead hour uses the image from about 3 days before it, roughly the travel time of the wind from the Sun.
-- **The heliospheric current sheet:** the angular distance to it, at the solar longitude that faced Earth about 3 days earlier. It comes from a potential-field source-surface model of the latest GONG magnetogram, solved at every run.
-- **In-situ and flare data:** the interplanetary magnetic field strength and plasma density at L1, and the peak X-ray flare flux of the last 3 days.
+- **The speed history:** the last hourly speed, and the speed 27 and 13.5 days earlier, since high-speed streams recur with the solar rotation.
+- **Coronal holes:** dark-area fraction near the central meridian in SDO/AIA 193 Å images, about 3 days before each lead hour.
+- **The latest GONG magnetogram,** solved at every run with a potential-field source-surface model: the distance to the heliospheric current sheet, and a WSA wind speed propagated to Earth.
+- **In-situ and flare data:** the magnetic field strength and density at L1, and the peak X-ray flare flux of the last 3 days.
+- **A Bayesian stream-arrival model:** fitted offline by MCMC. At each run, 32 posterior draws give the probability that a high-speed stream has arrived by each lead hour, and the expected speed path.
 
-**Training:** on 2016–2025, with a loss that blends squared error with the competition's tail-weighted error. Every choice of inputs and settings was made on six yearly walk-forward folds with the official metric, and a final year was held out for reporting. On the folds the model scores about 0.78 of persistence.
+**Training:** on 2016–2025, with a loss that blends squared error with the competition's tail-weighted error. Every choice was made on six yearly walk-forward folds with the official metric, and a final year was held out for reporting. The model scores about 0.77 of persistence on the folds and 0.74 on the held-out year.
 
-**Robustness:** a missing input takes its training median, or a submodel fitted without it. If the model fails, a speed-only baseline (persistence blended with solar-rotation recurrence) takes over, so every run returns a forecast. The model is deterministic: the same time and inputs give the same forecast.
+**Robustness:** a missing input takes its training median, or a submodel fitted without it. If the stream-arrival part fails, the linear model runs without it; if that fails, a speed-only baseline takes over, so every run returns a forecast. The forecast is deterministic.
 
 ## The submitted model
 
-The forecast is a per-lead linear model (`models/linear_model.py`,
-`assets/linear_model.json`), fitted on 2016-10 → 2025-10. Every choice was made on six
-yearly walk-forward folds with the organisers' official metric (per lead, the geometric
-mean of RMSE and a percentile TIMSE, averaged over the 72 leads).
-- **Folds:** its score is 0.78 of persistence's (0.79 before the PFSS term was added on 2026-11-07), against 0.87 for the speed-only reference baseline below.
-- **Held-out year** (2025-10 → 2026-10, used once for reporting, before the PFSS term): 0.79 of persistence's.
-- **Details:** choices and scores are in `docs/` in the repository (`official_score.md`, `official_retune.md`, `linear_model.md`, `lead_aligned_ch.md`, `pfss.md`).
+Since 2026-11-18 the forecast is the Bayes model (`models/bayes_model.py`,
+`assets/bayes_model.json`): the per-lead linear model below with two more lead-aligned
+regressors from a Bayesian stream-arrival model. Every choice was made on six yearly
+walk-forward folds with the organisers' official metric (per lead, the geometric mean of
+RMSE and a percentile TIMSE, averaged over the 72 leads), fitted on 2016-10 → 2025-10.
+- **Folds:** 0.765 of persistence's score, 1.8% better than the previous submission (0.779; 5 of 6 folds), against 0.87 for the speed-only reference baseline below.
+- **Held-out year** (2025-10 → 2026-10, used once for reporting): 0.744 of persistence's, 0.8% better than the previous submission.
+- **Details:** choices and scores are in `docs/` in the repository (`near_miss.md`, `bayes_model.md`, `bayes_stream.md`, `wsa.md`, `pfss.md`, `official_retune.md`, `linear_model.md`).
 
 **The regression.** For each lead k = 1…72 h, a ridge regression of v(t0+k) − last on:
 - the last observed hourly speed;
 - the mean speed ±3 h around t0 + k − 27 d and t0 + k − 13.5 d (recurrence);
-- five regressors:
+- six regressors:
   - last-hour Bt;
   - the coronal-hole area of the central-meridian strip in the SDO/AIA 193 Å image about 72 h before each forecast hour (lead k uses the image 72 − k h before t0; 13 images, 0–72 h);
   - the 72 h peak X-ray flare flux;
-  - the 24 h mean density;
-  - the angular distance to the heliospheric current sheet at the Carrington longitude that faced Earth about 72 h before each forecast hour (13 lags, 0–72 h). It comes from a potential-field source-surface (PFSS) solution of the newest GONG synoptic magnetogram, computed at each run with sunkit-magex (GPL-3, the successor of pfsspy).
+  - the last-hour density;
+  - the angular distance to the heliospheric current sheet at the Carrington longitude that faced Earth about 72 h before each forecast hour (13 lags, 0–72 h). It and the WSA speed come from a potential-field source-surface (PFSS) solution of the newest GONG synoptic magnetogram, computed at each run with sunkit-magex (GPL-3, the successor of pfsspy);
+  - the WSA speed: the WSA source speed on the same PFSS solution, propagated to 1 AU by HUX and read at Earth's longitude (13 lags, 0–72 h before t0), with a calibration fitted offline on every training run (`assets/wsa_calibration.json`);
+- two Bayes regressors, per lead: P(a stream has arrived by t0 + k) and the expected speed path, averaged over 32 posterior draws of a Bayesian generative model (slow ambient wind plus hierarchical stream arrivals with a latent arrival time; fitted offline by NUTS, evaluated in numpy at runtime). The stream model takes the same regressors.
 
-**Training loss.** The loss weights match the official metric. Per lead, they are 75% plain squared error and 25% the official percentile-TIMSE weights over all training runs at that lead. The 25% share was chosen on the folds: more tail weight biases the forecast upward and costs more RMSE than it saves in the tail. Each regressor is clipped to its training [0.5%, 99.5%] range.
+**Training loss.** Per lead, the weights are 75% plain squared error and 25% the official percentile-TIMSE weights over all training runs at that lead. The 25% share was chosen on the folds. Each regressor is clipped to its training [5%, 95%] range.
 
 **Robustness.** A run never fails for lack of data.
-- **Missing regressors:** a missing regressor takes its training median. This includes the current-sheet distance when no GONG map is usable or the PFSS solve fails.
+- **Missing regressors:** a missing regressor takes its training median. This includes the PFSS terms when no GONG map is usable or the solve fails.
 - **Missing coronal-hole image:** it falls back to one 6 h, then 12 h older, then to the nearest of the other images within 24 h. If the strip is still missing, a submodel fitted without it is used.
-- **Failures:** if the linear model fails, the reference baseline below forecasts; then persistence; then the training mean.
-- **Other modes:** `SWP_MODEL=baseline` submits the reference baseline directly. `SWP_MODEL=hybrid` runs an earlier linear + gradient-boosted-trees hybrid (`models/xgboost_model.py`, `assets/xgboost_model.json`, evaluated in numpy). It is not used by default: on the official metric it is no better. `SWP_MODEL=bayes` runs the linear model with two extra regressors from a Bayesian stream-arrival model (`models/bayes_model.py`, `assets/bayes_model.json`, numpy only), falling back to the linear model. It is not used by default either: on the training folds it was 0.4% better, short of our 1% rule.
+- **Failures:** if the Bayes model fails, the linear model alone (`assets/linear_model.json`, the same regressors) forecasts from the inputs already fetched; then the reference baseline below; then persistence; then the training mean.
+- **Other modes:** `SWP_MODEL=linear` submits the linear model alone, `SWP_MODEL=baseline` the reference baseline. `SWP_MODEL=hybrid` runs an earlier linear + gradient-boosted-trees hybrid (`models/xgboost_model.py`, `assets/xgboost_model.json`, evaluated in numpy), not used: on the official metric it is no better.
 
 **Runtime.** numpy, pandas and Pillow, plus sunkit-magex, sunpy, astropy, scipy, scikit-image and streamtracer for the PFSS solve.
 - **Inputs:** all sources are fetched in parallel within a 300 s budget: about 3 months of ACE speed, 30 days of ACE plasma and field, about 15 AIA images, flares and one GONG synoptic map (about 240 KB), roughly 20 MB. The PFSS solve takes about 10 s.
-- **Timing:** a run at 2026-11-07 12Z took 21 s, with every regressor observed.
+- **Timing:** in staging (fresh containers, the declared CPU and memory) a run takes about 10 s, with all 42 regressors observed.
 
 ## Reference baseline (fallback)
 
@@ -116,9 +120,9 @@ submission/
 ├── model.py             # CLI and output format; calls inference.run_selected_forecast
 ├── connectors/          # data clients (ACE archive, SWPC, SDO/AIA, CDAWeb)
 ├── feature_engineering/ # hourly speeds, recurrence features, regressors, imputation
-├── models/              # the linear model (submitted), the baseline, the hybrid and bayes (optional)
+├── models/              # bayes (submitted), the linear model (its fallback), the baseline, the hybrid
 ├── inference/           # fetch -> features -> model, with fallbacks
-├── assets/              # fitted weights (linear model, baseline, hybrid, bayes), regressor medians
+├── assets/              # fitted weights (bayes, linear model, baseline, hybrid), WSA calibration, regressor medians
 └── local_tests/         # run test_local.sh from here before you submit
     ├── test_local.sh
     └── mock_platform.py
