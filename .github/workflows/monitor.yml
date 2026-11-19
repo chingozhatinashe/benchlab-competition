@@ -1,0 +1,60 @@
+# Monitors the submitted model on Benchlab (Actions -> "Monitor Benchlab" -> Run workflow).
+#
+#   shape   print the shape of the portal's response: field paths, types and array lengths,
+#           never values (ci/monitor/shape.jq). Step 1: confirms which fields exist (per the
+#           organisers' FAQ #24/#25: recent runs with status, failure_reason and output_bytes,
+#           and a list of run logs) before the 6-hourly fetch, store and alert job is built.
+#
+# Needs the repository secret BENCHLAB_PORTAL (the portal link from the Benchlab email).
+# Read-only: it never uploads. The repository is public, so nothing secret may reach the
+# log: not the portal link (masked by GitHub), not presigned upload forms or log links.
+# The portal's response stays in a file and is deleted at the end.
+name: Monitor Benchlab
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "shape: print the portal response's field names and types (no values)"
+        type: choice
+        options: [shape]
+        default: shape
+
+concurrency:
+  group: benchlab-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    name: ${{ inputs.mode }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PORTAL: ${{ secrets.BENCHLAB_PORTAL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: ci/monitor
+
+      - name: Shape of the portal response
+        run: |
+          case "$PORTAL" in
+            http*) ;;
+            *) echo "::error::the BENCHLAB_PORTAL secret is missing"; exit 1 ;;
+          esac
+          RESP="$RUNNER_TEMP/portal.json"
+          trap 'rm -f "$RESP"' EXIT
+          curl -fsS --retry 3 --retry-delay 5 "$PORTAL" > "$RESP" \
+            || { echo "::error::could not read the portal"; exit 1; }
+          jq -e . "$RESP" > /dev/null || { echo "::error::the portal did not return JSON"; exit 1; }
+          SHAPE=$(jq -r -f ci/monitor/shape.jq "$RESP")
+          echo "$SHAPE"
+          {
+            echo "### Portal response: fields and types (no values)"
+            echo '```'
+            echo "$SHAPE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
