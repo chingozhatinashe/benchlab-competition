@@ -1,6 +1,7 @@
 """The Benchlab live monitor (ci/monitor/live.py): records, alerts, and no leaked links."""
 
 import csv
+import gzip
 import json
 import sys
 from datetime import datetime, timezone
@@ -167,3 +168,20 @@ def test_unreadable_cycle_times_alert(tmp_path):
     alerts, _ = live.monitor(portal([r], {}), tmp_path,
                              now=datetime(2026, 11, 19, 3, tzinfo=timezone.utc), fetch=None)
     assert "unreadable runs" in json.dumps(alerts)
+
+
+def test_gzip_logs_dry_runs_and_binary(tmp_path):
+    """Benchlab serves some logs gzipped; the run after an upload is off the 6-hourly marks."""
+    logs = {"z": gzip.compress(run_log("20261119T150000Z").encode()),
+            "b": bytes(range(256)) * 40}
+    p = portal([run("20261119T150000Z")], {k: "x" for k in logs})
+    alerts, _ = live.monitor(p, tmp_path, now=datetime(2026, 11, 19, 17, tzinfo=timezone.utc),
+                             fetch=lambda url: logs[url.rsplit("k=", 1)[1]])
+    rec = json.loads((tmp_path / "runs/2026-11/20261119T150000Z/benchlab__dryrun.json")
+                     .read_text(encoding="utf-8"))
+    assert rec["valid"] and rec["variant"] == "dryrun" and rec["model_used"] == "bayes"
+    stored = list((tmp_path / "live" / "logs").rglob("*.log"))
+    assert len(stored) == 1 and "<link>" in stored[0].read_text(encoding="utf-8")
+    state = json.loads((tmp_path / "live" / "state.json").read_text(encoding="utf-8"))
+    assert sum("error" in v for v in state["logs"].values()) == 1  # the binary one
+    assert "missed cycle" not in json.dumps(alerts)  # a dry run alone defines no cycles

@@ -7,9 +7,11 @@ BENCHLAB_PORTAL secret) and writes, under the staging records branch:
     live/status.json              the submission's status fields (no links, no credentials)
     live/runs/YYYY-MM.jsonl       one line per finished live run (RUN_FIELDS only: no task
                                   ARNs, network ids or IPs)
-    live/logs/YYYY-MM/*.log       each run log, scrubbed (links and IP addresses removed)
+    live/logs/YYYY-MM/*.log       each run log, scrubbed (links and IP addresses removed);
+                                  gzip logs are unpacked, and a log that isn't text is not stored
     live/state.json               what has been seen (log keys as sha256, never the links)
-    runs/YYYY-MM/<t0>/benchlab__live.json
+    runs/YYYY-MM/<t0>/benchlab__live.json   (benchlab__dryrun.json off the 6-hourly marks:
+                                  the qualification run after an upload)
                                   a run record in staging's format (ci/staging/record_run.py)
                                   for each finished run whose log carries the forecast
                                   ("[run] forecast {...}", src/run.sh since 942a451) or that
@@ -28,7 +30,9 @@ reported by type and HTTP status only. Read-only towards Benchlab: nothing is up
 """
 
 import argparse
+import gzip
 import hashlib
+import io
 import json
 import re
 import sys
@@ -42,6 +46,7 @@ import events as ev  # noqa: E402
 import record_run as rr  # noqa: E402
 
 CANDIDATE, VARIANT = "benchlab", "live"
+DRY_RUN = "dryrun"  # a run off the 6-hourly marks: the qualification run after an upload
 STAGING_CANDIDATE = "submitted"  # upload_candidate/submitted: the uploaded commit
 STATUS_FIELDS = ("submission_id", "eligibility", "conformance", "conformance_at",
                  "failure_reason", "phase", "accepting", "cpu_requested", "cpu_granted",
@@ -55,6 +60,8 @@ LOG_GRACE = timedelta(hours=3)  # a finished run's log should be listed by then
 MAX_LOG_BYTES = 2_000_000
 MAX_DIFF_KMS = 25.0  # live vs staging: inputs can differ a little (data arriving late)
 BUDGET_S = 900
+GZIP_MAGIC = bytes([0x1F, 0x8B])
+REPLACEMENT = chr(0xFFFD)  # what a bad UTF-8 byte decodes to
 FMT = "%Y%m%dT%H%M%SZ"
 
 _T0_LINE = re.compile(r"\[run\] t0=(\d{8}T\d{6}Z) submission=(\S+)")
@@ -70,6 +77,25 @@ def scrub(text):
     text = _LINK.sub("<link>", text)
     text = _AMZ.sub(r"\1=<removed>", text)
     return _IP.sub("<ip>", text)
+
+
+def variant(t0):
+    """"live" for a 6-hourly cycle, DRY_RUN otherwise (scored apart from the cycles)."""
+    t = rr.t0_time(t0)
+    return VARIANT if t.hour % 6 == 0 and t.minute == 0 else DRY_RUN
+
+
+def log_text(body):
+    """The log as scrubbed text: gzip is unpacked; anything that isn't text is refused."""
+    if body[:2] == GZIP_MAGIC:
+        body = gzip.GzipFile(fileobj=io.BytesIO(body)).read(MAX_LOG_BYTES * 20 + 1)
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        text = body.decode("utf-8", errors="replace")
+        if text.count(REPLACEMENT) > max(10, len(text) // 1000):
+            raise ValueError("not text") from None
+    return scrub(text)
 
 
 def key_id(key):
@@ -167,7 +193,7 @@ def run_record(t0, run, log, staging):
     code = num(run.get("exit_code"))
     rec = {
         "schema": rr.SCHEMA, "t0": t0, "candidate": CANDIDATE,
-        "sha": str(run.get("submission_id") or ""), "variant": VARIANT,
+        "sha": str(run.get("submission_id") or ""), "variant": variant(t0),
         "started_at": f"{started:%Y-%m-%dT%H:%M:%SZ}" if started else None,
         "start_delay_s": (round((started - rr.t0_time(t0)).total_seconds())
                           if started else None),
@@ -221,9 +247,10 @@ def monitor(portal, records, now=None, fetch=http_get):
     rows, alerts = [], {}
     stamp = ev.now()
 
-    def event(t0, kind, severity, detail, sub=""):
+    def event(t0, kind, severity, detail, sub="", var=None):
         rows.append({"time": stamp, "t0": t0, "candidate": CANDIDATE, "sha": sub,
-                     "variant": VARIANT, "kind": kind, "severity": severity,
+                     "variant": variant(t0) if var is None else var, "kind": kind,
+                     "severity": severity,
                      "detail": detail})
         if severity == "alert":
             alerts.setdefault("benchlab (live)", []).append(f"- `{t0}`: {kind}: {detail}")
@@ -238,7 +265,7 @@ def monitor(portal, records, now=None, fetch=http_get):
         event(f"{now:{FMT}}", "eligibility", sev,
               f"{status.get('submission_id')}: {status.get('eligibility')}"
               + (f" ({status['failure_reason']})" if status.get("failure_reason") else ""),
-              str(status.get("submission_id") or ""))
+              str(status.get("submission_id") or ""), var="")
 
     # finished runs -> live/runs
     runs = []
@@ -249,7 +276,8 @@ def monitor(portal, records, now=None, fetch=http_get):
         runs.append((t0, {k: r.get(k) for k in RUN_FIELDS}))
     if portal.get("recent_runs") and not runs:
         event(f"{now:{FMT}}", "unreadable runs", "alert",
-              "no run's cycle_ts could be read as a time (ci/monitor/live.py to_time)")
+              "no run's cycle_ts could be read as a time (ci/monitor/live.py to_time)",
+              var="")
     for t0, r in runs:
         rid = f"{r['submission_id']}|{r['cycle_ts']}|{r['started_at']}"
         if not r.get("stopped_at") or rid in state["runs"]:
@@ -269,9 +297,14 @@ def monitor(portal, records, now=None, fetch=http_get):
             state["logs"][kid] = {"error": f"too large ({item.get('size')} bytes)"}
             continue
         try:
-            text = scrub(fetch(item["url"]).decode("utf-8", errors="replace"))
+            body = fetch(item["url"])
         except RuntimeError as e:
             print(f"log {kid}: download failed ({e}); retried next time", file=sys.stderr)
+            continue
+        try:
+            text = log_text(body)
+        except (OSError, EOFError, ValueError) as e:  # bad gzip, or not text: not stored
+            state["logs"][kid] = {"error": f"unreadable ({type(e).__name__})"}
             continue
         m = _T0_LINE.search(text)
         t0, sub = (m.group(1), m.group(2)) if m else (None, None)
@@ -313,13 +346,13 @@ def monitor(portal, records, now=None, fetch=http_get):
         staging = load_json(records / "runs" / month / t0 / f"{STAGING_CANDIDATE}__default.json",
                             None)
         rec = run_record(t0, r, log, staging)
-        write_json(records / "runs" / month / t0 / f"{CANDIDATE}__{VARIANT}.json", rec)
+        write_json(records / "runs" / month / t0 / f"{CANDIDATE}__{variant(t0)}.json", rec)
         for kind, severity, detail in live_events(rec):
             event(t0, kind, severity, detail, sub)
         state["closed"].append(key)
 
     # missed cycles: a 6-hourly t0 inside the portal's window with no run at all
-    t0s = sorted({rr.t0_time(t0) for t0, _ in runs})
+    t0s = sorted({rr.t0_time(t0) for t0, _ in runs if variant(t0) == VARIANT})
     if t0s:
         t = t0s[0]
         while t <= now - CYCLE_GRACE:
