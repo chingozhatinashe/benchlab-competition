@@ -18,24 +18,13 @@
   "20261118T180000Z|sub_e9dbb623",
   "20261119T000000Z|sub_e9dbb623",
   "20261119T060000Z|sub_e9dbb623",
-  "20261119T120000Z|sub_e9dbb623",
-  "20261119T150000Z|sub_e9dbb623"
+  "20261119T120000Z|sub_e9dbb623"
  ],
  "logs": {
-  "05446b08e6ade5c6": {
-   "path": "live/logs/other/other__05446b08e6ade5c6.log",
-   "submission": null,
-   "t0": null
-  },
   "0566f387796b09b4": {
    "path": "live/logs/2026-11/20261114T060000Z__sub_e9dbb623__0566f387796b09b4.log",
    "submission": "sub_e9dbb623",
    "t0": "20261114T060000Z"
-  },
-  "0bea2892cb25d3f2": {
-   "path": "live/logs/other/other__0bea2892cb25d3f2.log",
-   "submission": null,
-   "t0": null
   },
   "0c993d773f0e073d": {
    "path": "live/logs/2026-11/20261114T000000Z__sub_e9dbb623__0c993d773f0e073d.log",
@@ -56,11 +45,6 @@
    "path": "live/logs/2026-11/20261110T060000Z__sub_e9dbb623__0f8b6da5728b7082.log",
    "submission": "sub_e9dbb623",
    "t0": "20261110T060000Z"
-  },
-  "169c0728bf085ab8": {
-   "path": "live/logs/other/other__169c0728bf085ab8.log",
-   "submission": null,
-   "t0": null
   },
   "2f5e8b66cf575cc6": {
    "path": "live/logs/2026-11/20261116T180000Z__sub_e9dbb623__2f5e8b66cf575cc6.log",
@@ -152,11 +136,6 @@
    "submission": "sub_e9dbb623",
    "t0": "20261116T120000Z"
   },
-  "8031ce50547bdfad": {
-   "path": "live/logs/other/other__8031ce50547bdfad.log",
-   "submission": null,
-   "t0": null
-  },
   "828025e4b9699ae4": {
    "path": "live/logs/2026-11/20261111T120000Z__sub_e9dbb623__828025e4b9699ae4.log",
    "submission": "sub_e9dbb623",
@@ -166,16 +145,6 @@
    "path": "live/logs/2026-11/20261111T000000Z__sub_e9dbb623__8439b1e18dba46ca.log",
    "submission": "sub_e9dbb623",
    "t0": "20261111T000000Z"
-  },
-  "89284c3147d4530d": {
-   "path": "live/logs/other/other__89284c3147d4530d.log",
-   "submission": null,
-   "t0": null
-  },
-  "8a54aa59c98732e5": {
-   "path": "live/logs/other/other__8a54aa59c98732e5.log",
-   "submission": null,
-   "t0": null
   },
   "8a8841926b536514": {
    "path": "live/logs/2026-11/20261112T000000Z__sub_e9dbb623__8a8841926b536514.log",
@@ -196,11 +165,6 @@
    "path": "live/logs/2026-11/20261119T060000Z__sub_e9dbb623__92f0a0564c220dda.log",
    "submission": "sub_e9dbb623",
    "t0": "20261119T060000Z"
-  },
-  "93165f9fc68fe358": {
-   "path": "live/logs/other/other__93165f9fc68fe358.log",
-   "submission": null,
-   "t0": null
   },
   "9a701c3311eb1175": {
    "path": "live/logs/2026-11/20261109T180000Z__sub_e9dbb623__9a701c3311eb1175.log",
@@ -232,11 +196,6 @@
    "submission": "sub_e9dbb623",
    "t0": "20261110T180000Z"
   },
-  "c8a5fcf73fa209ee": {
-   "path": "live/logs/other/other__c8a5fcf73fa209ee.log",
-   "submission": null,
-   "t0": null
-  },
   "cd915f71701d3189": {
    "path": "live/logs/2026-11/20261113T120000Z__sub_e9dbb623__cd915f71701d3189.log",
    "submission": "sub_e9dbb623",
@@ -246,16 +205,6 @@
    "path": "live/logs/2026-11/20261114T180000Z__sub_e9dbb623__d2ebb8da56fe4e60.log",
    "submission": "sub_e9dbb623",
    "t0": "20261114T180000Z"
-  },
-  "d7c9620e0d279b89": {
-   "path": "live/logs/other/other__d7c9620e0d279b89.log",
-   "submission": null,
-   "t0": null
-  },
-  "dace614498b9e866": {
-   "path": "live/logs/other/other__dace614498b9e866.log",
-   "submission": null,
-   "t0": null
   },
   "dc24fe11c26d07d8": {
    "path": "live/logs/2026-11/20261117T120000Z__sub_e9dbb623__dc24fe11c26d07d8.log",
