@@ -68,14 +68,24 @@ _T0_LINE = re.compile(r"\[run\] t0=(\d{8}T\d{6}Z) submission=(\S+)")
 _FORECAST = re.compile(r"\[run\] forecast (\{.*\})")
 _LINK = re.compile(r"\b[a-z][a-z0-9+.-]*://\S+", re.I)
 _IP = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+# the organisers' infrastructure in build logs: registry hosts, AWS account ids, ARNs, keys
+_AWS_HOST = re.compile(r"\b[\w.-]*\.amazonaws\.com(?:\.cn)?\b(?:/[\w./-]*)?", re.I)
+_ARN = re.compile(r"\barn:aws[\w-]*:\S+", re.I)
+_ACCOUNT = re.compile(r"(?<![\w.])\d{12}(?!\w)")
+_KEY_ID = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{12,}\b")
 _AMZ = re.compile(r"(X-Amz-[A-Za-z-]+|AWSAccessKeyId|Signature|x-amz-security-token)=\S+", re.I)
 
 
 # ---------------------------------------------------------------------- helpers
 def scrub(text):
-    """The log without links, IP addresses or signed-query parameters."""
+    """The log without links, IP addresses, signed-query parameters, or the organisers' AWS
+    details (registry hosts, account ids, ARNs, access key ids)."""
     text = _LINK.sub("<link>", text)
     text = _AMZ.sub(r"\1=<removed>", text)
+    text = _AWS_HOST.sub("<aws>", text)
+    text = _ARN.sub("<arn>", text)
+    text = _KEY_ID.sub("<key>", text)
+    text = _ACCOUNT.sub("<account>", text)
     return _IP.sub("<ip>", text)
 
 

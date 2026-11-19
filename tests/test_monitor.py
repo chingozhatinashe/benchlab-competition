@@ -185,3 +185,16 @@ def test_gzip_logs_dry_runs_and_binary(tmp_path):
     state = json.loads((tmp_path / "live" / "state.json").read_text(encoding="utf-8"))
     assert sum("error" in v for v in state["logs"].values()) == 1  # the binary one
     assert "missed cycle" not in json.dumps(alerts)  # a dry run alone defines no cycles
+
+
+def test_scrub_build_log_aws_details():
+    """Benchlab's build logs name the organisers' registry and account (CodeBuild)."""
+    acct = "1234" * 3
+    log = (f"The push refers to repository [{acct}.dkr.ecr.us-east-1.amazonaws.com/swp-prod]\n"
+           f"#10 naming to {acct}.dkr.ecr.us-east-1.amazonaws.com/swp-prod:sub_x done\n"
+           f"role arn:aws:iam::{acct}:role/build key AKIAABCDEFGHIJKLMNOP account {acct}\n"
+           "[inference] minutes: 36213 from the archive; t0=20261119T150000Z 1486 bytes")
+    s = live.scrub(log)
+    for leak in (acct, "amazonaws", "arn:aws", "AKIA"):
+        assert leak not in s, leak
+    assert "36213" in s and "20261119T150000Z" in s and "1486" in s  # model lines intact
