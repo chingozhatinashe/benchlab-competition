@@ -1,56 +1,67 @@
 # Monitors the submitted model on Benchlab (Actions -> "Monitor Benchlab" -> Run workflow).
 #
+#   record  (every 3 h, and on demand) the live runs and their logs -> the staging-records
+#           branch (ci/monitor/live.py): run statuses, scrubbed logs, a staging-format run
+#           record per finished run (candidate "benchlab", variant "live"), so the daily
+#           staging evaluation scores the live forecasts next to the candidates; alerts for
+#           a lost ELIGIBLE status, failed or missed runs, missing logs or forecasts, and a
+#           forecast far from staging's run of the same commit (upload_candidate/submitted).
+#           Alerts fail the run, so GitHub emails the owner (ci/staging/report_alerts.sh).
 #   shape   print the shape of the portal's response: field paths, types and array lengths,
-#           never values (ci/monitor/shape.jq). Step 1: confirms which fields exist (per the
-#           organisers' FAQ #24/#25: recent runs with status, failure_reason and output_bytes,
-#           and a list of run logs) before the 6-hourly fetch, store and alert job is built.
+#           never values (ci/monitor/shape.jq).
 #
 # Needs the repository secret BENCHLAB_PORTAL (the portal link from the Benchlab email).
-# Read-only: it never uploads. The repository is public, so nothing secret may reach the
-# log: not the portal link (masked by GitHub), not presigned upload forms or log links.
-# The portal's response stays in a file and is deleted at the end.
+# Read-only towards Benchlab: it never uploads. The repository is public, so nothing secret
+# may reach the log or the records: not the portal link (masked by GitHub), not presigned
+# upload forms or log links. The portal's response stays in a file, deleted at the end.
 name: Monitor Benchlab
 
 on:
+  schedule:
+    - cron: "50 */3 * * *"  # Benchlab runs at each 6-hourly t0; logs can be listed late
   workflow_dispatch:
     inputs:
       mode:
-        description: "shape: print the portal response's field names and types (no values)"
+        description: "record: file the live runs and logs; shape: the portal response's field names and types (no values)"
         type: choice
-        options: [shape]
-        default: shape
+        options: [record, shape]
+        default: record
 
 concurrency:
-  group: benchlab-monitor
+  group: staging-records  # shares the records branch with the staging workflow
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write  # the staging-records branch
 
 jobs:
   monitor:
-    name: ${{ inputs.mode }}
+    name: ${{ inputs.mode || 'record' }}
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       PORTAL: ${{ secrets.BENCHLAB_PORTAL }}
+      MODE: ${{ inputs.mode || 'record' }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          sparse-checkout: ci/monitor
 
-      - name: Shape of the portal response
+      - name: Read the portal
         run: |
           case "$PORTAL" in
             http*) ;;
             *) echo "::error::the BENCHLAB_PORTAL secret is missing"; exit 1 ;;
           esac
-          RESP="$RUNNER_TEMP/portal.json"
-          trap 'rm -f "$RESP"' EXIT
-          curl -fsS --retry 3 --retry-delay 5 "$PORTAL" > "$RESP" \
+          curl -fsS --retry 3 --retry-delay 5 "$PORTAL" > "$RUNNER_TEMP/portal.json" \
             || { echo "::error::could not read the portal"; exit 1; }
-          jq -e . "$RESP" > /dev/null || { echo "::error::the portal did not return JSON"; exit 1; }
-          SHAPE=$(jq -r -f ci/monitor/shape.jq "$RESP")
+          jq -e . "$RUNNER_TEMP/portal.json" > /dev/null \
+            || { echo "::error::the portal did not return JSON"; exit 1; }
+
+      - name: Shape of the portal response
+        if: env.MODE == 'shape'
+        run: |
+          SHAPE=$(jq -r -f ci/monitor/shape.jq "$RUNNER_TEMP/portal.json")
           echo "$SHAPE"
           {
             echo "### Portal response: fields and types (no values)"
@@ -58,3 +69,20 @@ jobs:
             echo "$SHAPE"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: File the live runs and logs
+        if: env.MODE == 'record'
+        run: |
+          bash ci/staging/records.sh checkout records
+          python3 ci/monitor/live.py --portal "$RUNNER_TEMP/portal.json" --records records \
+            --alerts alerts.json | tee -a "$GITHUB_STEP_SUMMARY"
+          rm -f "$RUNNER_TEMP/portal.json"
+          bash ci/staging/records.sh push records "live $(date -u +%Y-%m-%dT%H:%MZ)"
+
+      - name: Alerts
+        if: env.MODE == 'record'
+        run: bash ci/staging/report_alerts.sh alerts.json
+
+      - name: Remove the portal response
+        if: always()
+        run: rm -f "$RUNNER_TEMP/portal.json"

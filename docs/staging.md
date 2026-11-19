@@ -87,6 +87,10 @@ runs/YYYY-MM/<t0>/<candidate>__<variant>.json   one record per run
 events/YYYY-MM.csv              time, t0, candidate, sha, variant, kind, severity, detail
 candidates.json                 the candidates of the last cycle
 truth/YYYYMM_ace_swepam_1h.txt  the official truth
+live/status.json                the submission's status on Benchlab (monitor.yml)
+live/runs/YYYY-MM.jsonl         Benchlab's live runs, as the portal lists them
+live/logs/YYYY-MM/*.log         Benchlab's run logs, scrubbed
+live/state.json                 what the monitor has seen
 ```
 
 The repository is public, so the branch is too. Records hold forecasts, logs and host names, but no secrets.
@@ -101,6 +105,16 @@ Every event goes to `events/`. Issues are off on this repository, so alerts are 
 | info | run ok, missing regressors, source not ok, dns not captured, candidate added / moved / removed, cycle |
 
 The report lists the last 7 days of alerts and counts the info events.
+
+## Benchlab's live runs (`.github/workflows/monitor.yml`)
+
+The "Monitor Benchlab" workflow reads the portal every 3 h (and on demand) and files the submitted model's live runs on the same branch (`ci/monitor/live.py`).
+
+- **Run statuses:** each finished run's status fields (status, exit code, failure reason, output bytes, pull and run seconds, start and stop times, retries) go to `live/runs/`. Task ARNs, network ids, IPs and object keys are not stored.
+- **Logs:** each new run log is downloaded and stored in `live/logs/` with links and IP addresses removed. Since 942a451, `run.sh` puts the `[inference]` log and the forecast (`[run] forecast {...}`) in the run log, the only way to see the live forecast: the portal gives no download for it.
+- **Run records:** each finished run whose log carries the forecast, or that failed, becomes a run record in the staging format, candidate `benchlab`, variant `live`. The daily evaluation scores it with the candidates (a failed run counts as persistence) and shows its health. Its runtime and pull time are Benchlab's own. Runs of versions before 942a451 log no forecast and are kept as logs only.
+- **Alerts** (same reporting as staging): the staging rules on each record, plus not ELIGIBLE, missed cycle (a 6-hourly t0 with no run), no log 3 h after a run, no forecast in a successful run's log (info), and **differs from staging**: a different model, or a forecast more than 25 km/s from staging's run of `upload_candidate/submitted` at the same t0 (small differences are expected from data arriving between the two runs; the difference is in each record and as a `vs staging` info event).
+- **Secrets:** the portal's response holds presigned links and upload credentials. It stays in a file on the runner and is deleted; links are used in memory only and never printed or stored. `mode=shape` prints only the response's field names and types (`ci/monitor/shape.jq`).
 
 ## Limits
 
@@ -118,4 +132,5 @@ The report lists the last 7 days of alerts and counts the info events.
 
 - **Workflow and shared step:** `.github/workflows/staging.yml`, `.github/actions/base-image/action.yml`.
 - **Scripts:** `ci/staging/run_candidate.sh`, `record_run.py`, `events.py`, `evaluate.py`, `records.sh`, `report_alerts.sh`.
+- **Live monitor:** `.github/workflows/monitor.yml`, `ci/monitor/live.py`, `ci/monitor/shape.jq`; tests in `tests/test_monitor.py` (records, alerts, repeated passes, and no link, credential, ARN or IP on the branch).
 - **Tests:** `tests/test_staging.py` covers log parsing, DNS and declared domains, record validity, event rules, and a whole cycle-to-report run on synthetic truth.
