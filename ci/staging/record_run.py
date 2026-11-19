@@ -108,6 +108,11 @@ def check_forecast(path):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
         return None, f"no readable forecast ({type(e).__name__})"
+    return check_values(data)
+
+
+def check_values(data):
+    """check_forecast on the parsed JSON (ci/monitor/live.py reads it from a log line)."""
     values = data.get("forecast_speed_kms") if isinstance(data, dict) else None
     if not isinstance(values, list) or len(values) != HORIZON:
         return None, "not 72 values"
