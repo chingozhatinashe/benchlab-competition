@@ -11,7 +11,10 @@ OUT=/tmp/forecast.json
 #   python3 /app/model.py "$T0" > "$OUT"
 #   Rscript /app/model.R "$T0" "$OUT"
 #   /app/my_binary --t0 "$T0" --out "$OUT"
-python3 /app/model.py "$T0" > "$OUT"
+# stderr (the [inference] log) joins stdout, which the platform copies to the run log;
+# the forecast JSON alone goes to $OUT, and is echoed so the run log carries it too
+python3 /app/model.py "$T0" 2>&1 > "$OUT"
+echo "[run] forecast $(tr -d '\n' < "$OUT")"
 # ==============================================================
 
 echo "[run] produced $(wc -c < "$OUT") bytes"
