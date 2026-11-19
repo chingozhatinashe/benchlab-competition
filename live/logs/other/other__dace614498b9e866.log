@@ -1,0 +1,272 @@
+[Container] 2026/10/02 17:01:52.711192 Running on CodeBuild On-demand
+[Container] 2026/10/02 17:01:52.711201 Waiting for agent ping
+[Container] 2026/10/02 17:01:52.947484 Waiting for DOWNLOAD_SOURCE
+[Container] 2026/10/02 17:01:54.210254 Phase is DOWNLOAD_SOURCE
+[Container] 2026/10/02 17:01:54.211169 CODEBUILD_SRC_DIR=/codebuild/output/src3432884817/src
+[Container] 2026/10/02 17:01:54.211577 YAML location is /codebuild/readonly/buildspec.yml
+[Container] 2026/10/02 17:01:54.213439 Setting HTTP client timeout to higher timeout for S3 source
+[Container] 2026/10/02 17:01:54.213531 Processing environment variables
+[Container] 2026/10/02 17:01:54.444598 No runtime version selected in buildspec.
+[Container] 2026/10/02 17:01:54.488802 Moving to directory /codebuild/output/src3432884817/src
+[Container] 2026/10/02 17:01:54.488824 Cache is not defined in the buildspec
+[Container] 2026/10/02 17:01:54.528262 Skip cache due to: no paths specified to be cached
+[Container] 2026/10/02 17:01:54.528485 Registering with agent
+[Container] 2026/10/02 17:01:54.561372 Phases found in YAML: 3
+[Container] 2026/10/02 17:01:54.561391  PRE_BUILD: 5 commands
+[Container] 2026/10/02 17:01:54.561396  BUILD: 5 commands
+[Container] 2026/10/02 17:01:54.561400  POST_BUILD: 1 commands
+[Container] 2026/10/02 17:01:54.561631 Phase complete: DOWNLOAD_SOURCE State: SUCCEEDED
+[Container] 2026/10/02 17:01:54.561643 Phase context status code:  Message: 
+[Container] 2026/10/02 17:01:54.669745 Entering phase INSTALL
+[Container] 2026/10/02 17:01:54.711753 Phase complete: INSTALL State: SUCCEEDED
+[Container] 2026/10/02 17:01:54.711771 Phase context status code:  Message: 
+[Container] 2026/10/02 17:01:54.753324 Entering phase PRE_BUILD
+[Container] 2026/10/02 17:01:54.789135 Running command echo "Validating structure for $SUBMISSION_ID"
+Validating structure for sub_e9dbb623
+
+[Container] 2026/10/02 17:01:54.797419 Running command test -f Dockerfile      || { echo "FATAL: no Dockerfile at zip root. Zip the CONTENTS of your folder, not the folder itself."; exit 1; }
+
+[Container] 2026/10/02 17:01:54.805082 Running command test -f README.md       || { echo "FATAL: no README.md at zip root"; exit 1; }
+
+[Container] 2026/10/02 17:01:54.812868 Running command test -f submission.json || { echo "FATAL: no submission.json at zip root"; exit 1; }
+
+[Container] 2026/10/02 17:01:54.820508 Running command aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+WARNING! Your credentials are stored unencrypted in '/root/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+<link>
+
+Login Succeeded
+
+[Container] 2026/10/02 17:02:10.651365 Phase complete: PRE_BUILD State: SUCCEEDED
+[Container] 2026/10/02 17:02:10.651384 Phase context status code:  Message: 
+[Container] 2026/10/02 17:02:10.695583 Entering phase BUILD
+[Container] 2026/10/02 17:02:10.696434 Running command aws s3 sync . "<link> --exclude ".git/*" --exclude "logs/*" --delete
+
+[Container] 2026/10/02 17:02:11.608485 Running command docker build --platform linux/amd64 -t "$ECR_REGISTRY/$ECR_REPO:$SUBMISSION_ID" .
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 548B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/ubuntu:22.04
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 1.31kB done
+#4 DONE 0.0s
+
+#5 [1/5] FROM docker.io/library/ubuntu:22.04@sha256:b1066385161d28ddf6bc7e7b28a9170eec11484c821d1a5150d176cbde41d7f7
+#5 resolve docker.io/library/ubuntu:22.04@sha256:b1066385161d28ddf6bc7e7b28a9170eec11484c821d1a5150d176cbde41d7f7 0.0s done
+#5 sha256:b1066385161d28ddf6bc7e7b28a9170eec11484c821d1a5150d176cbde41d7f7 6.69kB / 6.69kB done
+#5 sha256:08ea48a03a3e78ebc7cd526e6a275053223aadd88bfc09cc49b06d5281525fde 424B / 424B done
+#5 sha256:e8df6c74f650ad385efe2e20103eca9b0ad50690fb3c63d49fa00762412bbf55 2.05kB / 2.05kB done
+#5 sha256:98c4455a98982b35380ec62f90d5cf0edff02eeb4b3bb18595d871fdeb0c0c67 16.78MB / 29.75MB 0.2s
+#5 sha256:98c4455a98982b35380ec62f90d5cf0edff02eeb4b3bb18595d871fdeb0c0c67 27.26MB / 29.75MB 0.3s
+#5 sha256:98c4455a98982b35380ec62f90d5cf0edff02eeb4b3bb18595d871fdeb0c0c67 29.75MB / 29.75MB 0.3s done
+#5 extracting sha256:98c4455a98982b35380ec62f90d5cf0edff02eeb4b3bb18595d871fdeb0c0c67
+#5 extracting sha256:98c4455a98982b35380ec62f90d5cf0edff02eeb4b3bb18595d871fdeb0c0c67 0.8s done
+#5 DONE 1.3s
+
+#6 [2/5] WORKDIR /app
+#6 DONE 0.5s
+
+#7 [3/5] RUN apt-get update && apt-get install -y --no-install-recommends         ca-certificates curl jq     && rm -rf /var/lib/apt/lists/*
+#7 0.443 Get:1 <link> jammy InRelease [270 kB]
+#7 0.496 Get:2 <link> jammy-security InRelease [129 kB]
+#7 0.876 Get:3 <link> jammy-updates InRelease [128 kB]
+#7 0.980 Get:4 <link> jammy-backports InRelease [127 kB]
+#7 1.027 Get:5 <link> jammy-security/multiverse amd64 Packages [84.6 kB]
+#7 1.087 Get:6 <link> jammy/main amd64 Packages [1792 kB]
+#7 1.184 Get:7 <link> jammy-security/main amd64 Packages [4376 kB]
+#7 1.326 Get:8 <link> jammy/multiverse amd64 Packages [266 kB]
+#7 1.341 Get:9 <link> jammy/universe amd64 Packages [17.5 MB]
+#7 1.749 Get:10 <link> jammy-security/universe amd64 Packages [1321 kB]
+#7 1.790 Get:11 <link> jammy-security/restricted amd64 Packages [7843 kB]
+#7 1.807 Get:12 <link> jammy/restricted amd64 Packages [164 kB]
+#7 1.811 Get:13 <link> jammy-updates/main amd64 Packages [4747 kB]
+#7 1.929 Get:14 <link> jammy-updates/restricted amd64 Packages [8198 kB]
+#7 2.131 Get:15 <link> jammy-updates/multiverse amd64 Packages [93.2 kB]
+#7 2.133 Get:16 <link> jammy-updates/universe amd64 Packages [1623 kB]
+#7 2.172 Get:17 <link> jammy-backports/main amd64 Packages [82.9 kB]
+#7 2.174 Get:18 <link> jammy-backports/universe amd64 Packages [35.6 kB]
+#7 3.789 Fetched 48.8 MB in 3s (13.9 MB/s)
+#7 3.789 Reading package lists...
+#7 4.962 Reading package lists...
+#7 6.114 Building dependency tree...
+#7 6.337 Reading state information...
+#7 6.549 The following additional packages will be installed:
+#7 6.550   libbrotli1 libcurl4 libjq1 libldap-2.5-0 libnghttp2-14 libonig5 libpsl5
+#7 6.551   librtmp1 libsasl2-2 libsasl2-modules-db libssh-4 openssl
+#7 6.552 Recommended packages:
+#7 6.552   libldap-common publicsuffix libsasl2-modules
+#7 6.600 The following NEW packages will be installed:
+#7 6.601   ca-certificates curl jq libbrotli1 libcurl4 libjq1 libldap-2.5-0
+#7 6.601   libnghttp2-14 libonig5 libpsl5 librtmp1 libsasl2-2 libsasl2-modules-db
+#7 6.602   libssh-4 openssl
+#7 6.784 0 upgraded, 15 newly installed, 0 to remove and 1 not upgraded.
+#7 6.784 Need to get 3127 kB of archives.
+#7 6.784 After this operation, 7419 kB of additional disk space will be used.
+#7 6.784 Get:1 <link> jammy-updates/main amd64 openssl amd64 3.0.2-0ubuntu1.30 [1186 kB]
+#7 7.417 Get:2 <link> jammy-updates/main amd64 ca-certificates all 20260601~22.04.1 [141 kB]
+#7 7.423 Get:3 <link> jammy-updates/main amd64 libnghttp2-14 amd64 1.43.0-1ubuntu0.4 [76.9 kB]
+#7 7.427 Get:4 <link> jammy/main amd64 libpsl5 amd64 0.21.0-1.2build2 [58.4 kB]
+#7 7.429 Get:5 <link> jammy/main amd64 libbrotli1 amd64 1.0.9-2build6 [315 kB]
+#7 7.445 Get:6 <link> jammy-updates/main amd64 libsasl2-modules-db amd64 2.1.27+dfsg2-3ubuntu1.2 [20.5 kB]
+#7 7.446 Get:7 <link> jammy-updates/main amd64 libsasl2-2 amd64 2.1.27+dfsg2-3ubuntu1.2 [53.8 kB]
+#7 7.449 Get:8 <link> jammy-updates/main amd64 libldap-2.5-0 amd64 2.5.20+dfsg-0ubuntu0.22.04.1 [184 kB]
+#7 7.458 Get:9 <link> jammy/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2build4 [58.2 kB]
+#7 7.461 Get:10 <link> jammy-updates/main amd64 libssh-4 amd64 0.9.6-2ubuntu0.22.04.8 [189 kB]
+#7 7.499 Get:11 <link> jammy-updates/main amd64 libcurl4 amd64 7.81.0-1ubuntu1.29 [292 kB]
+#7 7.581 Get:12 <link> jammy-updates/main amd64 curl amd64 7.81.0-1ubuntu1.29 [194 kB]
+#7 7.586 Get:13 <link> jammy/main amd64 libonig5 amd64 <ip>-2build1 [172 kB]
+#7 7.590 Get:14 <link> jammy-updates/main amd64 libjq1 amd64 1.6-2.1ubuntu3.2 [135 kB]
+#7 7.594 Get:15 <link> jammy-updates/main amd64 jq amd64 1.6-2.1ubuntu3.2 [52.5 kB]
+#7 7.696 debconf: delaying package configuration, since apt-utils is not installed
+#7 7.724 Fetched 3127 kB in 1s (3178 kB/s)
+#7 7.744 Selecting previously unselected package openssl.
+#7 7.744 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 4393 files and directories currently installed.)
+#7 7.747 Preparing to unpack .../00-openssl_3.0.2-0ubuntu1.30_amd64.deb ...
+#7 7.751 Unpacking openssl (3.0.2-0ubuntu1.30) ...
+#7 7.796 Selecting previously unselected package ca-certificates.
+#7 7.796 Preparing to unpack .../01-ca-certificates_20260601~22.04.1_all.deb ...
+#7 7.800 Unpacking ca-certificates (20260601~22.04.1) ...
+#7 7.846 Selecting previously unselected package libnghttp2-14:amd64.
+#7 7.847 Preparing to unpack .../02-libnghttp2-14_1.43.0-1ubuntu0.4_amd64.deb ...
+#7 7.855 Unpacking libnghttp2-14:amd64 (1.43.0-1ubuntu0.4) ...
+#7 7.886 Selecting previously unselected package libpsl5:amd64.
+#7 7.887 Preparing to unpack .../03-libpsl5_0.21.0-1.2build2_amd64.deb ...
+#7 7.890 Unpacking libpsl5:amd64 (0.21.0-1.2build2) ...
+#7 7.918 Selecting previously unselected package libbrotli1:amd64.
+#7 7.918 Preparing to unpack .../04-libbrotli1_1.0.9-2build6_amd64.deb ...
+#7 7.922 Unpacking libbrotli1:amd64 (1.0.9-2build6) ...
+#7 7.948 Selecting previously unselected package libsasl2-modules-db:amd64.
+#7 7.949 Preparing to unpack .../05-libsasl2-modules-db_2.1.27+dfsg2-3ubuntu1.2_amd64.deb ...
+#7 7.953 Unpacking libsasl2-modules-db:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 7.978 Selecting previously unselected package libsasl2-2:amd64.
+#7 7.979 Preparing to unpack .../06-libsasl2-2_2.1.27+dfsg2-3ubuntu1.2_amd64.deb ...
+#7 7.983 Unpacking libsasl2-2:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 8.011 Selecting previously unselected package libldap-2.5-0:amd64.
+#7 8.012 Preparing to unpack .../07-libldap-2.5-0_2.5.20+dfsg-0ubuntu0.22.04.1_amd64.deb ...
+#7 8.016 Unpacking libldap-2.5-0:amd64 (2.5.20+dfsg-0ubuntu0.22.04.1) ...
+#7 8.045 Selecting previously unselected package librtmp1:amd64.
+#7 8.045 Preparing to unpack .../08-librtmp1_2.4+20151223.gitfa8646d.1-2build4_amd64.deb ...
+#7 8.049 Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build4) ...
+#7 8.077 Selecting previously unselected package libssh-4:amd64.
+#7 8.078 Preparing to unpack .../09-libssh-4_0.9.6-2ubuntu0.22.04.8_amd64.deb ...
+#7 8.082 Unpacking libssh-4:amd64 (0.9.6-2ubuntu0.22.04.8) ...
+#7 8.111 Selecting previously unselected package libcurl4:amd64.
+#7 8.111 Preparing to unpack .../10-libcurl4_7.81.0-1ubuntu1.29_amd64.deb ...
+#7 8.115 Unpacking libcurl4:amd64 (7.81.0-1ubuntu1.29) ...
+#7 8.139 Selecting previously unselected package curl.
+#7 8.139 Preparing to unpack .../11-curl_7.81.0-1ubuntu1.29_amd64.deb ...
+#7 8.143 Unpacking curl (7.81.0-1ubuntu1.29) ...
+#7 8.172 Selecting previously unselected package libonig5:amd64.
+#7 8.173 Preparing to unpack .../12-libonig5_6.9.7.1-2build1_amd64.deb ...
+#7 8.177 Unpacking libonig5:amd64 (<ip>-2build1) ...
+#7 8.205 Selecting previously unselected package libjq1:amd64.
+#7 8.206 Preparing to unpack .../13-libjq1_1.6-2.1ubuntu3.2_amd64.deb ...
+#7 8.210 Unpacking libjq1:amd64 (1.6-2.1ubuntu3.2) ...
+#7 8.234 Selecting previously unselected package jq.
+#7 8.235 Preparing to unpack .../14-jq_1.6-2.1ubuntu3.2_amd64.deb ...
+#7 8.239 Unpacking jq (1.6-2.1ubuntu3.2) ...
+#7 8.267 Setting up libpsl5:amd64 (0.21.0-1.2build2) ...
+#7 8.278 Setting up libbrotli1:amd64 (1.0.9-2build6) ...
+#7 8.290 Setting up libnghttp2-14:amd64 (1.43.0-1ubuntu0.4) ...
+#7 8.301 Setting up libsasl2-modules-db:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 8.312 Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build4) ...
+#7 8.323 Setting up libsasl2-2:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 8.334 Setting up libssh-4:amd64 (0.9.6-2ubuntu0.22.04.8) ...
+#7 8.345 Setting up openssl (3.0.2-0ubuntu1.30) ...
+#7 8.361 Setting up libonig5:amd64 (<ip>-2build1) ...
+#7 8.372 Setting up libjq1:amd64 (1.6-2.1ubuntu3.2) ...
+#7 8.383 Setting up libldap-2.5-0:amd64 (2.5.20+dfsg-0ubuntu0.22.04.1) ...
+#7 8.394 Setting up ca-certificates (20260601~22.04.1) ...
+#7 8.718 Updating certificates in /etc/ssl/certs...
+#7 9.125 121 added, 0 removed; done.
+#7 9.149 Setting up jq (1.6-2.1ubuntu3.2) ...
+#7 9.161 Setting up libcurl4:amd64 (7.81.0-1ubuntu1.29) ...
+#7 9.172 Setting up curl (7.81.0-1ubuntu1.29) ...
+#7 9.184 Processing triggers for libc-bin (2.35-0ubuntu3.15) ...
+#7 9.201 Processing triggers for ca-certificates (20260601~22.04.1) ...
+#7 9.208 Updating certificates in /etc/ssl/certs...
+#7 9.512 0 added, 0 removed; done.
+#7 9.512 Running hooks in /etc/ca-certificates/update.d...
+#7 9.513 done.
+#7 DONE 9.7s
+
+#8 [4/5] COPY upload.sh run.sh /app/
+#8 DONE 0.1s
+
+#9 [5/5] RUN chmod +x /app/run.sh /app/upload.sh     && useradd --create-home --uid 1000 runner     && chown -R runner /app
+#9 DONE 0.5s
+
+#10 exporting to image
+#10 exporting layers 0.1s done
+#10 writing image sha256:f6913ce10cb5e2360a61439d661c3eaec0848767626e50aa6f54ddf61fa6c115 done
+#10 naming to <aws>:sub_e9dbb623 done
+#10 DONE 0.1s
+
+[Container] 2026/10/02 17:02:24.589715 Running command SIZE=$(docker image inspect "$ECR_REGISTRY/$ECR_REPO:$SUBMISSION_ID" --format '{{.Size}}')
+
+[Container] 2026/10/02 17:02:24.609596 Running command echo "Image size $SIZE bytes"
+Image size 85799383 bytes
+
+[Container] 2026/10/02 17:02:24.617544 Running command test "$SIZE" -lt "$IMAGE_MAX_BYTES" || { echo "FATAL: image exceeds 15 GiB"; exit 1; }
+
+[Container] 2026/10/02 17:02:24.625366 Phase complete: BUILD State: SUCCEEDED
+[Container] 2026/10/02 17:02:24.625378 Phase context status code:  Message: 
+[Container] 2026/10/02 17:02:24.677686 Entering phase POST_BUILD
+[Container] 2026/10/02 17:02:24.678657 Running command docker push "$ECR_REGISTRY/$ECR_REPO:$SUBMISSION_ID"
+The push refers to repository [<aws>]
+e03c4f75f633: Preparing
+0c243607cea2: Preparing
+64c12889f378: Preparing
+64f7e0df5c2b: Preparing
+cbaf391e6709: Preparing
+0c243607cea2: Pushed
+64f7e0df5c2b: Pushed
+e03c4f75f633: Pushed
+64c12889f378: Pushed
+cbaf391e6709: Pushed
+sub_e9dbb623: digest: sha256:906d93269597411c161512023b36e8c7da236c81d67ff03fe512c071c774ee2f size: 1362
+
+[Container] 2026/10/02 17:02:29.320091 Phase complete: POST_BUILD State: SUCCEEDED
+[Container] 2026/10/02 17:02:29.320116 Phase context status code:  Message: 
+[Container] 2026/10/02 17:02:29.377557 Set report auto-discover timeout to 5 seconds
+[Container] 2026/10/02 17:02:29.377607 Expanding base directory path:  .
+[Container] 2026/10/02 17:02:29.381320 Assembling file list
+[Container] 2026/10/02 17:02:29.381334 Expanding .
+[Container] 2026/10/02 17:02:29.385106 Expanding file paths for base directory .
+[Container] 2026/10/02 17:02:29.385121 Assembling file list
+[Container] 2026/10/02 17:02:29.385124 Expanding **/*
+[Container] 2026/10/02 17:02:29.388914 No matching auto-discover report paths found
+[Container] 2026/10/02 17:02:29.388937 Report auto-discover file discovery took 0.011379 seconds
+[Container] 2026/10/02 17:02:29.388951 Phase complete: UPLOAD_ARTIFACTS State: SUCCEEDED
+[Container] 2026/10/02 17:02:29.388962 Phase context status code:  Message: 

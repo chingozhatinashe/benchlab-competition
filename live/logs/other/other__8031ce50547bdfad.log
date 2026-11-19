@@ -1,0 +1,5 @@
+[conformance] t0=20261025T190000Z submission=sub_e9dbb623
+[conformance] egress check -> 200
+[conformance] produced 709 bytes
+[upload] ok
+[conformance] PASS

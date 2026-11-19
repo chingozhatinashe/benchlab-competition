@@ -1,0 +1,866 @@
+[Container] 2026/11/19 15:03:43.142840 Running on CodeBuild On-demand
+[Container] 2026/11/19 15:03:43.142848 Waiting for agent ping
+[Container] 2026/11/19 15:03:43.378665 Waiting for DOWNLOAD_SOURCE
+[Container] 2026/11/19 15:03:43.983976 Phase is DOWNLOAD_SOURCE
+[Container] 2026/11/19 15:03:43.984933 CODEBUILD_SRC_DIR=/codebuild/output/src2836837813/src
+[Container] 2026/11/19 15:03:43.985286 YAML location is /codebuild/readonly/buildspec.yml
+[Container] 2026/11/19 15:03:43.987274 Setting HTTP client timeout to higher timeout for S3 source
+[Container] 2026/11/19 15:03:43.987355 Processing environment variables
+[Container] 2026/11/19 15:03:44.104077 No runtime version selected in buildspec.
+[Container] 2026/11/19 15:03:44.132214 Moving to directory /codebuild/output/src2836837813/src
+[Container] 2026/11/19 15:03:44.132229 Cache is not defined in the buildspec
+[Container] 2026/11/19 15:03:44.164948 Skip cache due to: no paths specified to be cached
+[Container] 2026/11/19 15:03:44.165091 Registering with agent
+[Container] 2026/11/19 15:03:44.205701 Phases found in YAML: 3
+[Container] 2026/11/19 15:03:44.205716  BUILD: 5 commands
+[Container] 2026/11/19 15:03:44.205719  POST_BUILD: 1 commands
+[Container] 2026/11/19 15:03:44.205721  PRE_BUILD: 5 commands
+[Container] 2026/11/19 15:03:44.205896 Phase complete: DOWNLOAD_SOURCE State: SUCCEEDED
+[Container] 2026/11/19 15:03:44.205904 Phase context status code:  Message: 
+[Container] 2026/11/19 15:03:44.311230 Entering phase INSTALL
+[Container] 2026/11/19 15:03:44.350659 Phase complete: INSTALL State: SUCCEEDED
+[Container] 2026/11/19 15:03:44.350672 Phase context status code:  Message: 
+[Container] 2026/11/19 15:03:44.385121 Entering phase PRE_BUILD
+[Container] 2026/11/19 15:03:44.418328 Running command echo "Validating structure for $SUBMISSION_ID"
+Validating structure for sub_e9dbb623
+
+[Container] 2026/11/19 15:03:44.424860 Running command test -f Dockerfile      || { echo "FATAL: no Dockerfile at zip root. Zip the CONTENTS of your folder, not the folder itself."; exit 1; }
+
+[Container] 2026/11/19 15:03:44.431204 Running command test -f README.md       || { echo "FATAL: no README.md at zip root"; exit 1; }
+
+[Container] 2026/11/19 15:03:44.437325 Running command test -f submission.json || { echo "FATAL: no submission.json at zip root"; exit 1; }
+
+[Container] 2026/11/19 15:03:44.443414 Running command aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+WARNING! Your credentials are stored unencrypted in '/root/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+<link>
+
+Login Succeeded
+
+[Container] 2026/11/19 15:03:54.882154 Phase complete: PRE_BUILD State: SUCCEEDED
+[Container] 2026/11/19 15:03:54.882166 Phase context status code:  Message: 
+[Container] 2026/11/19 15:03:54.916145 Entering phase BUILD
+[Container] 2026/11/19 15:03:54.916778 Running command aws s3 sync . "<link> --exclude ".git/*" --exclude "logs/*" --delete
+Completed 221 Bytes/776.3 KiB (2.1 KiB/s) with 53 file(s) remaining
+upload: ./.dockerignore to <link>
+Completed 221 Bytes/776.3 KiB (2.1 KiB/s) with 52 file(s) remaining
+Completed 1.8 KiB/776.3 KiB (17.3 KiB/s) with 52 file(s) remaining 
+upload: ./Dockerfile to <link>
+Completed 1.8 KiB/776.3 KiB (17.3 KiB/s) with 51 file(s) remaining
+Completed 15.5 KiB/776.3 KiB (147.2 KiB/s) with 51 file(s) remaining
+upload: ./README.md to <link>
+Completed 15.5 KiB/776.3 KiB (147.2 KiB/s) with 50 file(s) remaining
+Completed 163.1 KiB/776.3 KiB (1.5 MiB/s) with 50 file(s) remaining 
+upload: assets/bayes_model.json to <link>
+Completed 163.1 KiB/776.3 KiB (1.5 MiB/s) with 49 file(s) remaining
+Completed 163.5 KiB/776.3 KiB (1.5 MiB/s) with 49 file(s) remaining
+upload: assets/wsa_calibration.json to <link>
+Completed 163.5 KiB/776.3 KiB (1.5 MiB/s) with 48 file(s) remaining
+upload: assets/.gitkeep to <link>
+Completed 163.5 KiB/776.3 KiB (1.5 MiB/s) with 47 file(s) remaining
+Completed 307.1 KiB/776.3 KiB (2.7 MiB/s) with 47 file(s) remaining
+upload: assets/xgboost_model.json to <link>
+Completed 307.1 KiB/776.3 KiB (2.7 MiB/s) with 46 file(s) remaining
+Completed 434.5 KiB/776.3 KiB (3.9 MiB/s) with 46 file(s) remaining
+upload: assets/linear_model.json to <link>
+Completed 434.5 KiB/776.3 KiB (3.9 MiB/s) with 45 file(s) remaining
+Completed 435.7 KiB/776.3 KiB (3.6 MiB/s) with 45 file(s) remaining
+upload: assets/feature_climatology.json to <link>
+Completed 435.7 KiB/776.3 KiB (3.6 MiB/s) with 44 file(s) remaining
+Completed 462.9 KiB/776.3 KiB (3.4 MiB/s) with 44 file(s) remaining
+upload: assets/final_baseline.json to <link>
+Completed 462.9 KiB/776.3 KiB (3.4 MiB/s) with 43 file(s) remaining
+Completed 471.9 KiB/776.3 KiB (3.5 MiB/s) with 43 file(s) remaining
+upload: connectors/ace_archive.py to <link>
+Completed 471.9 KiB/776.3 KiB (3.5 MiB/s) with 42 file(s) remaining
+Completed 478.9 KiB/776.3 KiB (3.5 MiB/s) with 42 file(s) remaining
+upload: connectors/gong.py to <link>
+Completed 478.9 KiB/776.3 KiB (3.5 MiB/s) with 41 file(s) remaining
+Completed 483.1 KiB/776.3 KiB (3.5 MiB/s) with 41 file(s) remaining
+upload: connectors/base.py to <link>
+Completed 483.1 KiB/776.3 KiB (3.5 MiB/s) with 40 file(s) remaining
+Completed 487.1 KiB/776.3 KiB (3.5 MiB/s) with 40 file(s) remaining
+upload: connectors/cdaweb.py to <link>
+Completed 487.1 KiB/776.3 KiB (3.5 MiB/s) with 39 file(s) remaining
+Completed 494.2 KiB/776.3 KiB (3.5 MiB/s) with 39 file(s) remaining
+upload: connectors/swpc.py to <link>
+Completed 494.2 KiB/776.3 KiB (3.5 MiB/s) with 38 file(s) remaining
+Completed 498.8 KiB/776.3 KiB (3.5 MiB/s) with 38 file(s) remaining
+upload: connectors/lasco.py to <link>
+Completed 498.8 KiB/776.3 KiB (3.5 MiB/s) with 37 file(s) remaining
+Completed 499.1 KiB/776.3 KiB (3.5 MiB/s) with 37 file(s) remaining
+upload: feature_engineering/__init__.py to <link>
+Completed 499.1 KiB/776.3 KiB (3.5 MiB/s) with 36 file(s) remaining
+Completed 504.4 KiB/776.3 KiB (3.5 MiB/s) with 36 file(s) remaining
+upload: connectors/sdo.py to <link>
+Completed 504.4 KiB/776.3 KiB (3.5 MiB/s) with 35 file(s) remaining
+Completed 504.9 KiB/776.3 KiB (3.5 MiB/s) with 35 file(s) remaining
+upload: connectors/__init__.py to <link>
+Completed 504.9 KiB/776.3 KiB (3.5 MiB/s) with 34 file(s) remaining
+Completed 511.1 KiB/776.3 KiB (3.4 MiB/s) with 34 file(s) remaining
+upload: feature_engineering/build.py to <link>
+Completed 511.1 KiB/776.3 KiB (3.4 MiB/s) with 33 file(s) remaining
+Completed 516.7 KiB/776.3 KiB (3.1 MiB/s) with 33 file(s) remaining
+upload: feature_engineering/coronagraph.py to <link>
+Completed 516.7 KiB/776.3 KiB (3.1 MiB/s) with 32 file(s) remaining
+Completed 517.9 KiB/776.3 KiB (3.1 MiB/s) with 32 file(s) remaining
+upload: feature_engineering/hourly.py to <link>
+Completed 517.9 KiB/776.3 KiB (3.1 MiB/s) with 31 file(s) remaining
+Completed 525.0 KiB/776.3 KiB (3.1 MiB/s) with 31 file(s) remaining
+upload: feature_engineering/insitu.py to <link>
+Completed 525.0 KiB/776.3 KiB (3.1 MiB/s) with 30 file(s) remaining
+Completed 530.9 KiB/776.3 KiB (3.1 MiB/s) with 30 file(s) remaining
+upload: feature_engineering/registry.py to <link>
+Completed 530.9 KiB/776.3 KiB (3.1 MiB/s) with 29 file(s) remaining
+Completed 542.3 KiB/776.3 KiB (3.2 MiB/s) with 29 file(s) remaining
+upload: feature_engineering/pfss.py to <link>
+Completed 542.3 KiB/776.3 KiB (3.2 MiB/s) with 28 file(s) remaining
+Completed 551.8 KiB/776.3 KiB (3.2 MiB/s) with 28 file(s) remaining
+upload: feature_engineering/coronal_holes.py to <link>
+Completed 551.8 KiB/776.3 KiB (3.2 MiB/s) with 27 file(s) remaining
+Completed 554.1 KiB/776.3 KiB (3.2 MiB/s) with 27 file(s) remaining
+upload: feature_engineering/impute.py to <link>
+Completed 554.1 KiB/776.3 KiB (3.2 MiB/s) with 26 file(s) remaining
+Completed 562.4 KiB/776.3 KiB (3.2 MiB/s) with 26 file(s) remaining
+upload: feature_engineering/magnetogram.py to <link>
+Completed 562.4 KiB/776.3 KiB (3.2 MiB/s) with 25 file(s) remaining
+Completed 567.3 KiB/776.3 KiB (3.2 MiB/s) with 25 file(s) remaining
+upload: feature_engineering/recurrence.py to <link>
+Completed 567.3 KiB/776.3 KiB (3.2 MiB/s) with 24 file(s) remaining
+Completed 570.3 KiB/776.3 KiB (3.1 MiB/s) with 24 file(s) remaining
+upload: feature_engineering/solar_activity.py to <link>
+Completed 570.3 KiB/776.3 KiB (3.1 MiB/s) with 23 file(s) remaining
+Completed 571.8 KiB/776.3 KiB (2.9 MiB/s) with 23 file(s) remaining
+upload: ./model.py to <link>
+Completed 571.8 KiB/776.3 KiB (2.9 MiB/s) with 22 file(s) remaining
+Completed 571.8 KiB/776.3 KiB (2.9 MiB/s) with 22 file(s) remaining
+upload: models/__init__.py to <link>
+Completed 571.8 KiB/776.3 KiB (2.9 MiB/s) with 21 file(s) remaining
+Completed 572.3 KiB/776.3 KiB (2.8 MiB/s) with 21 file(s) remaining
+upload: inference/__init__.py to <link>
+Completed 572.3 KiB/776.3 KiB (2.8 MiB/s) with 20 file(s) remaining
+Completed 589.8 KiB/776.3 KiB (2.9 MiB/s) with 20 file(s) remaining
+upload: feature_engineering/windows.py to <link>
+Completed 589.8 KiB/776.3 KiB (2.9 MiB/s) with 19 file(s) remaining
+Completed 591.1 KiB/776.3 KiB (2.9 MiB/s) with 19 file(s) remaining
+upload: inference/check_features.py to <link>
+Completed 591.1 KiB/776.3 KiB (2.9 MiB/s) with 18 file(s) remaining
+Completed 606.7 KiB/776.3 KiB (3.0 MiB/s) with 18 file(s) remaining
+upload: inference/pipeline.py to <link>
+Completed 606.7 KiB/776.3 KiB (3.0 MiB/s) with 17 file(s) remaining
+Completed 614.1 KiB/776.3 KiB (3.0 MiB/s) with 17 file(s) remaining
+upload: models/bayes_model.py to <link>
+Completed 614.1 KiB/776.3 KiB (3.0 MiB/s) with 16 file(s) remaining
+Completed 627.5 KiB/776.3 KiB (3.0 MiB/s) with 16 file(s) remaining
+upload: models/bayes_stream.py to <link>
+Completed 627.5 KiB/776.3 KiB (3.0 MiB/s) with 15 file(s) remaining
+Completed 634.8 KiB/776.3 KiB (3.0 MiB/s) with 15 file(s) remaining
+upload: inference/fetch_inputs.py to <link>
+Completed 634.8 KiB/776.3 KiB (3.0 MiB/s) with 14 file(s) remaining
+Completed 642.5 KiB/776.3 KiB (3.0 MiB/s) with 14 file(s) remaining
+upload: models/cme_detector.py to <link>
+Completed 642.5 KiB/776.3 KiB (3.0 MiB/s) with 13 file(s) remaining
+Completed 663.5 KiB/776.3 KiB (2.9 MiB/s) with 13 file(s) remaining
+upload: models/final_baseline.py to <link>
+Completed 663.5 KiB/776.3 KiB (2.9 MiB/s) with 12 file(s) remaining
+Completed 691.3 KiB/776.3 KiB (3.0 MiB/s) with 12 file(s) remaining
+upload: models/linear_model.py to <link>
+Completed 691.3 KiB/776.3 KiB (3.0 MiB/s) with 11 file(s) remaining
+Completed 708.5 KiB/776.3 KiB (3.1 MiB/s) with 11 file(s) remaining
+upload: models/gaussian_process.py to <link>
+Completed 708.5 KiB/776.3 KiB (3.1 MiB/s) with 10 file(s) remaining
+Completed 721.0 KiB/776.3 KiB (3.1 MiB/s) with 10 file(s) remaining
+upload: models/structural.py to <link>
+Completed 721.0 KiB/776.3 KiB (3.1 MiB/s) with 9 file(s) remaining
+Completed 730.0 KiB/776.3 KiB (3.1 MiB/s) with 9 file(s) remaining
+upload: models/regime_switching.py to <link>
+Completed 730.0 KiB/776.3 KiB (3.1 MiB/s) with 8 file(s) remaining
+Completed 742.4 KiB/776.3 KiB (3.2 MiB/s) with 8 file(s) remaining
+upload: models/regime_hmm.py to <link>
+Completed 742.4 KiB/776.3 KiB (3.2 MiB/s) with 7 file(s) remaining
+Completed 749.2 KiB/776.3 KiB (3.1 MiB/s) with 7 file(s) remaining
+upload: models/stream_events.py to <link>
+Completed 749.2 KiB/776.3 KiB (3.1 MiB/s) with 6 file(s) remaining
+Completed 750.0 KiB/776.3 KiB (3.1 MiB/s) with 6 file(s) remaining
+upload: ./requirements.txt to <link>
+Completed 750.0 KiB/776.3 KiB (3.1 MiB/s) with 5 file(s) remaining
+Completed 755.2 KiB/776.3 KiB (3.1 MiB/s) with 5 file(s) remaining
+upload: models/wsa.py to <link>
+Completed 755.2 KiB/776.3 KiB (3.1 MiB/s) with 4 file(s) remaining
+Completed 774.6 KiB/776.3 KiB (3.2 MiB/s) with 4 file(s) remaining
+upload: models/xgboost_model.py to <link>
+Completed 774.6 KiB/776.3 KiB (3.2 MiB/s) with 3 file(s) remaining
+Completed 775.2 KiB/776.3 KiB (3.1 MiB/s) with 3 file(s) remaining
+upload: ./upload.sh to <link>
+Completed 775.2 KiB/776.3 KiB (3.1 MiB/s) with 2 file(s) remaining
+Completed 775.5 KiB/776.3 KiB (3.0 MiB/s) with 2 file(s) remaining
+upload: ./submission.json to <link>
+Completed 775.5 KiB/776.3 KiB (3.0 MiB/s) with 1 file(s) remaining
+Completed 776.3 KiB/776.3 KiB (3.0 MiB/s) with 1 file(s) remaining
+upload: ./run.sh to <link>
+
+[Container] 2026/11/19 15:03:55.945858 Running command docker build --platform linux/amd64 -t "$ECR_REGISTRY/$ECR_REPO:$SUBMISSION_ID" .
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.65kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/ubuntu/ubuntu:22.04
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 263B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 781.61kB done
+#4 DONE 0.0s
+
+#5 [ 1/15] FROM public.ecr.aws/ubuntu/ubuntu:22.04@sha256:bea3e9ce454d8bbd1fc005efd77dd06e9ac3bcdeceb3efd9d2e0c7d6fc1a11e7
+#5 resolve public.ecr.aws/ubuntu/ubuntu:22.04@sha256:bea3e9ce454d8bbd1fc005efd77dd06e9ac3bcdeceb3efd9d2e0c7d6fc1a11e7 0.0s done
+#5 sha256:bea3e9ce454d8bbd1fc005efd77dd06e9ac3bcdeceb3efd9d2e0c7d6fc1a11e7 1.41kB / 1.41kB done
+#5 sha256:b682e31336cc8e0a73ed91ab32b7a95e32591c5ff09994490a20accf9b3600f9 424B / 424B done
+#5 sha256:4c738ec33362ed21d54f5e6ca4eadc9f2707fd6516cd7eb5be2a772dfdfaa938 2.05kB / 2.05kB done
+#5 sha256:ba082564e6605eeb2e1abc91a762985d2e8afea393433de08e798c1eee36d028 30.07MB / 30.07MB 0.1s done
+#5 extracting sha256:ba082564e6605eeb2e1abc91a762985d2e8afea393433de08e798c1eee36d028 0.1s
+#5 extracting sha256:ba082564e6605eeb2e1abc91a762985d2e8afea393433de08e798c1eee36d028 0.5s done
+#5 DONE 0.9s
+
+#6 [ 2/15] WORKDIR /app
+#6 DONE 0.4s
+
+#7 [ 3/15] RUN apt-get update && apt-get install -y --no-install-recommends         ca-certificates curl jq     && rm -rf /var/lib/apt/lists/*
+#7 0.395 Get:1 <link> jammy-security InRelease [129 kB]
+#7 0.409 Get:2 <link> jammy InRelease [270 kB]
+#7 0.488 Get:3 <link> jammy-security/multiverse amd64 Packages [96.7 kB]
+#7 0.500 Get:4 <link> jammy-security/restricted amd64 Packages [8086 kB]
+#7 0.529 Get:5 <link> jammy-security/main amd64 Packages [4525 kB]
+#7 0.544 Get:6 <link> jammy-security/universe amd64 Packages [1329 kB]
+#7 0.564 Get:7 <link> jammy-updates InRelease [128 kB]
+#7 0.698 Get:8 <link> jammy-backports InRelease [127 kB]
+#7 0.730 Get:9 <link> jammy/restricted amd64 Packages [164 kB]
+#7 0.739 Get:10 <link> jammy/multiverse amd64 Packages [266 kB]
+#7 0.744 Get:11 <link> jammy/universe amd64 Packages [17.5 MB]
+#7 0.804 Get:12 <link> jammy/main amd64 Packages [1792 kB]
+#7 0.821 Get:13 <link> jammy-updates/multiverse amd64 Packages [104 kB]
+#7 0.831 Get:14 <link> jammy-updates/restricted amd64 Packages [8407 kB]
+#7 0.869 Get:15 <link> jammy-updates/main amd64 Packages [4875 kB]
+#7 0.885 Get:16 <link> jammy-updates/universe amd64 Packages [1631 kB]
+#7 0.894 Get:17 <link> jammy-backports/universe amd64 Packages [35.6 kB]
+#7 0.901 Get:18 <link> jammy-backports/main amd64 Packages [82.9 kB]
+#7 1.965 Fetched 49.5 MB in 2s (29.7 MB/s)
+#7 1.965 Reading package lists...
+#7 2.814 Reading package lists...
+#7 3.637 Building dependency tree...
+#7 3.790 Reading state information...
+#7 3.949 The following additional packages will be installed:
+#7 3.949   libbrotli1 libcurl4 libjq1 libldap-2.5-0 libnghttp2-14 libonig5 libpsl5
+#7 3.950   librtmp1 libsasl2-2 libsasl2-modules-db libssh-4 openssl
+#7 3.950 Recommended packages:
+#7 3.950   libldap-common publicsuffix libsasl2-modules
+#7 3.983 The following NEW packages will be installed:
+#7 3.984   ca-certificates curl jq libbrotli1 libcurl4 libjq1 libldap-2.5-0
+#7 3.984   libnghttp2-14 libonig5 libpsl5 librtmp1 libsasl2-2 libsasl2-modules-db
+#7 3.984   libssh-4 openssl
+#7 4.006 0 upgraded, 15 newly installed, 0 to remove and 0 not upgraded.
+#7 4.006 Need to get 3127 kB of archives.
+#7 4.006 After this operation, 7418 kB of additional disk space will be used.
+#7 4.006 Get:1 <link> jammy-updates/main amd64 openssl amd64 3.0.2-0ubuntu1.30 [1186 kB]
+#7 4.027 Get:2 <link> jammy-updates/main amd64 ca-certificates all 20260816ubuntu0.22.04.2 [140 kB]
+#7 4.033 Get:3 <link> jammy-updates/main amd64 libnghttp2-14 amd64 1.43.0-1ubuntu0.4 [76.9 kB]
+#7 4.042 Get:4 <link> jammy/main amd64 libpsl5 amd64 0.21.0-1.2build2 [58.4 kB]
+#7 4.052 Get:5 <link> jammy-updates/main amd64 libbrotli1 amd64 1.0.9-2ubuntu0.1 [315 kB]
+#7 4.064 Get:6 <link> jammy-updates/main amd64 libsasl2-modules-db amd64 2.1.27+dfsg2-3ubuntu1.2 [20.5 kB]
+#7 4.072 Get:7 <link> jammy-updates/main amd64 libsasl2-2 amd64 2.1.27+dfsg2-3ubuntu1.2 [53.8 kB]
+#7 4.078 Get:8 <link> jammy-updates/main amd64 libldap-2.5-0 amd64 2.5.20+dfsg-0ubuntu0.22.04.1 [184 kB]
+#7 4.092 Get:9 <link> jammy/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2build4 [58.2 kB]
+#7 4.099 Get:10 <link> jammy-updates/main amd64 libssh-4 amd64 0.9.6-2ubuntu0.22.04.8 [189 kB]
+#7 4.113 Get:11 <link> jammy-updates/main amd64 libcurl4 amd64 7.81.0-1ubuntu1.30 [293 kB]
+#7 4.119 Get:12 <link> jammy-updates/main amd64 curl amd64 7.81.0-1ubuntu1.30 [194 kB]
+#7 4.127 Get:13 <link> jammy/main amd64 libonig5 amd64 <ip>-2build1 [172 kB]
+#7 4.140 Get:14 <link> jammy-updates/main amd64 libjq1 amd64 1.6-2.1ubuntu3.2 [135 kB]
+#7 4.153 Get:15 <link> jammy-updates/main amd64 jq amd64 1.6-2.1ubuntu3.2 [52.5 kB]
+#7 4.229 debconf: delaying package configuration, since apt-utils is not installed
+#7 4.247 Fetched 3127 kB in 0s (19.0 MB/s)
+#7 4.264 Selecting previously unselected package openssl.
+#7 4.264 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 4393 files and directories currently installed.)
+#7 4.266 Preparing to unpack .../00-openssl_3.0.2-0ubuntu1.30_amd64.deb ...
+#7 4.270 Unpacking openssl (3.0.2-0ubuntu1.30) ...
+#7 4.307 Selecting previously unselected package ca-certificates.
+#7 4.307 Preparing to unpack .../01-ca-certificates_20260816ubuntu0.22.04.2_all.deb ...
+#7 4.311 Unpacking ca-certificates (20260816ubuntu0.22.04.2) ...
+#7 4.362 Selecting previously unselected package libnghttp2-14:amd64.
+#7 4.362 Preparing to unpack .../02-libnghttp2-14_1.43.0-1ubuntu0.4_amd64.deb ...
+#7 4.369 Unpacking libnghttp2-14:amd64 (1.43.0-1ubuntu0.4) ...
+#7 4.396 Selecting previously unselected package libpsl5:amd64.
+#7 4.397 Preparing to unpack .../03-libpsl5_0.21.0-1.2build2_amd64.deb ...
+#7 4.400 Unpacking libpsl5:amd64 (0.21.0-1.2build2) ...
+#7 4.425 Selecting previously unselected package libbrotli1:amd64.
+#7 4.425 Preparing to unpack .../04-libbrotli1_1.0.9-2ubuntu0.1_amd64.deb ...
+#7 4.429 Unpacking libbrotli1:amd64 (1.0.9-2ubuntu0.1) ...
+#7 4.452 Selecting previously unselected package libsasl2-modules-db:amd64.
+#7 4.453 Preparing to unpack .../05-libsasl2-modules-db_2.1.27+dfsg2-3ubuntu1.2_amd64.deb ...
+#7 4.457 Unpacking libsasl2-modules-db:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 4.480 Selecting previously unselected package libsasl2-2:amd64.
+#7 4.480 Preparing to unpack .../06-libsasl2-2_2.1.27+dfsg2-3ubuntu1.2_amd64.deb ...
+#7 4.484 Unpacking libsasl2-2:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 4.509 Selecting previously unselected package libldap-2.5-0:amd64.
+#7 4.509 Preparing to unpack .../07-libldap-2.5-0_2.5.20+dfsg-0ubuntu0.22.04.1_amd64.deb ...
+#7 4.513 Unpacking libldap-2.5-0:amd64 (2.5.20+dfsg-0ubuntu0.22.04.1) ...
+#7 4.539 Selecting previously unselected package librtmp1:amd64.
+#7 4.540 Preparing to unpack .../08-librtmp1_2.4+20151223.gitfa8646d.1-2build4_amd64.deb ...
+#7 4.543 Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build4) ...
+#7 4.568 Selecting previously unselected package libssh-4:amd64.
+#7 4.569 Preparing to unpack .../09-libssh-4_0.9.6-2ubuntu0.22.04.8_amd64.deb ...
+#7 4.573 Unpacking libssh-4:amd64 (0.9.6-2ubuntu0.22.04.8) ...
+#7 4.599 Selecting previously unselected package libcurl4:amd64.
+#7 4.600 Preparing to unpack .../10-libcurl4_7.81.0-1ubuntu1.30_amd64.deb ...
+#7 4.604 Unpacking libcurl4:amd64 (7.81.0-1ubuntu1.30) ...
+#7 4.625 Selecting previously unselected package curl.
+#7 4.625 Preparing to unpack .../11-curl_7.81.0-1ubuntu1.30_amd64.deb ...
+#7 4.629 Unpacking curl (7.81.0-1ubuntu1.30) ...
+#7 4.654 Selecting previously unselected package libonig5:amd64.
+#7 4.655 Preparing to unpack .../12-libonig5_6.9.7.1-2build1_amd64.deb ...
+#7 4.659 Unpacking libonig5:amd64 (<ip>-2build1) ...
+#7 4.685 Selecting previously unselected package libjq1:amd64.
+#7 4.685 Preparing to unpack .../13-libjq1_1.6-2.1ubuntu3.2_amd64.deb ...
+#7 4.689 Unpacking libjq1:amd64 (1.6-2.1ubuntu3.2) ...
+#7 4.708 Selecting previously unselected package jq.
+#7 4.709 Preparing to unpack .../14-jq_1.6-2.1ubuntu3.2_amd64.deb ...
+#7 4.712 Unpacking jq (1.6-2.1ubuntu3.2) ...
+#7 4.737 Setting up libpsl5:amd64 (0.21.0-1.2build2) ...
+#7 4.748 Setting up libbrotli1:amd64 (1.0.9-2ubuntu0.1) ...
+#7 4.759 Setting up libnghttp2-14:amd64 (1.43.0-1ubuntu0.4) ...
+#7 4.770 Setting up libsasl2-modules-db:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 4.781 Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build4) ...
+#7 4.792 Setting up libsasl2-2:amd64 (2.1.27+dfsg2-3ubuntu1.2) ...
+#7 4.802 Setting up libssh-4:amd64 (0.9.6-2ubuntu0.22.04.8) ...
+#7 4.813 Setting up openssl (3.0.2-0ubuntu1.30) ...
+#7 4.828 Setting up libonig5:amd64 (<ip>-2build1) ...
+#7 4.839 Setting up libjq1:amd64 (1.6-2.1ubuntu3.2) ...
+#7 4.850 Setting up libldap-2.5-0:amd64 (2.5.20+dfsg-0ubuntu0.22.04.1) ...
+#7 4.860 Setting up ca-certificates (20260816ubuntu0.22.04.2) ...
+#7 5.051 Clearing symlinks in /etc/ssl/certs...
+#7 5.052 done.
+#7 5.052 Updating certificates in /etc/ssl/certs...
+#7 5.282 120 added, 0 removed; done.
+#7 5.304 Setting up jq (1.6-2.1ubuntu3.2) ...
+#7 5.316 Setting up libcurl4:amd64 (7.81.0-1ubuntu1.30) ...
+#7 5.327 Setting up curl (7.81.0-1ubuntu1.30) ...
+#7 5.338 Processing triggers for libc-bin (2.35-0ubuntu3.18) ...
+#7 5.352 Processing triggers for ca-certificates (20260816ubuntu0.22.04.2) ...
+#7 5.358 Updating certificates in /etc/ssl/certs...
+#7 5.529 0 added, 0 removed; done.
+#7 5.529 Running hooks in /etc/ca-certificates/update.d...
+#7 5.530 done.
+#7 DONE 5.7s
+
+#8 [ 4/15] COPY upload.sh /app/upload.sh
+#8 DONE 0.1s
+
+#9 [ 5/15] RUN apt-get update && apt-get install -y --no-install-recommends         python3 python3-pip     && rm -rf /var/lib/apt/lists/*
+#9 0.518 Get:1 <link> jammy-security InRelease [129 kB]
+#9 0.526 Get:2 <link> jammy InRelease [270 kB]
+#9 0.612 Get:3 <link> jammy-security/multiverse amd64 Packages [96.7 kB]
+#9 0.624 Get:4 <link> jammy-security/universe amd64 Packages [1329 kB]
+#9 0.637 Get:5 <link> jammy-security/main amd64 Packages [4525 kB]
+#9 0.668 Get:6 <link> jammy-security/restricted amd64 Packages [8086 kB]
+#9 0.683 Get:7 <link> jammy-updates InRelease [128 kB]
+#9 0.899 Get:8 <link> jammy-backports InRelease [127 kB]
+#9 0.932 Get:9 <link> jammy/restricted amd64 Packages [164 kB]
+#9 0.939 Get:10 <link> jammy/multiverse amd64 Packages [266 kB]
+#9 0.949 Get:11 <link> jammy/main amd64 Packages [1792 kB]
+#9 0.964 Get:12 <link> jammy/universe amd64 Packages [17.5 MB]
+#9 1.034 Get:13 <link> jammy-updates/restricted amd64 Packages [8407 kB]
+#9 1.065 Get:14 <link> jammy-updates/main amd64 Packages [4875 kB]
+#9 1.079 Get:15 <link> jammy-updates/multiverse amd64 Packages [104 kB]
+#9 1.082 Get:16 <link> jammy-updates/universe amd64 Packages [1631 kB]
+#9 1.098 Get:17 <link> jammy-backports/universe amd64 Packages [35.6 kB]
+#9 1.106 Get:18 <link> jammy-backports/main amd64 Packages [82.9 kB]
+#9 2.088 Fetched 49.5 MB in 2s (29.7 MB/s)
+#9 2.088 Reading package lists...
+#9 2.940 Reading package lists...
+#9 3.768 Building dependency tree...
+#9 3.912 Reading state information...
+#9 4.068 The following additional packages will be installed:
+#9 4.068   libexpat1 libmpdec3 libpython3-stdlib libpython3.10-minimal
+#9 4.069   libpython3.10-stdlib libreadline8 libsqlite3-0 media-types python3-distutils
+#9 4.069   python3-lib2to3 python3-minimal python3-pkg-resources python3-setuptools
+#9 4.069   python3-wheel python3.10 python3.10-minimal readline-common
+#9 4.070 Suggested packages:
+#9 4.070   python3-doc python3-tk python3-venv python-setuptools-doc python3.10-venv
+#9 4.070   python3.10-doc binutils binfmt-support readline-doc
+#9 4.070 Recommended packages:
+#9 4.070   build-essential python3-dev
+#9 4.151 The following NEW packages will be installed:
+#9 4.151   libexpat1 libmpdec3 libpython3-stdlib libpython3.10-minimal
+#9 4.152   libpython3.10-stdlib libreadline8 libsqlite3-0 media-types python3
+#9 4.152   python3-distutils python3-lib2to3 python3-minimal python3-pip
+#9 4.152   python3-pkg-resources python3-setuptools python3-wheel python3.10
+#9 4.152   python3.10-minimal readline-common
+#9 4.174 0 upgraded, 19 newly installed, 0 to remove and 0 not upgraded.
+#9 4.174 Need to get 8592 kB of archives.
+#9 4.174 After this operation, 34.3 MB of additional disk space will be used.
+#9 4.174 Get:1 <link> jammy-updates/main amd64 libpython3.10-minimal amd64 3.10.12-1~22.04.18 [817 kB]
+#9 4.195 Get:2 <link> jammy-updates/main amd64 libexpat1 amd64 2.4.7-1ubuntu0.9 [96.9 kB]
+#9 4.203 Get:3 <link> jammy-updates/main amd64 python3.10-minimal amd64 3.10.12-1~22.04.18 [2277 kB]
+#9 4.218 Get:4 <link> jammy-updates/main amd64 python3-minimal amd64 3.10.6-1~22.04.1 [24.3 kB]
+#9 4.227 Get:5 <link> jammy/main amd64 media-types all 7.0.0 [25.5 kB]
+#9 4.235 Get:6 <link> jammy/main amd64 libmpdec3 amd64 2.5.1-2build2 [86.8 kB]
+#9 4.242 Get:7 <link> jammy/main amd64 readline-common all 8.1.2-1 [53.5 kB]
+#9 4.249 Get:8 <link> jammy/main amd64 libreadline8 amd64 8.1.2-1 [153 kB]
+#9 4.256 Get:9 <link> jammy-updates/main amd64 libsqlite3-0 amd64 3.37.2-2ubuntu0.8 [642 kB]
+#9 4.265 Get:10 <link> jammy-updates/main amd64 libpython3.10-stdlib amd64 3.10.12-1~22.04.18 [1850 kB]
+#9 4.278 Get:11 <link> jammy-updates/main amd64 python3.10 amd64 3.10.12-1~22.04.18 [508 kB]
+#9 4.288 Get:12 <link> jammy-updates/main amd64 libpython3-stdlib amd64 3.10.6-1~22.04.1 [6812 B]
+#9 4.294 Get:13 <link> jammy-updates/main amd64 python3 amd64 3.10.6-1~22.04.1 [22.8 kB]
+#9 4.303 Get:14 <link> jammy-updates/main amd64 python3-pkg-resources all 59.6.0-1.2ubuntu0.22.04.3 [133 kB]
+#9 4.311 Get:15 <link> jammy-updates/main amd64 python3-lib2to3 all 3.10.8-1~22.04 [77.6 kB]
+#9 4.320 Get:16 <link> jammy-updates/main amd64 python3-distutils all 3.10.8-1~22.04 [139 kB]
+#9 4.328 Get:17 <link> jammy-updates/main amd64 python3-setuptools all 59.6.0-1.2ubuntu0.22.04.3 [340 kB]
+#9 4.339 Get:18 <link> jammy-updates/universe amd64 python3-wheel all 0.37.1-2ubuntu0.22.04.1 [32.0 kB]
+#9 4.346 Get:19 <link> jammy-updates/universe amd64 python3-pip all 22.0.2+dfsg-1ubuntu0.7 [1306 kB]
+#9 4.431 debconf: delaying package configuration, since apt-utils is not installed
+#9 4.452 Fetched 8592 kB in 0s (43.5 MB/s)
+#9 4.473 Selecting previously unselected package libpython3.10-minimal:amd64.
+#9 4.473 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 4934 files and directories currently installed.)
+#9 4.476 Preparing to unpack .../libpython3.10-minimal_3.10.12-1~22.04.18_amd64.deb ...
+#9 4.479 Unpacking libpython3.10-minimal:amd64 (3.10.12-1~22.04.18) ...
+#9 4.547 Selecting previously unselected package libexpat1:amd64.
+#9 4.548 Preparing to unpack .../libexpat1_2.4.7-1ubuntu0.9_amd64.deb ...
+#9 4.555 Unpacking libexpat1:amd64 (2.4.7-1ubuntu0.9) ...
+#9 4.583 Selecting previously unselected package python3.10-minimal.
+#9 4.584 Preparing to unpack .../python3.10-minimal_3.10.12-1~22.04.18_amd64.deb ...
+#9 4.589 Unpacking python3.10-minimal (3.10.12-1~22.04.18) ...
+#9 4.635 Setting up libpython3.10-minimal:amd64 (3.10.12-1~22.04.18) ...
+#9 4.652 Setting up libexpat1:amd64 (2.4.7-1ubuntu0.9) ...
+#9 4.664 Setting up python3.10-minimal (3.10.12-1~22.04.18) ...
+#9 5.077 Selecting previously unselected package python3-minimal.
+#9 5.077 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 5238 files and directories currently installed.)
+#9 5.079 Preparing to unpack .../0-python3-minimal_3.10.6-1~22.04.1_amd64.deb ...
+#9 5.083 Unpacking python3-minimal (3.10.6-1~22.04.1) ...
+#9 5.105 Selecting previously unselected package media-types.
+#9 5.106 Preparing to unpack .../1-media-types_7.0.0_all.deb ...
+#9 5.109 Unpacking media-types (7.0.0) ...
+#9 5.135 Selecting previously unselected package libmpdec3:amd64.
+#9 5.135 Preparing to unpack .../2-libmpdec3_2.5.1-2build2_amd64.deb ...
+#9 5.139 Unpacking libmpdec3:amd64 (2.5.1-2build2) ...
+#9 5.162 Selecting previously unselected package readline-common.
+#9 5.162 Preparing to unpack .../3-readline-common_8.1.2-1_all.deb ...
+#9 5.166 Unpacking readline-common (8.1.2-1) ...
+#9 5.192 Selecting previously unselected package libreadline8:amd64.
+#9 5.192 Preparing to unpack .../4-libreadline8_8.1.2-1_amd64.deb ...
+#9 5.196 Unpacking libreadline8:amd64 (8.1.2-1) ...
+#9 5.222 Selecting previously unselected package libsqlite3-0:amd64.
+#9 5.223 Preparing to unpack .../5-libsqlite3-0_3.37.2-2ubuntu0.8_amd64.deb ...
+#9 5.226 Unpacking libsqlite3-0:amd64 (3.37.2-2ubuntu0.8) ...
+#9 5.252 Selecting previously unselected package libpython3.10-stdlib:amd64.
+#9 5.252 Preparing to unpack .../6-libpython3.10-stdlib_3.10.12-1~22.04.18_amd64.deb ...
+#9 5.256 Unpacking libpython3.10-stdlib:amd64 (3.10.12-1~22.04.18) ...
+#9 5.314 Selecting previously unselected package python3.10.
+#9 5.315 Preparing to unpack .../7-python3.10_3.10.12-1~22.04.18_amd64.deb ...
+#9 5.318 Unpacking python3.10 (3.10.12-1~22.04.18) ...
+#9 5.339 Selecting previously unselected package libpython3-stdlib:amd64.
+#9 5.340 Preparing to unpack .../8-libpython3-stdlib_3.10.6-1~22.04.1_amd64.deb ...
+#9 5.343 Unpacking libpython3-stdlib:amd64 (3.10.6-1~22.04.1) ...
+#9 5.365 Setting up python3-minimal (3.10.6-1~22.04.1) ...
+#9 5.472 Selecting previously unselected package python3.
+#9 5.472 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 5668 files and directories currently installed.)
+#9 5.474 Preparing to unpack .../0-python3_3.10.6-1~22.04.1_amd64.deb ...
+#9 5.479 Unpacking python3 (3.10.6-1~22.04.1) ...
+#9 5.503 Selecting previously unselected package python3-pkg-resources.
+#9 5.504 Preparing to unpack .../1-python3-pkg-resources_59.6.0-1.2ubuntu0.22.04.3_all.deb ...
+#9 5.507 Unpacking python3-pkg-resources (59.6.0-1.2ubuntu0.22.04.3) ...
+#9 5.533 Selecting previously unselected package python3-lib2to3.
+#9 5.533 Preparing to unpack .../2-python3-lib2to3_3.10.8-1~22.04_all.deb ...
+#9 5.537 Unpacking python3-lib2to3 (3.10.8-1~22.04) ...
+#9 5.574 Selecting previously unselected package python3-distutils.
+#9 5.574 Preparing to unpack .../3-python3-distutils_3.10.8-1~22.04_all.deb ...
+#9 5.578 Unpacking python3-distutils (3.10.8-1~22.04) ...
+#9 5.608 Selecting previously unselected package python3-setuptools.
+#9 5.609 Preparing to unpack .../4-python3-setuptools_59.6.0-1.2ubuntu0.22.04.3_all.deb ...
+#9 5.612 Unpacking python3-setuptools (59.6.0-1.2ubuntu0.22.04.3) ...
+#9 5.645 Selecting previously unselected package python3-wheel.
+#9 5.646 Preparing to unpack .../5-python3-wheel_0.37.1-2ubuntu0.22.04.1_all.deb ...
+#9 5.649 Unpacking python3-wheel (0.37.1-2ubuntu0.22.04.1) ...
+#9 5.675 Selecting previously unselected package python3-pip.
+#9 5.675 Preparing to unpack .../6-python3-pip_22.0.2+dfsg-1ubuntu0.7_all.deb ...
+#9 5.679 Unpacking python3-pip (22.0.2+dfsg-1ubuntu0.7) ...
+#9 5.759 Setting up media-types (7.0.0) ...
+#9 5.775 Setting up libsqlite3-0:amd64 (3.37.2-2ubuntu0.8) ...
+#9 5.786 Setting up libmpdec3:amd64 (2.5.1-2build2) ...
+#9 5.797 Setting up readline-common (8.1.2-1) ...
+#9 5.808 Setting up libreadline8:amd64 (8.1.2-1) ...
+#9 5.819 Setting up libpython3.10-stdlib:amd64 (3.10.12-1~22.04.18) ...
+#9 5.830 Setting up libpython3-stdlib:amd64 (3.10.6-1~22.04.1) ...
+#9 5.841 Setting up python3.10 (3.10.12-1~22.04.18) ...
+#9 6.267 Setting up python3 (3.10.6-1~22.04.1) ...
+#9 6.327 Setting up python3-lib2to3 (3.10.8-1~22.04) ...
+#9 6.396 Setting up python3-pkg-resources (59.6.0-1.2ubuntu0.22.04.3) ...
+#9 6.507 Setting up python3-distutils (3.10.8-1~22.04) ...
+#9 6.590 Setting up python3-setuptools (59.6.0-1.2ubuntu0.22.04.3) ...
+#9 6.809 Setting up python3-wheel (0.37.1-2ubuntu0.22.04.1) ...
+#9 6.891 Setting up python3-pip (22.0.2+dfsg-1ubuntu0.7) ...
+#9 7.558 Processing triggers for libc-bin (2.35-0ubuntu3.18) ...
+#9 DONE 7.8s
+
+#10 [ 6/15] COPY requirements.txt .
+#10 DONE 0.1s
+
+#11 [ 7/15] RUN pip3 install --no-cache-dir -r requirements.txt
+#11 1.068 Collecting numpy==2.2.6
+#11 1.110   Downloading numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+#11 1.225      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.8/16.8 MB 345.9 MB/s eta 0:00:00
+#11 1.463 Collecting pandas==2.3.3
+#11 1.479   Downloading pandas-2.3.3-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (12.8 MB)
+#11 1.720      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.8/12.8 MB 74.0 MB/s eta 0:00:00
+#11 2.030 Collecting Pillow==12.3.0
+#11 2.036   Downloading pillow-12.3.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.9 MB)
+#11 2.211      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.9/6.9 MB 39.9 MB/s eta 0:00:00
+#11 2.239 Collecting sunkit-magex==1.1.0
+#11 2.243   Downloading sunkit_magex-1.1.0-py3-none-any.whl (60 kB)
+#11 2.247      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60.9/60.9 KB 349.8 MB/s eta 0:00:00
+#11 2.362 Collecting sunpy[map]==6.0.6
+#11 2.368   Downloading sunpy-6.0.6-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.4 MB)
+#11 2.403      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 104.2 MB/s eta 0:00:00
+#11 2.646 Collecting astropy==6.1.7
+#11 2.655   Downloading astropy-6.1.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.0 MB)
+#11 2.774      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.0/10.0 MB 85.0 MB/s eta 0:00:00
+#11 2.831 Collecting streamtracer==2.5.0
+#11 2.838   Downloading streamtracer-2.5.0-cp310-cp310-manylinux_2_28_x86_64.whl (379 kB)
+#11 2.849      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 380.0/380.0 KB 38.2 MB/s eta 0:00:00
+#11 2.958 Collecting scikit-image==0.25.2
+#11 2.969   Downloading scikit_image-0.25.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (14.8 MB)
+#11 3.143      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.8/14.8 MB 75.6 MB/s eta 0:00:00
+#11 3.380 Collecting scipy==1.15.3
+#11 3.384   Downloading scipy-1.15.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (37.7 MB)
+#11 3.511      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 37.7/37.7 MB 460.1 MB/s eta 0:00:00
+#11 3.567 Collecting aioftp==0.25.1
+#11 3.574   Downloading aioftp-0.25.1-py3-none-any.whl (39 kB)
+#11 3.668 Collecting pytz>=2020.1
+#11 3.672   Downloading pytz-2026.6-py2.py3-none-any.whl (506 kB)
+#11 3.675      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 506.3/506.3 KB 438.3 MB/s eta 0:00:00
+#11 3.697 Collecting python-dateutil>=2.8.2
+#11 3.701   Downloading python_dateutil-3.0.0-py2.py3-none-any.whl (94 kB)
+#11 3.702      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 94.7/94.7 KB 584.3 MB/s eta 0:00:00
+#11 3.720 Collecting tzdata>=2022.7
+#11 3.724   Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+#11 3.725      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 348.2/348.2 KB 642.3 MB/s eta 0:00:00
+#11 4.024 Collecting matplotlib>=3.6.0
+#11 4.027   Downloading matplotlib-3.10.9-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (8.8 MB)
+#11 4.161      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.8/8.8 MB 66.3 MB/s eta 0:00:00
+#11 4.256 Collecting pyerfa>=<ip>
+#11 4.260   Downloading pyerfa-<ip>-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (738 kB)
+#11 4.277      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 738.7/738.7 KB 46.5 MB/s eta 0:00:00
+#11 4.310 Collecting requests>=2.28.0
+#11 4.314   Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+#11 4.315      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 73.1/73.1 KB 482.6 MB/s eta 0:00:00
+#11 4.339 Collecting packaging>=23.0
+#11 4.346   Downloading packaging-26.3-py3-none-any.whl (129 kB)
+#11 4.347      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 130.0/130.0 KB 583.4 MB/s eta 0:00:00
+#11 4.364 Collecting parfive[ftp]>=2.0.0
+#11 4.371   Downloading parfive-2.3.1-py3-none-any.whl (34 kB)
+#11 4.410 Collecting reproject>=0.9.0
+#11 4.417   Downloading reproject-0.14.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.6 MB)
+#11 4.439      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 77.5 MB/s eta 0:00:00
+#11 4.464 Collecting mpl-animators>=1.0.0
+#11 4.470   Downloading mpl_animators-1.2.4-py3-none-any.whl (35 kB)
+#11 4.561 Collecting astropy-iers-data>=0.2024.<ip>.7
+#11 4.571   Downloading astropy_iers_data-0.2026.<ip>.1-py3-none-any.whl (2.0 MB)
+#11 4.583      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 197.5 MB/s eta 0:00:00
+#11 4.644 Collecting PyYAML>=3.13
+#11 4.647   Downloading pyyaml-6.0.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (770 kB)
+#11 4.651      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 770.3/770.3 KB 500.1 MB/s eta 0:00:00
+#11 4.717 Collecting networkx>=3.0
+#11 4.721   Downloading networkx-3.4.2-py3-none-any.whl (1.7 MB)
+#11 4.726      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 503.1 MB/s eta 0:00:00
+#11 4.742 Collecting lazy-loader>=0.4
+#11 4.750   Downloading lazy_loader-0.6-py3-none-any.whl (8.8 kB)
+#11 4.799 Collecting tifffile>=2022.8.12
+#11 4.810   Downloading tifffile-2025.5.10-py3-none-any.whl (226 kB)
+#11 4.812      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 226.5/226.5 KB 648.5 MB/s eta 0:00:00
+#11 4.848 Collecting imageio!=2.35.0,>=2.33
+#11 4.856   Downloading imageio-2.38.0-py3-none-any.whl (328 kB)
+#11 4.857      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 328.1/328.1 KB 696.0 MB/s eta 0:00:00
+#11 5.063 Collecting kiwisolver>=1.3.1
+#11 5.068   Downloading kiwisolver-1.5.1-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl (1.6 MB)
+#11 5.080      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 159.8 MB/s eta 0:00:00
+#11 5.150 Collecting pyparsing>=3
+#11 5.155   Downloading pyparsing-3.3.3-py3-none-any.whl (126 kB)
+#11 5.157      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 126.4/126.4 KB 566.0 MB/s eta 0:00:00
+#11 5.168 Collecting cycler>=0.10
+#11 5.172   Downloading cycler-0.12.1-py3-none-any.whl (8.3 kB)
+#11 5.468 Collecting fonttools>=4.22.0
+#11 5.472   Downloading fonttools-4.65.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.3 MB)
+#11 5.487      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.3/5.3 MB 402.5 MB/s eta 0:00:00
+#11 5.609 Collecting contourpy>=1.0.1
+#11 5.613   Downloading contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (325 kB)
+#11 5.620      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 325.0/325.0 KB 65.9 MB/s eta 0:00:00
+#11 5.706 Collecting tqdm>=4.27.0
+#11 5.712   Downloading tqdm-4.70.1-py3-none-any.whl (80 kB)
+#11 5.714      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80.2/80.2 KB 531.7 MB/s eta 0:00:00
+#11 6.645 Collecting aiohttp
+#11 6.649   Downloading aiohttp-3.14.5-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.9 MB)
+#11 6.654      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.9/1.9 MB 490.1 MB/s eta 0:00:00
+#11 6.686 Collecting six>=1.6
+#11 6.689   Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+#11 6.812 Collecting dask[array]>=2021.8
+#11 6.816   Downloading dask-2026.8.0-py3-none-any.whl (1.5 MB)
+#11 6.822      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.5/1.5 MB 285.7 MB/s eta 0:00:00
+#11 6.857 Collecting fsspec
+#11 6.862   Downloading fsspec-2026.9.0-py3-none-any.whl (221 kB)
+#11 6.864      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 221.7/221.7 KB 683.2 MB/s eta 0:00:00
+#11 6.882 Collecting cloudpickle
+#11 6.885   Downloading cloudpickle-3.1.3-py3-none-any.whl (22 kB)
+#11 6.924 Collecting zarr
+#11 6.929   Downloading zarr-2.18.3-py3-none-any.whl (210 kB)
+#11 6.931      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 210.7/210.7 KB 668.3 MB/s eta 0:00:00
+#11 6.961 Collecting astropy-healpix>=1.0
+#11 6.974   Downloading astropy_healpix-2.0.1-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (193 kB)
+#11 6.976      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 193.4/193.4 KB 654.1 MB/s eta 0:00:00
+#11 7.009 Collecting certifi>=2023.5.7
+#11 7.012   Downloading certifi-2026.10.23-py3-none-any.whl (135 kB)
+#11 7.014      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 135.1/135.1 KB 616.5 MB/s eta 0:00:00
+#11 7.243 Collecting charset_normalizer<4,>=2
+#11 7.247   Downloading charset_normalizer-3.5.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (271 kB)
+#11 7.249      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 271.1/271.1 KB 649.0 MB/s eta 0:00:00
+#11 7.288 Collecting urllib3<3,>=1.26
+#11 7.292   Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+#11 7.293      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 135.7/135.7 KB 596.8 MB/s eta 0:00:00
+#11 7.314 Collecting idna<4,>=2.5
+#11 7.318   Downloading idna-3.20-py3-none-any.whl (69 kB)
+#11 7.320      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 69.6/69.6 KB 130.8 MB/s eta 0:00:00
+#11 7.438 Collecting importlib_metadata>=4.13.0
+#11 7.442   Downloading importlib_metadata-9.0.1-py3-none-any.whl (27 kB)
+#11 7.461 Collecting partd>=1.4.0
+#11 7.464   Downloading partd-1.4.2-py3-none-any.whl (18 kB)
+#11 7.477 Collecting toolz>=0.12.0
+#11 7.482   Downloading toolz-1.2.0-py3-none-any.whl (60 kB)
+#11 7.483      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60.8/60.8 KB 503.4 MB/s eta 0:00:00
+#11 7.507 Collecting click>=8.1
+#11 7.511   Downloading click-8.5.1-py3-none-any.whl (126 kB)
+#11 7.513      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 126.2/126.2 KB 586.5 MB/s eta 0:00:00
+#11 7.653 Collecting aiohappyeyeballs>=2.5.0
+#11 7.657   Downloading aiohappyeyeballs-2.7.1-py3-none-any.whl (15 kB)
+#11 7.676 Collecting attrs>=17.3.0
+#11 7.681   Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+#11 7.682      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 67.5/67.5 KB 475.3 MB/s eta 0:00:00
+#11 7.807 Collecting propcache>=0.2.0
+#11 7.814   Downloading propcache-0.5.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (224 kB)
+#11 7.815      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 224.3/224.3 KB 630.7 MB/s eta 0:00:00
+#11 7.839 Collecting typing_extensions>=4.4
+#11 7.846   Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#11 7.847      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 45.6/45.6 KB 435.2 MB/s eta 0:00:00
+#11 7.861 Collecting async-timeout<6.0,>=4.0
+#11 7.865   Downloading async_timeout-5.0.1-py3-none-any.whl (6.2 kB)
+#11 8.332 Collecting yarl<2.0,>=1.25.1
+#11 8.338   Downloading yarl-1.25.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (118 kB)
+#11 8.340      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 118.1/118.1 KB 550.2 MB/s eta 0:00:00
+#11 8.352 Collecting aiosignal>=1.4.0
+#11 8.356   Downloading aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+#11 8.916 Collecting multidict<8.0,>=4.5
+#11 8.921   Downloading multidict-7.1.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (464 kB)
+#11 8.923      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 464.4/464.4 KB 636.1 MB/s eta 0:00:00
+#11 9.036 Collecting frozenlist>=1.1.1
+#11 9.040   Downloading frozenlist-1.8.0-cp310-cp310-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (219 kB)
+#11 9.042      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 219.5/219.5 KB 601.6 MB/s eta 0:00:00
+#11 9.124 Collecting numcodecs>=0.10.0
+#11 9.128   Downloading numcodecs-0.13.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (8.6 MB)
+#11 9.179      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.6/8.6 MB 177.2 MB/s eta 0:00:00
+#11 9.201 Collecting fasteners
+#11 9.206   Downloading fasteners-0.20-py3-none-any.whl (18 kB)
+#11 9.217 Collecting asciitree
+#11 9.224   Downloading asciitree-1.0.0-py3-none-any.whl (5.3 kB)
+#11 9.292 Collecting zipp>=3.20
+#11 9.295   Downloading zipp-4.1.2-py3-none-any.whl (10 kB)
+#11 9.334 Collecting locket
+#11 9.352   Downloading locket-1.0.0-py2.py3-none-any.whl (4.4 kB)
+#11 9.882 Installing collected packages: pytz, asciitree, zipp, urllib3, tzdata, typing_extensions, tqdm, toolz, six, PyYAML, pyparsing, propcache, Pillow, packaging, numpy, networkx, locket, kiwisolver, idna, fsspec, frozenlist, fonttools, fasteners, cycler, cloudpickle, click, charset_normalizer, certifi, attrs, async-timeout, astropy-iers-data, aiohappyeyeballs, aioftp, tifffile, streamtracer, scipy, requests, python-dateutil, pyerfa, partd, numcodecs, multidict, lazy-loader, importlib_metadata, imageio, contourpy, aiosignal, zarr, yarl, scikit-image, pandas, matplotlib, dask, astropy, mpl-animators, astropy-healpix, aiohttp, reproject, parfive, sunpy, sunkit-magex
+#11 23.43 Successfully installed Pillow-12.3.0 PyYAML-6.0.3 aioftp-0.25.1 aiohappyeyeballs-2.7.1 aiohttp-3.14.5 aiosignal-1.4.0 asciitree-1.0.0 astropy-6.1.7 astropy-healpix-2.0.1 astropy-iers-data-0.2026.<ip>.1 async-timeout-5.0.1 attrs-26.1.0 certifi-2026.10.23 charset_normalizer-3.5.2 click-8.5.1 cloudpickle-3.1.3 contourpy-1.3.2 cycler-0.12.1 dask-2026.8.0 fasteners-0.20 fonttools-4.65.0 frozenlist-1.8.0 fsspec-2026.9.0 idna-3.20 imageio-2.38.0 importlib_metadata-9.0.1 kiwisolver-1.5.1 lazy-loader-0.6 locket-1.0.0 matplotlib-3.10.9 mpl-animators-1.2.4 multidict-7.1.0 networkx-3.4.2 numcodecs-0.13.1 numpy-2.2.6 packaging-26.3 pandas-2.3.3 parfive-2.3.1 partd-1.4.2 propcache-0.5.4 pyerfa-<ip> pyparsing-3.3.3 python-dateutil-3.0.0 pytz-2026.6 reproject-0.14.1 requests-2.34.2 scikit-image-0.25.2 scipy-1.15.3 six-1.17.0 streamtracer-2.5.0 sunkit-magex-1.1.0 sunpy-6.0.6 tifffile-2025.5.10 toolz-1.2.0 tqdm-4.70.1 typing_extensions-4.16.0 tzdata-2026.6 urllib3-2.8.0 yarl-1.25.1 zarr-2.18.3 zipp-4.1.2
+#11 23.43 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: <link>
+#11 DONE 25.2s
+
+#12 [ 8/15] COPY model.py .
+#12 DONE 0.1s
+
+#13 [ 9/15] COPY connectors/ ./connectors/
+#13 DONE 0.1s
+
+#14 [10/15] COPY feature_engineering/ ./feature_engineering/
+#14 DONE 0.1s
+
+#15 [11/15] COPY models/ ./models/
+#15 DONE 0.1s
+
+#16 [12/15] COPY inference/ ./inference/
+#16 DONE 0.1s
+
+#17 [13/15] COPY assets/ ./assets/
+#17 DONE 0.1s
+
+#18 [14/15] COPY run.sh /app/run.sh
+#18 DONE 0.1s
+
+#19 [15/15] RUN chmod +x /app/run.sh /app/upload.sh     && useradd --create-home --uid 1000 runner     && chown -R runner /app
+#19 DONE 0.5s
+
+#20 exporting to image
+#20 exporting layers
+#20 exporting layers 1.6s done
+#20 writing image sha256:d673f8f908e0120ef2b77d95e98063ffe5f025a7b245a809a7b7e03456772513 done
+#20 naming to <aws>:sub_e9dbb623 done
+#20 DONE 1.6s
+
+[Container] 2026/11/19 15:04:39.185260 Running command SIZE=$(docker image inspect "$ECR_REGISTRY/$ECR_REPO:$SUBMISSION_ID" --format '{{.Size}}')
+
+[Container] 2026/11/19 15:04:39.203384 Running command echo "Image size $SIZE bytes"
+Image size 682671889 bytes
+
+[Container] 2026/11/19 15:04:39.209865 Running command test "$SIZE" -lt "$IMAGE_MAX_BYTES" || { echo "FATAL: image exceeds 15 GiB"; exit 1; }
+
+[Container] 2026/11/19 15:04:39.216093 Phase complete: BUILD State: SUCCEEDED
+[Container] 2026/11/19 15:04:39.216102 Phase context status code:  Message: 
+[Container] 2026/11/19 15:04:39.262408 Entering phase POST_BUILD
+[Container] 2026/11/19 15:04:39.262973 Running command docker push "$ECR_REGISTRY/$ECR_REPO:$SUBMISSION_ID"
+The push refers to repository [<aws>]
+569dc79e9179: Preparing
+c99b6221f72f: Preparing
+05ac1d4fc427: Preparing
+1a2af673aaac: Preparing
+0ae3326e3425: Preparing
+10ede1ccc1a2: Preparing
+cac04605cdb5: Preparing
+697fd32b4356: Preparing
+e70dadff03b2: Preparing
+c22e70616076: Preparing
+400a71704639: Preparing
+cac04605cdb5: Waiting
+ef7f662a3a81: Preparing
+469f3286888b: Preparing
+b6438b54e4eb: Preparing
+af272fa34b9e: Preparing
+ef7f662a3a81: Waiting
+697fd32b4356: Waiting
+469f3286888b: Waiting
+e70dadff03b2: Waiting
+b6438b54e4eb: Waiting
+af272fa34b9e: Waiting
+c22e70616076: Waiting
+10ede1ccc1a2: Waiting
+400a71704639: Waiting
+c99b6221f72f: Pushed
+1a2af673aaac: Pushed
+05ac1d4fc427: Pushed
+0ae3326e3425: Pushed
+569dc79e9179: Pushed
+10ede1ccc1a2: Pushed
+c22e70616076: Pushed
+cac04605cdb5: Pushed
+697fd32b4356: Pushed
+ef7f662a3a81: Pushed
+b6438b54e4eb: Pushed
+469f3286888b: Pushed
+400a71704639: Pushed
+af272fa34b9e: Pushed
+e70dadff03b2: Pushed
+sub_e9dbb623: digest: sha256:308d79bae2ae81a7956db3135338f2ae2d0b0570d4fd3bf20d33297ca4e86ce5 size: 3455
+
+[Container] 2026/11/19 15:04:59.158405 Phase complete: POST_BUILD State: SUCCEEDED
+[Container] 2026/11/19 15:04:59.158421 Phase context status code:  Message: 
+[Container] 2026/11/19 15:04:59.208124 Set report auto-discover timeout to 5 seconds
+[Container] 2026/11/19 15:04:59.208161 Expanding base directory path:  .
+[Container] 2026/11/19 15:04:59.210474 Assembling file list
+[Container] 2026/11/19 15:04:59.210478 Expanding .
+[Container] 2026/11/19 15:04:59.212753 Expanding file paths for base directory .
+[Container] 2026/11/19 15:04:59.212763 Assembling file list
+[Container] 2026/11/19 15:04:59.212765 Expanding **/*
+[Container] 2026/11/19 15:04:59.215276 No matching auto-discover report paths found
+[Container] 2026/11/19 15:04:59.215293 Report auto-discover file discovery took 0.007169 seconds
+[Container] 2026/11/19 15:04:59.215308 Phase complete: UPLOAD_ARTIFACTS State: SUCCEEDED
+[Container] 2026/11/19 15:04:59.215312 Phase context status code:  Message: 
