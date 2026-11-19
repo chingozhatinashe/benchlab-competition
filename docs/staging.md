@@ -37,7 +37,7 @@ Both can be started by hand: Actions → Staging → Run workflow, `job = cycle 
 - **When the laptop is off or asleep at a slot,** GitHub's cron runs that cycle later, as before. Whichever fires second finds the cycle recorded and skips it. If both start before either has recorded, the cycle runs twice, and the later record replaces the earlier one.
 
 **A cycle, per candidate** (`ci/staging/run_candidate.sh`):
-1. **Build:** `docker build` of the candidate's `src/`, with the base image from the Actions cache (`.github/actions/base-image`, shared with CI). Build time and image size are recorded.
+1. **Build:** `docker build` of the candidate's `src/`, with the base image from the Actions cache (`.github/actions/base-image`, shared with CI). Build time and image size are recorded. A failed build is retried once after 60 s (usually a package-archive outage, as on 2026-11-19 12Z when `apt-get update` timed out for every candidate); the recorded build time then includes the retry.
 2. **Up to three variants, each in a fresh container, exactly as `local_tests/test_local.sh` runs it:**
    - `default`, the submitted model;
    - `baseline` (`SWP_MODEL=baseline`), its fallback;

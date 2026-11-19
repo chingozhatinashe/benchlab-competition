@@ -25,7 +25,8 @@ VARIANTS=("$@")
 [ ${#VARIANTS[@]} -eq 0 ] && VARIANTS=(default baseline)
 KEPT=()
 for v in "${VARIANTS[@]}"; do
-  if [ "$v" = default ] || [ "$v" = baseline ] \n     || grep -qE "[\"']$v[\"']" "$CAND_DIR/src/inference/pipeline.py" 2> /dev/null; then
+  if [ "$v" = default ] || [ "$v" = baseline ] \
+     || grep -qE "[\"']$v[\"']" "$CAND_DIR/src/inference/pipeline.py" 2> /dev/null; then
     KEPT+=("$v")
   else
     echo "== $NAME has no $v model: variant skipped"
@@ -54,7 +55,17 @@ IMAGE="staging-$(echo "$NAME" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_.\n-' '-')"
 
 echo "== build $NAME ($SHA) cpu=$CPU mem=$MEM"
 B0=$(date +%s)
-if ! docker build --platform linux/amd64 -t "$IMAGE" "$CAND_DIR/src" > "$RAW/build.log" 2>&1; then
+build() { docker build --platform linux/amd64 -t "$IMAGE" "$CAND_DIR/src" > "$RAW/build.log" 2>&1; }
+# one retry after a minute: a failed build is usually a package-archive outage (apt, PyPI),
+# not the candidate (2026-11-19 12Z: apt-get update timed out for every candidate)
+BUILT=1
+if ! build; then
+  tail -5 "$RAW/build.log"
+  echo "== build failed; retrying once in 60 s"
+  sleep 60
+  build || BUILT=0
+fi
+if [ "$BUILT" -eq 0 ]; then
   tail -20 "$RAW/build.log"
   for v in "${VARIANTS[@]}"; do
     record "$v" --build-failed --build-seconds $(( $(date +%s) - B0 )) --log "$RAW/build.log"
