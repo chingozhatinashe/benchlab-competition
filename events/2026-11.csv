@@ -837,3 +837,24 @@ time,t0,candidate,sha,variant,kind,severity,detail
 2026-11-19T12:12:50Z,20261119T120000Z,pfss-shadow,7cdedc196c81d2f65096172f93af7ea4fc1175e6,baseline,build failed,alert,the image did not build; scored as persistence
 2026-11-19T12:12:50Z,20261119T120000Z,pfss-shadow,7cdedc196c81d2f65096172f93af7ea4fc1175e6,default,build failed,alert,the image did not build; scored as persistence
 2026-11-19T12:12:50Z,20261119T120000Z,,,,cycle,info,"10 candidates, 25 runs recorded"
+2026-11-19T16:41:22Z,20261119T164122Z,benchlab,sub_e9dbb623,live,eligibility,info,sub_e9dbb623: ELIGIBLE
+2026-11-19T16:41:22Z,20261115T000000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261115T060000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261115T120000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261115T180000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261116T000000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261116T060000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261116T120000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261116T180000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261117T000000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261117T060000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261117T120000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261117T180000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261118T000000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261118T060000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261118T120000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261118T180000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261119T000000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261119T060000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261119T120000Z,benchlab,sub_e9dbb623,live,no forecast in log,info,not scored (log only)
+2026-11-19T16:41:22Z,20261119T150000Z,benchlab,sub_e9dbb623,live,run ok,info,"bayes, 43.0 s, 42/42 regressors"

@@ -1,0 +1,15 @@
+{
+ "accepting": "your real submission",
+ "conformance": "PASSED",
+ "conformance_at": "2026-11-09T06:51:47.573Z",
+ "cpu_granted": "4096",
+ "cpu_requested": "4096",
+ "eligibility": "ELIGIBLE",
+ "failure_reason": null,
+ "memory_granted": "16384",
+ "memory_requested": "16384",
+ "phase": "open",
+ "read_at": "2026-11-19T16:41:22Z",
+ "resources_snapped": false,
+ "submission_id": "sub_e9dbb623"
+}

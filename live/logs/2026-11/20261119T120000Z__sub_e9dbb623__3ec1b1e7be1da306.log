@@ -1,0 +1,15 @@
+[run] t0=20261119T120000Z submission=sub_e9dbb623
+[connectors] ACE archive: 30/30 days in 0.5 s (0 timed out, 0 failed)
+[connectors] ACE epam: 30/30 days in 0.6 s (0 timed out, 0 failed)
+[connectors] ACE swepam: 30/30 days in 0.7 s (0 timed out, 0 failed)
+[connectors] SWPC feed starts at 2026-11-18 12:01:00+00:00, after requested start 2026-11-18 12:00:00+00:00
+[inference] minutes: 36257 from the archive, 312 added from SWPC real time
+[connectors] SDO 0193: 15/15 images
+[fetch_inputs] pfss: mrzqs261119t1004c2318_303.fits.gz (1.9 h old), 9.6 s
+[connectors] ACE mag: 30/30 days in 21.1 s (0 timed out, 0 failed)
+[fetch_inputs] inputs in 22.4 s, 19.6 MB: {'swepam': 'ok', 'mag': 'ok', 'epam': 'ok', 'swepam_rt': 'ok', 'mag_rt': 'ok', 'sdo': 'ok', 'flares': 'ok', 'f107': 'ok', 'pfss': 'ok'}
+[inference] bayes model: 42/42 regressors observed; imputed: none
+[inference] bayes model done in 22.6 s; forecast 416..451 km/s
+[run] produced 1487 bytes
+[upload] ok
+[run] done
