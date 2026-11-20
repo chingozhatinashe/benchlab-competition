@@ -29,10 +29,11 @@ git push origin :refs/tags/upload_candidate/linear-v2   # stop running it (its r
 
 Both can be started by hand: Actions → Staging → Run workflow, `job = cycle | evaluate`, on main. A cycle takes an optional `t0` (a 6-hourly mark in the last 24 h; empty = the current one).
 
-**The on-time trigger.** GitHub's cron starts runs hours late (see Limits), so a scheduled task on the developer's Windows laptop dispatches each cycle instead.
-- `ci/staging/trigger_cycle.ps1` runs every 10 min, at :05, :15, …. Once t0 + 5 min has passed, it runs `gh workflow run staging.yml -f job=cycle -f t0=<t0>`, once per t0. After a sleep it catches up on wake.
+**The on-time trigger.** GitHub's cron starts runs hours late and drops some (see Limits), so a scheduled task on the developer's Windows laptop dispatches each cycle, and the Benchlab monitor, instead.
+- `ci/staging/trigger_cycle.ps1` runs every 10 min, at :05, :15, …. Once t0 + 5 min has passed, it runs `gh workflow run staging.yml -f job=cycle -f t0=<t0>`, once per t0. Once t0 + 30 min has passed (Benchlab's live run is done by about t0 + 7 min), it runs `gh workflow run monitor.yml -f mode=record`, once per t0. After a sleep it catches up on wake, for the current t0 only.
+- After changing `trigger_cycle.ps1`, run the installer again: the task runs its own copy.
 - **Install / remove:** `powershell -ExecutionPolicy Bypass -File ci\staging\install_trigger.ps1 [-Uninstall]`.
-  - The task copies the script to `%LOCALAPPDATA%enchlab-staging`, where its state (`last_t0.txt`) and log (`trigger.log`, dispatches and failures only) are kept.
+  - The task copies the script to `%LOCALAPPDATA%\benchlab-staging`, where its state (`last_t0.txt`, `last_monitor_t0.txt`) and log (`trigger.log`, dispatches and failures only) are kept.
   - It runs `gh` with your login, which needs the `workflow` scope, and only while you are logged on.
 - **When the laptop is off or asleep at a slot,** GitHub's cron runs that cycle later, as before. Whichever fires second finds the cycle recorded and skips it. If both start before either has recorded, the cycle runs twice, and the later record replaces the earlier one.
 
@@ -108,12 +109,12 @@ The report lists the last 7 days of alerts and counts the info events.
 
 ## Benchlab's live runs (`.github/workflows/monitor.yml`)
 
-The "Monitor Benchlab" workflow reads the portal every 3 h (and on demand) and files the submitted model's live runs on the same branch (`ci/monitor/live.py`).
+The "Monitor Benchlab" workflow reads the portal at t0 + 30 min from the on-time trigger, every 3 h from GitHub's cron as the backup (which in November 2026 dropped most passes), and on demand and files the submitted model's live runs on the same branch (`ci/monitor/live.py`).
 
 - **Run statuses:** each finished run's status fields (status, exit code, failure reason, output bytes, pull and run seconds, start and stop times, retries) go to `live/runs/`. Task ARNs, network ids, IPs and object keys are not stored.
 - **Logs:** each new run log is downloaded and stored in `live/logs/` with links and IP addresses removed. Since 942a451, `run.sh` puts the `[inference]` log and the forecast (`[run] forecast {...}`) in the run log, the only way to see the live forecast: the portal gives no download for it.
 - **Run records:** each finished run whose log carries the forecast, or that failed, becomes a run record in the staging format, candidate `benchlab`, variant `live`. The daily evaluation scores it with the candidates (a failed run counts as persistence) and shows its health. Its runtime and pull time are Benchlab's own. Runs of versions before 942a451 log no forecast and are kept as logs only. A run off the 6-hourly marks (the qualification dry run after an upload) is recorded as variant `dryrun`, scored apart from the cycles, and ignored by the missed-cycle check. Some logs are served gzipped; they're unpacked before scrubbing, and a log that isn't text is not stored.
-- **Alerts** (same reporting as staging): the staging rules on each record, plus not ELIGIBLE, missed cycle (a 6-hourly t0 with no run), no log 3 h after a run, no forecast in a successful run's log (info), and **differs from staging**: a different model, or a forecast more than 25 km/s from staging's run of `upload_candidate/submitted` at the same t0 (small differences are expected from data arriving between the two runs; the difference is in each record and as a `vs staging` info event).
+- **Alerts** (same reporting as staging): the staging rules on each record, plus not ELIGIBLE, missed cycle (a 6-hourly t0 with no run), no log 3 h after a run, no forecast in a successful run's log (info), and **differs from staging**: a different model, or a forecast more than 25 km/s from staging's run of `upload_candidate/submitted` at the same t0 (small differences are expected from data arriving between the two runs; the difference is in each record and as a `vs staging` info event). Staging's record of a t0 can come hours after the live one (a cycle run by the cron backup), so a live record without it is compared on a later pass; after 24 h without one it's marked `"staging": null` with a `no staging run` info event.
 - **Secrets:** the portal's response holds presigned links and upload credentials. It stays in a file on the runner and is deleted; links are used in memory only and never printed or stored. `mode=shape` prints only the response's field names and types (`ci/monitor/shape.jq`).
 
 ## Limits

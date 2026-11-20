@@ -1,6 +1,7 @@
 # Monitors the submitted model on Benchlab (Actions -> "Monitor Benchlab" -> Run workflow).
 #
-#   record  (every 3 h, and on demand) the live runs and their logs -> the staging-records
+#   record  (at t0 + 30 min from the laptop trigger, ci/staging/trigger_cycle.ps1; every 3 h
+#           from the cron as the backup; on demand) the live runs and their logs -> the staging-records
 #           branch (ci/monitor/live.py): run statuses, scrubbed logs, a staging-format run
 #           record per finished run (candidate "benchlab", variant "live"), so the daily
 #           staging evaluation scores the live forecasts next to the candidates; alerts for
@@ -18,7 +19,7 @@ name: Monitor Benchlab
 
 on:
   schedule:
-    - cron: "50 */3 * * *"  # Benchlab runs at each 6-hourly t0; logs can be listed late
+    - cron: "50 */3 * * *"  # backup for the laptop trigger; GitHub drops many of these
   workflow_dispatch:
     inputs:
       mode:
