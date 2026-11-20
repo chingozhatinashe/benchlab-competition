@@ -22,7 +22,9 @@ BENCHLAB_PORTAL secret) and writes, under the staging records branch:
 Live alerts: not ELIGIBLE, a missed cycle (no run for a 6-hourly t0), a failed run, a log
 missing LOG_GRACE after the run stopped, a forecast missing from a successful run's log,
 and a different model or a forecast far (> MAX_DIFF_KMS) from staging's run of the
-submitted commit (candidate "submitted") at the same t0.
+submitted commit (candidate "submitted") at the same t0. Staging's record can come hours
+after the live one, so a valid live record without it is compared on a later pass (its
+"staging" field is absent until then, and null if none comes within STAGING_WAIT).
 
 The portal's response holds presigned links and upload credentials, and this repository is
 public: links are only used to download, in memory, and never printed or written. Errors are
@@ -59,6 +61,7 @@ CYCLE_GRACE = timedelta(hours=2)  # a cycle this recent may still be running
 LOG_GRACE = timedelta(hours=3)  # a finished run's log should be listed by then
 MAX_LOG_BYTES = 2_000_000
 MAX_DIFF_KMS = 25.0  # live vs staging: inputs can differ a little (data arriving late)
+STAGING_WAIT = timedelta(hours=24)  # staging's record of a t0 can come late (cron backup)
 BUDGET_S = 900
 GZIP_MAGIC = bytes([0x1F, 0x8B])
 REPLACEMENT = chr(0xFFFD)  # what a bad UTF-8 byte decodes to
@@ -220,15 +223,30 @@ def run_record(t0, run, log, staging):
         "platform": {k: run.get(k) for k in RUN_FIELDS},
     }
     if staging and forecast and staging.get("forecast"):
-        diff = max(abs(a - b) for a, b in zip(forecast, staging["forecast"], strict=True))
-        rec["staging"] = {"model_used": staging.get("model_used"), "max_abs_diff_kms":
-                          round(diff, 2)}
+        rec["staging"] = compare(forecast, staging)
     return rec
+
+
+def compare(forecast, staging):
+    """The live forecast against staging's run of the submitted commit at the same t0."""
+    diff = max(abs(a - b) for a, b in zip(forecast, staging["forecast"], strict=True))
+    return {"model_used": staging.get("model_used"), "max_abs_diff_kms": round(diff, 2)}
+
+
+def awaits_staging(rec):
+    """A valid live record not yet compared: staging's record may still come (it can run
+    hours late); `staging` is set to the comparison, or to null once STAGING_WAIT has passed."""
+    return rec.get("variant") == VARIANT and rec.get("valid") and "staging" not in rec
 
 
 def live_events(rec):
     """Staging's events for the record, plus the comparison with staging."""
-    out = [e for e in ev.run_events(rec) if e[0] != "dns not captured"]
+    return [e for e in ev.run_events(rec) if e[0] != "dns not captured"] + staging_events(rec)
+
+
+def staging_events(rec):
+    """The comparison with staging, once there is one."""
+    out = []
     st = rec.get("staging")
     if st:
         if st["model_used"] != rec["model_used"]:
@@ -360,6 +378,25 @@ def monitor(portal, records, now=None, fetch=http_get):
         for kind, severity, detail in live_events(rec):
             event(t0, kind, severity, detail, sub)
         state["closed"].append(key)
+
+    # live records still waiting for staging's run of the same t0 (staging can be hours late)
+    for path in sorted((records / "runs").glob(f"*/*/{CANDIDATE}__{VARIANT}.json")):
+        rec = load_json(path, {})
+        if not awaits_staging(rec):
+            continue
+        t0, sub = rec["t0"], rec.get("sha", "")
+        staging = load_json(path.parent / f"{STAGING_CANDIDATE}__default.json", None)
+        if staging and staging.get("forecast"):
+            rec["staging"] = compare(rec["forecast"], staging)
+        elif staging or now - rr.t0_time(t0) > STAGING_WAIT:
+            rec["staging"] = None
+            why = "staging's run is invalid" if staging else f"none {STAGING_WAIT} after t0"
+            event(t0, "no staging run", "info", f"not compared: {why}", sub)
+        else:
+            continue
+        write_json(path, rec)
+        for kind, severity, detail in staging_events(rec):
+            event(t0, kind, severity, detail, sub)
 
     # missed cycles: a 6-hourly t0 inside the portal's window with no run at all
     t0s = sorted({rr.t0_time(t0) for t0, _ in runs if variant(t0) == VARIANT})

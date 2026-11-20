@@ -198,3 +198,36 @@ def test_scrub_build_log_aws_details():
     for leak in (acct, "amazonaws", "arn:aws", "AKIA"):
         assert leak not in s, leak
     assert "36213" in s and "20261119T150000Z" in s and "1486" in s  # model lines intact
+
+
+def test_late_staging_record_compared_later(tmp_path):
+    """Staging's run of a t0 can be recorded hours after the live one (its cron backup)."""
+    logs = {"a": run_log("20261120T000000Z"), "b": run_log("20261120T060000Z")}
+    p = portal([run("20261120T000000Z", stopped="2026-11-20T00:02:00Z"),
+                run("20261120T060000Z", stopped="2026-11-20T06:02:00Z")], logs)
+
+    def fetch(url):
+        return logs[url.rsplit("k=", 1)[1]].encode()
+
+    def rec(t0):
+        return json.loads((tmp_path / f"runs/2026-11/{t0}/benchlab__live.json")
+                          .read_text(encoding="utf-8"))
+
+    live.monitor(p, tmp_path, now=datetime(2026, 11, 20, 7, tzinfo=timezone.utc), fetch=fetch)
+    assert "staging" not in rec("20261120T000000Z")  # staging hasn't recorded 00Z yet
+
+    st = tmp_path / "runs/2026-11/20261120T000000Z/submitted__default.json"
+    st.write_text(json.dumps(staging_record([v + 3 for v in FORECAST], "20261120T000000Z")),
+                  encoding="utf-8")
+    alerts, _ = live.monitor(p, tmp_path, now=datetime(2026, 11, 20, 8, tzinfo=timezone.utc),
+                             fetch=fetch)
+    assert rec("20261120T000000Z")["staging"] == {"model_used": "bayes", "max_abs_diff_kms": 3.0}
+    assert "staging" not in rec("20261120T060000Z") and alerts == {}
+
+    # a day on, 06Z still has no staging run: noted once, not compared
+    live.monitor(p, tmp_path, now=datetime(2026, 11, 21, 7, tzinfo=timezone.utc), fetch=fetch)
+    live.monitor(p, tmp_path, now=datetime(2026, 11, 21, 8, tzinfo=timezone.utc), fetch=fetch)
+    assert rec("20261120T060000Z")["staging"] is None
+    kinds = [(e["t0"], e["kind"]) for e in events(tmp_path)]
+    assert kinds.count(("20261120T000000Z", "vs staging")) == 1
+    assert kinds.count(("20261120T060000Z", "no staging run")) == 1

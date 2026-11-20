@@ -1,6 +1,7 @@
 # Installs (or with -Uninstall removes) the Windows scheduled task that runs
-# trigger_cycle.ps1 every 10 min, so staging cycles start right after each t0
-# (docs/staging.md). The script is copied to %LOCALAPPDATA%\benchlab-staging, so the
+# trigger_cycle.ps1 every 10 min, so staging cycles start right after each t0 and the
+# Benchlab monitor runs at t0 + 30 min (docs/staging.md). Run it again after changing
+# trigger_cycle.ps1. The script is copied to %LOCALAPPDATA%\benchlab-staging, so the
 # task doesn't depend on which branch this checkout is on. It uses this user's `gh`
 # login (needs the `workflow` scope) and runs only while the user is logged on.
 #
@@ -37,5 +38,5 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatt
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
     -Principal $principal -Force `
-    -Description "Dispatches the benchlab-competition Staging cycle right after each 6-hourly t0" | Out-Null
+    -Description "Dispatches the benchlab-competition Staging cycle right after each 6-hourly t0, and the Benchlab monitor at t0 + 30 min" | Out-Null
 "Installed '$TaskName': every 10 min, $script (log: $dir\trigger.log)"
