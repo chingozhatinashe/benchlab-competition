@@ -893,3 +893,4 @@ time,t0,candidate,sha,variant,kind,severity,detail
 2026-11-19T19:52:00Z,20261119T150000Z,benchlab,sub_e9dbb623,dryrun,run ok,info,"bayes, 43.0 s, 42/42 regressors"
 2026-11-19T19:52:00Z,20261119T180000Z,benchlab,sub_e9dbb623,live,run ok,info,"bayes, 42.0 s, 42/42 regressors"
 2026-11-19T19:52:00Z,20261119T180000Z,benchlab,sub_e9dbb623,live,vs staging,info,max |live - staging| 0.0 km/s
+2026-11-20T00:56:50Z,20261120T000000Z,benchlab,sub_e9dbb623,live,run ok,info,"bayes, 50.0 s, 42/42 regressors"
