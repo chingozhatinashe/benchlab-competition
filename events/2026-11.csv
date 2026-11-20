@@ -1023,3 +1023,5 @@ time,t0,candidate,sha,variant,kind,severity,detail
 2026-11-20T18:16:15Z,20261120T180000Z,submitted,942a4518fa0f14bc3a7d928f7cc732c75d569120,bayes,few regressors,alert,"29/42 observed; missing ['ch_cm_at_0h', 'ch_cm_at_6h', 'ch_cm_at_12h', 'ch_cm_at_18h', 'ch_cm_at_24h', 'ch_cm_at_30h', 'ch_cm_at_36h', 'ch_cm_at_42h', 'ch_cm_at_48h', 'ch_cm_at_54h', 'ch_cm_at_60h', 'ch_cm_at_66h', 'ch_cm_at_72h']"
 2026-11-20T18:16:15Z,20261120T180000Z,submitted,942a4518fa0f14bc3a7d928f7cc732c75d569120,default,few regressors,alert,"29/42 observed; missing ['ch_cm_at_0h', 'ch_cm_at_6h', 'ch_cm_at_12h', 'ch_cm_at_18h', 'ch_cm_at_24h', 'ch_cm_at_30h', 'ch_cm_at_36h', 'ch_cm_at_42h', 'ch_cm_at_48h', 'ch_cm_at_54h', 'ch_cm_at_60h', 'ch_cm_at_66h', 'ch_cm_at_72h']"
 2026-11-20T18:16:15Z,20261120T180000Z,,,,cycle,info,"11 candidates, 28 runs recorded"
+2026-11-20T18:35:19Z,20261120T180000Z,benchlab,sub_e9dbb623,live,run ok,info,"bayes, 41.0 s, 42/42 regressors"
+2026-11-20T18:35:19Z,20261120T180000Z,benchlab,sub_e9dbb623,live,vs staging,info,max |live - staging| 23.36 km/s
