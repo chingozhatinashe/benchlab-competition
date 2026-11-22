@@ -1221,3 +1221,5 @@ time,t0,candidate,sha,variant,kind,severity,detail
 2026-11-22T06:08:23Z,20261122T060000Z,submitted,942a4518fa0f14bc3a7d928f7cc732c75d569120,bayes,run ok,info,"bayes, 11.5 s, 42/42 regressors"
 2026-11-22T06:08:23Z,20261122T060000Z,submitted,942a4518fa0f14bc3a7d928f7cc732c75d569120,default,run ok,info,"bayes, 11.6 s, 42/42 regressors"
 2026-11-22T06:08:23Z,20261122T060000Z,,,,cycle,info,"11 candidates, 28 runs recorded"
+2026-11-22T06:35:20Z,20261122T060000Z,benchlab,sub_e9dbb623,live,run ok,info,"bayes, 35.0 s, 42/42 regressors"
+2026-11-22T06:35:20Z,20261122T060000Z,benchlab,sub_e9dbb623,live,vs staging,info,max |live - staging| 0.0 km/s
