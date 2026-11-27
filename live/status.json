@@ -1,5 +1,5 @@
 {
- "accepting": "your real submission",
+ "accepting": "nothing -- submissions are closed",
  "conformance": "PASSED",
  "conformance_at": "2026-11-09T06:51:47.573Z",
  "cpu_granted": "4096",
@@ -8,8 +8,8 @@
  "failure_reason": null,
  "memory_granted": "16384",
  "memory_requested": "16384",
- "phase": "open",
- "read_at": "2026-11-26T18:35:13Z",
+ "phase": "closed",
+ "read_at": "2026-11-27T00:05:12Z",
  "resources_snapped": false,
  "submission_id": "sub_e9dbb623"
 }
