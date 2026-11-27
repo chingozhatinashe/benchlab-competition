@@ -121,6 +121,10 @@
   "swepam": "ok",
   "swepam_rt": "ok"
  },
+ "staging": {
+  "max_abs_diff_kms": 0.07,
+  "model_used": "bayes"
+ },
  "start_delay_s": 149,
  "started_at": "2026-11-27T00:02:29Z",
  "t0": "20261127T000000Z",
